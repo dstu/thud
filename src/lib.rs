@@ -11,7 +11,10 @@ pub enum Piece {
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Coordinate(u8);
 
+// Number of cells in each row.
 const ROW_LENGTHS: [u8; 15] = [5, 7, 9, 11, 13, 15, 15, 15, 15, 15, 13, 11, 9, 7, 5];
+
+// The first cell of each row.
 const ROW_OFFSETS: [u8; 15] = [0, 5, 12, 21, 32, 45, 60, 75, 90, 105, 120, 133, 144, 153, 160];
 
 impl Coordinate {
@@ -36,6 +39,7 @@ impl Coordinate {
         }
     }
 
+    // The leftmost cell of a row is column 0.
     pub fn column(self) -> u8 {
         let Coordinate(c) = self;
         c - ROW_OFFSETS[self.row() as usize]
@@ -271,17 +275,17 @@ macro_rules! build_troll_shove_actions {
             loop {
                 match end {
                     Some(e) if $board.piece_at(e) == None => {
-                        if (e.up().and_then(|c| $board.piece_at(c))
-                            .or_else(|| e.down().and_then(|c| $board.piece_at(c)))
-                            .or_else(|| e.left().and_then(|c| $board.piece_at(c)))
-                            .or_else(|| e.right().and_then(|c| $board.piece_at(c)))
-                            .or_else(|| e.up_left().and_then(|c| $board.piece_at(c)))
-                            .or_else(|| e.up_right().and_then(|c| $board.piece_at(c)))
-                            .or_else(|| e.down_left().and_then(|c| $board.piece_at(c)))
-                            .or_else(|| e.down_right().and_then(|c| $board.piece_at(c))))
-                            == Some(Piece::Dwarf) {
-                                // At least one dwarf is adjacent to this space, so a
-                                // shove that lands here will capture.
+                        if e.up().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf)
+                            .or_else(|| e.down().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf))
+                            .or_else(|| e.left().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf))
+                            .or_else(|| e.right().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf))
+                            .or_else(|| e.up_left().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf))
+                            .or_else(|| e.up_right().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf))
+                            .or_else(|| e.down_left().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf))
+                            .or_else(|| e.down_right().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf))
+                            .unwrap_or(false) {
+                                // At least one dwarf is adjacent to this space,
+                                // so a shove that lands here will capture.
                                 $result.push(Action::Shove($start, e));
                                 match backward(line_start) {
                                     Some(s) if $board.piece_at(s) == Some(Piece::Troll) => {
