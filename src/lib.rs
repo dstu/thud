@@ -1,5 +1,7 @@
 use std::iter::Iterator;
 
+pub mod console;
+
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum Piece {
     Thudstone,
@@ -8,7 +10,7 @@ pub enum Piece {
 }
 
 // For now, assume that we're on a standard Thud grid.
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Coordinate(u8);
 
 // Number of cells in each row.
@@ -19,7 +21,7 @@ const ROW_OFFSETS: [u8; 15] = [0, 5, 12, 21, 32, 45, 60, 75, 90, 105, 120, 133, 
 
 impl Coordinate {
     pub fn new(c: u8) -> Self {
-        assert!(c <= 165u8);
+        assert!(c < 165u8);
         Coordinate(c)
     }
 
@@ -32,34 +34,35 @@ impl Coordinate {
         let Coordinate(c) = self;
         let mut i = 0u8;
         loop {
-            if c < ROW_OFFSETS[i as usize] {
+            if c < ROW_OFFSETS[i as usize] + ROW_LENGTHS[i as usize]{
                 return i
             }
             i += 1;
         }
     }
 
-    // The leftmost cell of a row is column 0.
     pub fn column(self) -> u8 {
         let Coordinate(c) = self;
-        c - ROW_OFFSETS[self.row() as usize]
+        let r = self.row();
+        c - ROW_OFFSETS[r as usize] + ROW_LENGTHS[r as usize]
     }
 
     pub fn left(self) -> Option<Self> {
-        match self.column() {
-            0 => None,
-            _ => {
-                let Coordinate(c) = self;
-                Some(Coordinate::new(c - 1))
-            }
+        let r = self.row();
+        let Coordinate(c) = self;
+        if c == ROW_OFFSETS[r as usize] {
+            None
+        } else {
+            Some(Coordinate::new(c - 1))
         }
     }
 
     pub fn right(self) -> Option<Self> {
-        if self.column() == ROW_LENGTHS[self.row() as usize] - 1 {
+        let r = self.row();
+        let Coordinate(c) = self;
+        if c == 165u8 || c == ROW_OFFSETS[(r + 1) as usize] {
             None
         } else {
-            let Coordinate(c) = self;
             Some(Coordinate::new(c + 1))
         }
     }
@@ -101,11 +104,18 @@ impl Coordinate {
             None
         } else {
             let col = self.column();
-            let next_row_end = ROW_OFFSETS[(row + 1) as usize] + ROW_LENGTHS[(row + 1) as usize];
-            if next_row_end < col {
+            if col > ROW_LENGTHS[(row + 1) as usize] {
                 None
             } else {
-                Some(Coordinate::new(ROW_OFFSETS[(row + 1) as usize] + col))
+                match ROW_LENGTHS[row as usize].cmp(ROW_LENGTHS[(row + 1) as usize]) {
+                    Ordering::Less =>
+                        Some(Coordinate::new(ROW_OFFSETS[(row + 1) as usize] + col)),
+                    Ordering::Greater =>
+                        Some(Coordinate::new(ROW_OFFSETS[(row + 1) as usize] + col)),
+                    Ordering::Equal =>
+                        Some(Coordinate::new(ROW_OFFSETS[(row + 1) as usize] + col)),
+                    
+                }
             }
         }
     }
@@ -159,13 +169,66 @@ impl BoardState {
         let mut board = BoardState { spaces: [None; 165], };
         // Place Dwarfs.
         let mut c = Coordinate::new(0u8);
-        while board.piece_at(c) != Some(Piece::Dwarf) {
-            let row = c.row();
-            let col = c.column();
-            if row != 7 && !(col == 2 && (row == 0 || row == 14)) {
+        loop {
+            println!["{:?}", c];
+            if c.column() != 2 {
                 board.set_piece_at(c, Some(Piece::Dwarf));
             }
-            c = c.right().or_else(|| c.down()).or_else(|| c.left()).or_else(|| c.up()).unwrap();
+            match c.right() {
+                Some(new_c) => c = new_c,
+                None => break,
+            }
+        }
+        loop {
+            println!["{:?}", c];
+            match c.down_right() {
+                Some(new_c) => c = new_c,
+                None => break,
+            }
+        }
+        loop {
+            println!["{:?}", c];
+            if c.row() != 7 {
+                board.set_piece_at(c, Some(Piece::Dwarf));
+            }
+            match c.down() {
+                Some(new_c) => c = new_c,
+                None => break,
+            }
+        }
+        loop {
+            println!["{:?}", c];
+            match c.down_left() {
+                Some(new_c) => c = new_c,
+                None => break,
+            }
+        }
+        loop {
+            println!["{:?}", c];
+            if c.column() != 2 {
+                board.set_piece_at(c, Some(Piece::Dwarf));
+            }
+            match c.left() {
+                Some(new_c) => c = new_c,
+                None => break,
+            }
+        }
+        loop {
+            println!["{:?}", c];
+            match c.up_left() {
+                Some(new_c) => c = new_c,
+                None => break,
+            }
+        }
+        loop {
+            println!["{:?}", c];
+            if c.row() != 7 {
+                board.set_piece_at(c, Some(Piece::Dwarf));
+            }
+            match c.up() {
+                Some(new_c) => c = new_c,
+                None => break,
+            }
         }
         // Place Thudstone.
         c = Coordinate::new(82);
