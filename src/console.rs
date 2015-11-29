@@ -1,3 +1,6 @@
+use std::io;
+use std::io::Write;
+
 use ::Board;
 use ::BoardContent;
 use ::GridCoordinate;
@@ -19,5 +22,36 @@ pub fn write_board(board: &Board) {
             print!("{}", glyph(board.get_grid_square(GridCoordinate::new(row, col))))
         }
         println!("");
+    }
+}
+
+pub fn read_coordinate() -> GridCoordinate {
+    let stdin = io::stdin();
+    let mut stdout = io::stdout();
+    let mut input = String::new();
+    loop {
+        input.clear();
+        print!("row? ");
+        stdout.flush().ok().expect("could not flush stdout");
+        assert!(stdin.read_line(&mut input).is_ok());
+        let row: u8 = match input.trim().parse() {
+            Ok(r) if r <= 14 => r,
+            _ => {
+                println!("bad row");
+                continue
+            },
+        };
+        input.clear();
+        print!("col? ");
+        stdout.flush().ok().expect("could not flush stdout");
+        assert!(stdin.read_line(&mut input).is_ok());
+        let col: u8 = match input.trim().parse() {
+            Ok(c) if c <= 14 => c,
+            _ => {
+                println!("bad col");
+                continue
+            },
+        };
+        return GridCoordinate::new(row, col)
     }
 }
