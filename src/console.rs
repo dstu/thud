@@ -3,7 +3,7 @@ use std::io::Write;
 
 use ::Board;
 use ::BoardContent;
-use ::GridCoordinate;
+use ::Coordinate;
 use ::Token;
 
 pub fn glyph(b: Option<BoardContent>) -> &'static str {
@@ -19,13 +19,13 @@ pub fn glyph(b: Option<BoardContent>) -> &'static str {
 pub fn write_board(board: &Board) {
     for row in 0u8..15u8 {
         for col in 0u8..15u8 {
-            print!("{}", glyph(board.get_grid_square(GridCoordinate::new(row, col))))
+            print!("{}", glyph(Coordinate::new(row, col).map(|c| board[c])))
         }
         println!("");
     }
 }
 
-pub fn read_coordinate() -> GridCoordinate {
+pub fn read_coordinate() -> Coordinate {
     let stdin = io::stdin();
     let mut stdout = io::stdout();
     let mut input = String::new();
@@ -33,7 +33,7 @@ pub fn read_coordinate() -> GridCoordinate {
         input.clear();
         print!("row? ");
         stdout.flush().ok().expect("could not flush stdout");
-        assert!(stdin.read_line(&mut input).is_ok());
+        stdin.read_line(&mut input).ok().expect("could not read from stdin");
         let row: u8 = match input.trim().parse() {
             Ok(r) if r <= 14 => r,
             _ => {
@@ -44,7 +44,7 @@ pub fn read_coordinate() -> GridCoordinate {
         input.clear();
         print!("col? ");
         stdout.flush().ok().expect("could not flush stdout");
-        assert!(stdin.read_line(&mut input).is_ok());
+        stdin.read_line(&mut input).ok().expect("could not read from stdin");
         let col: u8 = match input.trim().parse() {
             Ok(c) if c <= 14 => c,
             _ => {
@@ -52,6 +52,12 @@ pub fn read_coordinate() -> GridCoordinate {
                 continue
             },
         };
-        return GridCoordinate::new(row, col)
+        match Coordinate::new(row, col) {
+            None => {
+                println!("coordinate out of playable range");
+                continue
+            },
+            Some(c) => return c,
+        }
     }
 }

@@ -20,16 +20,7 @@ pub enum BoardContent {
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct BoardElement {
     pub content: BoardContent,
-    pub coordinate: GameCoordinate,
-}
-
-/// A Cartesian coordinate on the game board.
-///
-/// May have values which represent invalid locations for placing pieces, like
-/// (0, 0).
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub struct GridCoordinate {
-    packed: u8,
+    pub coordinate: Coordinate,
 }
 
 const COL_MULTIPLIER: u8 = 0x10u8;
@@ -37,11 +28,23 @@ const COL_MASK: u8 = 0xF0u8;
 const ROW_MULTIPLIER: u8 = 1u8;
 const ROW_MASK: u8 = 0x0Fu8;
 
-impl GridCoordinate {
-    pub fn new(row: u8, col: u8) -> Self {
-        assert!(row < 16u8, "Grid row must be in [0, 15]");
-        assert!(col < 16u8, "Grid col must be in [0, 15]");
-        GridCoordinate { packed: COL_MULTIPLIER * col + ROW_MULTIPLIER * row }
+/// A space in the game, where a piece may be placed.
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub struct Coordinate {
+    packed: u8,
+}
+
+impl Coordinate {
+    pub fn new(row: u8, col: u8) -> Option<Self> {
+        if row >= 15 || col >= 15 {
+            return None
+        }
+        let (row_start, row_end) = bounds_of_row(row);
+        if row_start <= col && col <= row_end {
+            Some(Coordinate { packed: col * COL_MULTIPLIER + row * ROW_MULTIPLIER, })
+        } else {
+            None
+        }
     }
 
     pub fn row(&self) -> u8 {
@@ -72,7 +75,7 @@ impl GridCoordinate {
         if self.at_leftmost() {
             None
         } else {
-            Some(GridCoordinate { packed: self.packed - COL_MULTIPLIER })
+            Some(Coordinate { packed: self.packed - COL_MULTIPLIER })
         }
     }
 
@@ -80,7 +83,7 @@ impl GridCoordinate {
         if self.at_rightmost() {
             None
         } else {
-            Some(GridCoordinate { packed: self.packed + COL_MULTIPLIER })
+            Some(Coordinate { packed: self.packed + COL_MULTIPLIER })
         }
     }
 
@@ -88,7 +91,7 @@ impl GridCoordinate {
         if self.at_top() {
             None
         } else {
-            Some(GridCoordinate { packed: self.packed - ROW_MULTIPLIER })
+            Some(Coordinate { packed: self.packed - ROW_MULTIPLIER })
         }
     }
 
@@ -96,56 +99,35 @@ impl GridCoordinate {
         if self.at_bottom() {
             None
         } else {
-            Some(GridCoordinate { packed: self.packed + ROW_MULTIPLIER })
+            Some(Coordinate { packed: self.packed + ROW_MULTIPLIER })
         }
+    }
+
+   
+    pub fn to_direction(&self, d: Direction) -> Option<Coordinate> {
+        match d {
+            Direction::Up => self.to_up(),
+            Direction::Down => self.to_down(),
+            Direction::Left => self.to_left(),
+            Direction::Right => self.to_right(),
+        }
+    }
+
+    fn index(&self) -> usize {
+        let (row_start, _) = bounds_of_row(self.row());
+        (offset_of_row(self.row()) + self.col() - row_start) as usize
     }
 }
 
-impl fmt::Debug for GridCoordinate {
+impl fmt::Debug for Coordinate {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "({}, {})", self.row(), self.col())
     }
 }
 
-/// A space in the game, where a piece may be placed.
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub struct GameCoordinate {
-    c: GridCoordinate,
-}
-
-impl GameCoordinate {
-    pub fn new(c: GridCoordinate) -> Option<Self> {
-        let col = c.col();
-        let (row_start, row_end) = bounds_of_row(c);
-        if row_start <= col && col <= row_end {
-            Some(GameCoordinate { c: c, })
-        } else {
-            None
-        }
-    }
-    
-    pub fn to_grid(&self) -> GridCoordinate {
-        self.c
-    }
-
-    pub fn to_direction(&self, d: Direction) -> Option<GameCoordinate> {
-        match d {
-            Direction::Up => self.c.to_up().and_then(|c| GameCoordinate::new(c)),
-            Direction::Down => self.c.to_down().and_then(|c| GameCoordinate::new(c)),
-            Direction::Left => self.c.to_left().and_then(|c| GameCoordinate::new(c)),
-            Direction::Right => self.c.to_right().and_then(|c| GameCoordinate::new(c)),
-        }
-    }
-
-    fn index(&self) -> usize {
-        let (row_start, _) = bounds_of_row(self.c);
-        (offset_of_row(self.c) + self.c.col() - row_start) as usize
-    }
-}
-
-/// Returns the start and end columns the row of `c`.
-fn bounds_of_row(c: GridCoordinate) -> (u8, u8) {
-    let row_start = match c.row() {
+/// Returns the start and end columns of `row`, which must be in [0, 14].
+fn bounds_of_row(row: u8) -> (u8, u8) {
+    let row_start = match row {
         r @ 0...4 => 5 - r,
         r @ 10...14 => r - 9,
         _ => 0,
@@ -154,9 +136,9 @@ fn bounds_of_row(c: GridCoordinate) -> (u8, u8) {
     (row_start, row_end)
 }
 
-/// Returns the offset of the row of `c` in 1-d row-major order.
-fn offset_of_row(c: GridCoordinate) -> u8 {
-    match c.row() {
+/// Returns the offset in 1-d row-major order of `row`, which should be in [0, 14].
+fn offset_of_row(row: u8) -> u8 {
+    match row {
         0 => 0,
         1 => 5,
         2 => 12,
@@ -184,21 +166,21 @@ pub enum Direction {
 
 /// Describes a line on the game board proceeding in some direction.
 struct Ray {
-    here: GameCoordinate,
+    here: Coordinate,
     direction1: Direction,
     direction2: Option<Direction>,
 }
 
 impl Ray {
-    fn new(c: GameCoordinate, d1: Direction, d2: Option<Direction>, ) -> Self {
+    fn new(c: Coordinate, d1: Direction, d2: Option<Direction>, ) -> Self {
         Ray { here: c, direction1: d1, direction2: d2, }
     }
 }
 
 impl Iterator for Ray {
-    type Item = GameCoordinate;
+    type Item = Coordinate;
 
-    fn next(&mut self) -> Option<GameCoordinate> {
+    fn next(&mut self) -> Option<Coordinate> {
         self.here.to_direction(self.direction1)
             .and_then(|h| self.direction2.and_then(|d2| h.to_direction(d2)))
     }
@@ -219,76 +201,78 @@ impl Board {
     pub fn default() -> Self {
         let mut b = Board::new();
 
-        b[GameCoordinate::new(GridCoordinate::new(6, 6)).unwrap()] = BoardContent::Occupied(Token::Troll);
-        b[GameCoordinate::new(GridCoordinate::new(6, 7)).unwrap()] = BoardContent::Occupied(Token::Troll);
-        b[GameCoordinate::new(GridCoordinate::new(6, 8)).unwrap()] = BoardContent::Occupied(Token::Troll);
-        b[GameCoordinate::new(GridCoordinate::new(7, 6)).unwrap()] = BoardContent::Occupied(Token::Troll);
-        b[GameCoordinate::new(GridCoordinate::new(7, 7)).unwrap()] = BoardContent::Occupied(Token::Stone);
-        b[GameCoordinate::new(GridCoordinate::new(7, 8)).unwrap()] = BoardContent::Occupied(Token::Troll);
-        b[GameCoordinate::new(GridCoordinate::new(8, 6)).unwrap()] = BoardContent::Occupied(Token::Troll);
-        b[GameCoordinate::new(GridCoordinate::new(8, 7)).unwrap()] = BoardContent::Occupied(Token::Troll);
-        b[GameCoordinate::new(GridCoordinate::new(8, 8)).unwrap()] = BoardContent::Occupied(Token::Troll);
+        b[Coordinate::new(6, 6).unwrap()] = BoardContent::Occupied(Token::Troll);
+        b[Coordinate::new(6, 7).unwrap()] = BoardContent::Occupied(Token::Troll);
+        b[Coordinate::new(6, 8).unwrap()] = BoardContent::Occupied(Token::Troll);
+        b[Coordinate::new(7, 6).unwrap()] = BoardContent::Occupied(Token::Troll);
+        b[Coordinate::new(7, 7).unwrap()] = BoardContent::Occupied(Token::Stone);
+        b[Coordinate::new(7, 8).unwrap()] = BoardContent::Occupied(Token::Troll);
+        b[Coordinate::new(8, 6).unwrap()] = BoardContent::Occupied(Token::Troll);
+        b[Coordinate::new(8, 7).unwrap()] = BoardContent::Occupied(Token::Troll);
+        b[Coordinate::new(8, 8).unwrap()] = BoardContent::Occupied(Token::Troll);
 
-        b[GameCoordinate::new(GridCoordinate::new(0, 5)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(0, 6)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(0, 8)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(0, 9)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(0, 5).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(0, 6).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(0, 8).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(0, 9).unwrap()] = BoardContent::Occupied(Token::Dwarf);
 
-        b[GameCoordinate::new(GridCoordinate::new(1, 10)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(2, 11)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(3, 12)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(4, 13)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(1, 10).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(2, 11).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(3, 12).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(4, 13).unwrap()] = BoardContent::Occupied(Token::Dwarf);
 
-        b[GameCoordinate::new(GridCoordinate::new(5, 0)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(6, 0)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(8, 0)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(9, 0)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(5, 0).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(6, 0).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(8, 0).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(9, 0).unwrap()] = BoardContent::Occupied(Token::Dwarf);
 
-        b[GameCoordinate::new(GridCoordinate::new(10, 13)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(11, 12)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(12, 11)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(13, 10)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(10, 13).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(11, 12).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(12, 11).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(13, 10).unwrap()] = BoardContent::Occupied(Token::Dwarf);
 
-        b[GameCoordinate::new(GridCoordinate::new(14, 5)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(14, 6)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(14, 8)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(14, 9)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(14, 5).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(14, 6).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(14, 8).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(14, 9).unwrap()] = BoardContent::Occupied(Token::Dwarf);
 
-        b[GameCoordinate::new(GridCoordinate::new(13, 4)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(12, 3)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(11, 2)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(10, 1)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(13, 4).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(12, 3).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(11, 2).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(10, 1).unwrap()] = BoardContent::Occupied(Token::Dwarf);
 
-        b[GameCoordinate::new(GridCoordinate::new(5, 14)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(6, 14)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(8, 14)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(9, 14)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(5, 14).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(6, 14).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(8, 14).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(9, 14).unwrap()] = BoardContent::Occupied(Token::Dwarf);
 
-        b[GameCoordinate::new(GridCoordinate::new(4, 1)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(3, 2)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(2, 3)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
-        b[GameCoordinate::new(GridCoordinate::new(1, 4)).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(4, 1).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(3, 2).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(2, 3).unwrap()] = BoardContent::Occupied(Token::Dwarf);
+        b[Coordinate::new(1, 4).unwrap()] = BoardContent::Occupied(Token::Dwarf);
 
         b
     }
-    
-    pub fn get_grid_square(&self, c: GridCoordinate) -> Option<BoardContent> {
-        GameCoordinate::new(c).map(|gc| self[gc])
-    }
 }
 
-impl Index<GameCoordinate> for Board {
+impl Index<Coordinate> for Board {
     type Output = BoardContent;
 
-    fn index(&self, i: GameCoordinate) -> &BoardContent {
+    fn index(&self, i: Coordinate) -> &BoardContent {
         &self.cells[i.index()]
     }
 }
 
-impl IndexMut<GameCoordinate> for Board {
-    fn index_mut(&mut self, i: GameCoordinate) -> &mut BoardContent {
+impl IndexMut<Coordinate> for Board {
+    fn index_mut(&mut self, i: Coordinate) -> &mut BoardContent {
         &mut self.cells[i.index()]
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Action {
+    Move(Coordinate, Coordinate),
+    
 }
 
 // // For now, assume that we're on a standard Thud grid.
