@@ -174,7 +174,11 @@ impl Coordinate {
     pub fn to_direction(&self, d: Direction) -> Option<Coordinate> {
         match d {
             Direction::Up => self.to_up(),
+            Direction::UpLeft => self.to_up().and_then(|s| s.to_left()),
+            Direction::UpRight => self.to_up().and_then(|s| s.to_right()),
             Direction::Down => self.to_down(),
+            Direction::DownLeft => self.to_down().and_then(|s| s.to_left()),
+            Direction::DownRight => self.to_down().and_then(|s| s.to_right()),
             Direction::Left => self.to_left(),
             Direction::Right => self.to_right(),
         }
@@ -253,14 +257,18 @@ fn row_of_index(index: usize) -> u8 {
 /// A direction linking one Coordinate to another.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Direction {
-    Up, Down, Left, Right,
+    Up, Down, Left, Right, UpLeft, UpRight, DownLeft, DownRight,
 }
 
 impl Direction {
     pub fn reverse(&self) -> Self {
         match *self {
             Direction::Up => Direction::Down,
+            Direction::UpLeft => Direction::DownRight,
+            Direction::UpRight => Direction::DownLeft,
             Direction::Down => Direction::Up,
+            Direction::DownLeft => Direction::UpRight,
+            Direction::DownRight => Direction::UpLeft,
             Direction::Left => Direction::Right,
             Direction::Right => Direction::Left,
         }
@@ -270,17 +278,16 @@ impl Direction {
 /// Describes a line on the game board proceeding in some direction.
 struct Ray {
     here: Coordinate,
-    direction1: Direction,
-    direction2: Option<Direction>,
+    direction: Direction,
 }
 
 impl Ray {
-    fn new(c: Coordinate, d1: Direction, d2: Option<Direction>, ) -> Self {
-        Ray { here: c, direction1: d1, direction2: d2, }
+    fn new(c: Coordinate, d: Direction, ) -> Self {
+        Ray { here: c, direction: d, }
     }
 
     fn reverse(&self) -> Self {
-        Ray::new(self.here, self.direction1.reverse(), self.direction2.map(|d| d.reverse()))
+        Ray::new(self.here, self.direction.reverse())
     }
 }
 
@@ -288,19 +295,12 @@ impl Iterator for Ray {
     type Item = Coordinate;
 
     fn next(&mut self) -> Option<Coordinate> {
-        match (self.here.to_direction(self.direction1), self.direction2) {
-            (Some(new_here), None) => {
+        match self.here.to_direction(self.direction) {
+            Some(new_here) => {
                 self.here = new_here;
                 Some(self.here)
             },
-            (Some(intermediate), Some(d2)) => match intermediate.to_direction(d2) {
-                Some(new_here) => {
-                    self.here = new_here;
-                    Some(self.here)
-                },
-                _ => None,
-            },
-            _ => None,
+            None => None,
         }
     }
 }
@@ -376,7 +376,6 @@ impl Board {
 
     pub fn actions(&self, r: Role) // -> ActionIterator 
     {
-
         for (index, content) in self.cells.into_iter().enumerate() {
             match *content {
                 BoardContent::Occupied(t) if t.role() == Some(r) => {
@@ -384,50 +383,26 @@ impl Board {
                     println!("moves for {:?} @ {:?}", t, position);
                     match r {
                         Role::Dwarf => {
-                            for d in [Direction::Up, Direction::Down, Direction::Left, Direction::Right].into_iter() {
-                                println!("moves going {:?}", d);
-                                for a in MoveIterator::new(self, position, *d, None) {
+                            for d in [Direction::Up, Direction::Down, Direction::Left, Direction::Right, Direction::UpLeft, Direction::UpRight, Direction::DownLeft, Direction::DownRight].into_iter() {
+                                // println!("moves going {:?}", d);
+                                for a in MoveIterator::new(self, position, *d) {
                                     println!("  {:?}", a);
                                 }
-                                println!("hurls going {:?}", d);
-                                for a in HurlIterator::new(self, position, *d, None) {
+                                // println!("hurls going {:?}", d);
+                                for a in HurlIterator::new(self, position, *d) {
                                     println!("  {:?}", a);
-                                }
-                            }
-                            for d1 in [Direction::Up, Direction::Down].into_iter() {
-                                for d2 in [Direction::Left, Direction::Right].into_iter() {
-                                    println!("moves going {:?}->{:?}", d1, d2);
-                                    for a in MoveIterator::new(self, position, *d1, Some(*d2)) {
-                                        println!("  {:?}", a);
-                                    }
-                                    println!("hurls going {:?}->{:?}", d1, d2);
-                                    for a in HurlIterator::new(self, position, *d1, Some(*d2)) {
-                                        println!("  {:?}", a);
-                                    }
                                 }
                             }
                         },
                         Role::Troll => {
-                            for d in [Direction::Up, Direction::Down, Direction::Left, Direction::Right].into_iter() {
-                                println!("moves going {:?}", d);
-                                for a in MoveIterator::new(self, position, *d, None).take(1) {
+                            for d in [Direction::Up, Direction::Down, Direction::Left, Direction::Right, Direction::UpLeft, Direction::UpRight, Direction::DownLeft, Direction::DownRight].into_iter() {
+                                // println!("moves going {:?}", d);
+                                for a in MoveIterator::new(self, position, *d).take(1) {
                                     println!("  {:?}", a);
                                 }
-                                println!("shoves going {:?}", d);
-                                for a in ShoveIterator::new(self, position, *d, None) {
+                                // println!("shoves going {:?}", d);
+                                for a in ShoveIterator::new(self, position, *d) {
                                     println!("  {:?}", a);
-                                }
-                            }
-                            for d1 in [Direction::Up, Direction::Down].into_iter() {
-                                for d2 in [Direction::Left, Direction::Right].into_iter() {
-                                    println!("moves going {:?}->{:?}", d1, d2);
-                                    for a in MoveIterator::new(self, position, *d1, Some(*d2)).take(1) {
-                                        println!("  {:?}", a);
-                                    }
-                                    println!("shoves going {:?}->{:?}", d1, d2);
-                                    for a in ShoveIterator::new(self, position, *d1, Some(*d2)) {
-                                        println!("  {:?}", a);
-                                    }
                                 }
                             }
                         },
@@ -489,13 +464,17 @@ pub struct GameState {
 }
 
 impl GameState {
-    pub fn new(player1_name: String, player2_name: String) -> Self {
+    pub fn new(board: Board, player1_name: String, player2_name: String) -> Self {
         GameState {
-            board: Board::default(),
+            board: board,
             players: [Player { role: Role::Dwarf, name: player1_name, },
                       Player { role: Role::Troll, name: player2_name, },],
             first_player_active: true,
         }
+    }
+    
+    pub fn new_default(player1_name: String, player2_name: String) -> Self {
+        GameState::new(Board::default(), player1_name, player2_name)
     }
 
     pub fn active_player(&self) -> &Player {
@@ -537,8 +516,8 @@ pub struct MoveIterator<'a> {
 }
 
 impl<'a> MoveIterator<'a> {
-    fn new(board: &'a Board, start: Coordinate, d1: Direction, d2: Option<Direction>) -> Self {
-        MoveIterator { board: board, start: start, ray: Ray::new(start, d1, d2), }
+    fn new(board: &'a Board, start: Coordinate, d: Direction) -> Self {
+        MoveIterator { board: board, start: start, ray: Ray::new(start, d), }
     }
 }
 
@@ -564,10 +543,9 @@ pub struct ShoveIterator<'a> {
 }
 
 impl<'a> ShoveIterator<'a> {
-    fn new(board: &'a Board, start: Coordinate, d1: Direction, d2: Option<Direction>) -> Self {
-        let mut forward = Ray::new(start, d1, d2);
+    fn new(board: &'a Board, start: Coordinate, d: Direction) -> Self {
+        let forward = Ray::new(start, d);
         let backward = forward.reverse();
-        forward.next();
         ShoveIterator { board: board, start: start, forward: forward, backward: backward, }
     }
 }
@@ -618,10 +596,9 @@ pub struct HurlIterator<'a> {
 }
 
 impl<'a> HurlIterator<'a> {
-    pub fn new(board: &'a Board, start: Coordinate, d1: Direction, d2: Option<Direction>) -> Self {
-        let mut forward = Ray::new(start, d1, d2);
+    pub fn new(board: &'a Board, start: Coordinate, d: Direction) -> Self {
+        let forward = Ray::new(start, d);
         let backward = forward.reverse();
-        forward.next();
         HurlIterator { board: board, start: start, forward: forward, backward: backward, done: false, }
     }
 }
