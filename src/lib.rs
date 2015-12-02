@@ -4,17 +4,55 @@ use std::iter::Iterator;
 use std::ops::{Index, IndexMut};
 use std::fmt;
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Token {
     Stone,
     Dwarf,
     Troll,
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+impl Token {
+    pub fn role(&self) -> Option<Role> {
+        match *self {
+            Token::Stone => None,
+            Token::Dwarf => Some(Role::Dwarf),
+            Token::Troll => Some(Role::Troll),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BoardContent {
     Occupied(Token),
     Empty,
+}
+
+impl BoardContent {
+    pub fn is_empty(&self) -> bool {
+        match *self {
+            BoardContent::Empty => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_occupied(&self) -> bool {
+        return !self.is_empty()
+    }
+
+    pub fn is_troll(&self) -> bool {
+        *self == BoardContent::Occupied(Token::Troll)
+    }
+
+    pub fn is_dwarf(&self) -> bool {
+        *self == BoardContent::Occupied(Token::Dwarf)
+    }
+
+    pub fn role(&self) -> Option<Role> {
+        match *self {
+            BoardContent::Empty => None,
+            BoardContent::Occupied(t) => t.role(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -47,6 +85,17 @@ impl Coordinate {
         }
     }
 
+    fn from_index(index: usize) -> Self {
+        // println!("from_index({})", index);
+        assert!(index < 165);
+        let row = row_of_index(index);
+        let row_offset = offset_of_row(row);
+        let (row_start, _) = bounds_of_row(row);
+        let col = (index - (row_offset as usize) + (row_start as usize)) as u8;
+        // println!("from_index({}) = ({}, {})", index, row, col);
+        Coordinate { packed: col * COL_MULTIPLIER + row * ROW_MULTIPLIER, }
+    }
+
     pub fn row(&self) -> u8 {
         (self.packed & ROW_MASK) / ROW_MULTIPLIER
     }
@@ -56,19 +105,37 @@ impl Coordinate {
     }
 
     pub fn at_leftmost(&self) -> bool {
-        self.col() == 0
+        let (row_start, _) = bounds_of_row(self.row());
+        self.col() == row_start
     }
 
     pub fn at_rightmost(&self) -> bool {
-        self.col() == 15
+        let (_, row_end) = bounds_of_row(self.row());
+        self.col() == row_end
     }
 
     pub fn at_top(&self) -> bool {
-        self.row() == 0
+        match self.row() {
+            0 => true,
+            r @ 1...5 => {
+                let col = self.col();
+                let (row_start, row_end) = bounds_of_row(r);
+                col == row_start || col == row_end
+            },
+            _ => false,
+        }
     }
 
     pub fn at_bottom(&self) -> bool {
-        self.row() == 15
+        match self.row() {
+            r @ 9...13 => {
+                let col = self.col();
+                let (row_start, row_end) = bounds_of_row(r);
+                col == row_start || col == row_end
+            },
+            14 => true,
+            _ => false,
+        }
     }
 
     pub fn to_left(&self) -> Option<Self> {
@@ -114,8 +181,12 @@ impl Coordinate {
     }
 
     fn index(&self) -> usize {
+        let row_offset = offset_of_row(self.row());
         let (row_start, _) = bounds_of_row(self.row());
-        (offset_of_row(self.row()) + self.col() - row_start) as usize
+        // println!("index of ({}, {}) = {} + {} - {}",
+        //          self.row(), self.col(),
+        //          row_offset, self.col(), row_start);
+        (row_offset + self.col() - row_start) as usize
     }
 }
 
@@ -158,10 +229,42 @@ fn offset_of_row(row: u8) -> u8 {
     }
 }
 
-/// A direction linking one GameCoordinate to another.
-#[derive(Clone, Copy, Eq, PartialEq)]
+fn row_of_index(index: usize) -> u8 {
+    match index {
+        0...4 => 0u8,
+        5...11 => 1u8,
+        12...20 => 2u8,
+        21...31 => 3u8,
+        31...44 => 4u8,
+        45...59 => 5u8,
+        60...74 => 6u8,
+        75...89 => 7u8,
+        90...104 => 8u8,
+        105...119 => 9u8,
+        120...132 => 10u8,
+        133...143 => 11u8,
+        144...152 => 12u8,
+        153...159 => 13u8,
+        160...164 => 14u8,
+        _ => unreachable!(),
+    }
+}
+
+/// A direction linking one Coordinate to another.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Direction {
     Up, Down, Left, Right,
+}
+
+impl Direction {
+    pub fn reverse(&self) -> Self {
+        match *self {
+            Direction::Up => Direction::Down,
+            Direction::Down => Direction::Up,
+            Direction::Left => Direction::Right,
+            Direction::Right => Direction::Left,
+        }
+    }
 }
 
 /// Describes a line on the game board proceeding in some direction.
@@ -175,18 +278,35 @@ impl Ray {
     fn new(c: Coordinate, d1: Direction, d2: Option<Direction>, ) -> Self {
         Ray { here: c, direction1: d1, direction2: d2, }
     }
+
+    fn reverse(&self) -> Self {
+        Ray::new(self.here, self.direction1.reverse(), self.direction2.map(|d| d.reverse()))
+    }
 }
 
 impl Iterator for Ray {
     type Item = Coordinate;
 
     fn next(&mut self) -> Option<Coordinate> {
-        self.here.to_direction(self.direction1)
-            .and_then(|h| self.direction2.and_then(|d2| h.to_direction(d2)))
+        match (self.here.to_direction(self.direction1), self.direction2) {
+            (Some(new_here), None) => {
+                self.here = new_here;
+                Some(self.here)
+            },
+            (Some(intermediate), Some(d2)) => match intermediate.to_direction(d2) {
+                Some(new_here) => {
+                    self.here = new_here;
+                    Some(self.here)
+                },
+                _ => None,
+            },
+            _ => None,
+        }
     }
 }
 
-/// Game state, with handles for mutating it.
+/// Layout of tokens on the game board, with handles addressing into it and
+/// mutating it.
 pub struct Board {
     cells: [BoardContent; 165],
 }
@@ -253,6 +373,70 @@ impl Board {
 
         b
     }
+
+    pub fn actions(&self, r: Role) // -> ActionIterator 
+    {
+
+        for (index, content) in self.cells.into_iter().enumerate() {
+            match *content {
+                BoardContent::Occupied(t) if t.role() == Some(r) => {
+                    let position = Coordinate::from_index(index);
+                    println!("moves for {:?} @ {:?}", t, position);
+                    match r {
+                        Role::Dwarf => {
+                            for d in [Direction::Up, Direction::Down, Direction::Left, Direction::Right].into_iter() {
+                                println!("moves going {:?}", d);
+                                for a in MoveIterator::new(self, position, *d, None) {
+                                    println!("  {:?}", a);
+                                }
+                                println!("hurls going {:?}", d);
+                                for a in HurlIterator::new(self, position, *d, None) {
+                                    println!("  {:?}", a);
+                                }
+                            }
+                            for d1 in [Direction::Up, Direction::Down].into_iter() {
+                                for d2 in [Direction::Left, Direction::Right].into_iter() {
+                                    println!("moves going {:?}->{:?}", d1, d2);
+                                    for a in MoveIterator::new(self, position, *d1, Some(*d2)) {
+                                        println!("  {:?}", a);
+                                    }
+                                    println!("hurls going {:?}->{:?}", d1, d2);
+                                    for a in HurlIterator::new(self, position, *d1, Some(*d2)) {
+                                        println!("  {:?}", a);
+                                    }
+                                }
+                            }
+                        },
+                        Role::Troll => {
+                            for d in [Direction::Up, Direction::Down, Direction::Left, Direction::Right].into_iter() {
+                                println!("moves going {:?}", d);
+                                for a in MoveIterator::new(self, position, *d, None).take(1) {
+                                    println!("  {:?}", a);
+                                }
+                                println!("shoves going {:?}", d);
+                                for a in ShoveIterator::new(self, position, *d, None) {
+                                    println!("  {:?}", a);
+                                }
+                            }
+                            for d1 in [Direction::Up, Direction::Down].into_iter() {
+                                for d2 in [Direction::Left, Direction::Right].into_iter() {
+                                    println!("moves going {:?}->{:?}", d1, d2);
+                                    for a in MoveIterator::new(self, position, *d1, Some(*d2)).take(1) {
+                                        println!("  {:?}", a);
+                                    }
+                                    println!("shoves going {:?}->{:?}", d1, d2);
+                                    for a in ShoveIterator::new(self, position, *d1, Some(*d2)) {
+                                        println!("  {:?}", a);
+                                    }
+                                }
+                            }
+                        },
+                    }
+                },
+                _ => continue,
+            }
+        }
+    }
 }
 
 impl Index<Coordinate> for Board {
@@ -269,10 +453,196 @@ impl IndexMut<Coordinate> for Board {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Action {
     Move(Coordinate, Coordinate),
-    
+    Hurl(Coordinate, Coordinate),
+    Shove(Coordinate, Coordinate, Vec<Coordinate>),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Role {
+    Dwarf,
+    Troll,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Player {
+    role: Role,
+    name: String,
+}
+
+impl Player {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn role(&self) -> Role {
+        self.role
+    }
+}
+
+pub struct GameState {
+    board: Board,
+    players: [Player; 2],
+    first_player_active: bool,
+}
+
+impl GameState {
+    pub fn new(player1_name: String, player2_name: String) -> Self {
+        GameState {
+            board: Board::default(),
+            players: [Player { role: Role::Dwarf, name: player1_name, },
+                      Player { role: Role::Troll, name: player2_name, },],
+            first_player_active: true,
+        }
+    }
+
+    pub fn active_player(&self) -> &Player {
+        if self.first_player_active {
+            &self.players[0]
+        } else {
+            &self.players[1]
+        }
+    }
+
+    pub fn actions(&self, r: Role) {
+        self.board.actions(r)
+    }
+
+    pub fn toggle_player(&mut self) {
+        self.first_player_active = !self.first_player_active
+    }
+}
+
+// pub struct ActionIterator<'a> {
+//     cells: &'a Board,
+//     role: Role,
+// }
+
+// impl Iterator for ActionIterator {
+//     type Item = Action;
+
+//     fn next(&mut self) -> Option<Action> {
+//         if cell_index >= board.cells.size() {
+            
+//         }
+//     }
+// }
+
+pub struct MoveIterator<'a> {
+    board: &'a Board,
+    start: Coordinate,
+    ray: Ray,
+}
+
+impl<'a> MoveIterator<'a> {
+    fn new(board: &'a Board, start: Coordinate, d1: Direction, d2: Option<Direction>) -> Self {
+        MoveIterator { board: board, start: start, ray: Ray::new(start, d1, d2), }
+    }
+}
+
+impl<'a> Iterator for MoveIterator<'a> {
+    type Item = Action;
+
+    fn next(&mut self) -> Option<Action> {
+        self.ray.next().and_then(
+            |end|
+            if self.board[end].is_empty() {
+                Some(Action::Move(self.start, end))
+            } else {
+                None
+            })
+    }
+}
+
+pub struct ShoveIterator<'a> {
+    board: &'a Board,
+    start: Coordinate,
+    forward: Ray,
+    backward: Ray,
+}
+
+impl<'a> ShoveIterator<'a> {
+    fn new(board: &'a Board, start: Coordinate, d1: Direction, d2: Option<Direction>) -> Self {
+        let mut forward = Ray::new(start, d1, d2);
+        let backward = forward.reverse();
+        forward.next();
+        ShoveIterator { board: board, start: start, forward: forward, backward: backward, }
+    }
+}
+
+impl<'a> Iterator for ShoveIterator<'a> {
+    type Item = Action;
+
+    fn next(&mut self) -> Option<Action> {
+        match (self.forward.next(), self.backward.next()) {
+            (Some(end), Some(previous))
+                if self.board[end].is_empty() && self.board[previous].is_troll() => {
+                    let mut captured = Vec::with_capacity(8);
+                    for d in [Direction::Up, Direction::Down, Direction::Left, Direction::Right].into_iter() {
+                        match end.to_direction(*d) {
+                            Some(adjacent) if self.board[adjacent].is_dwarf() => {
+                                captured.push(adjacent)
+                            },
+                            _ => (),
+                        }
+                    }
+                    for d1 in [Direction::Up, Direction::Down].into_iter() {
+                        for d2 in [Direction::Left, Direction::Right].into_iter() {
+                            match end.to_direction(*d1).and_then(|e| e.to_direction(*d2)) {
+                                Some(adjacent) if self.board[adjacent].is_dwarf() => {
+                                    captured.push(adjacent)
+                                },
+                                _ => (),
+                            }
+                        }
+                    }
+                    if captured.is_empty() {
+                        None
+                    } else {
+                        Some(Action::Shove(self.start, end, captured))
+                    }
+                },
+            _ => None,
+        }
+    }
+}
+
+pub struct HurlIterator<'a> {
+    board: &'a Board,
+    start: Coordinate,
+    forward: Ray,
+    backward: Ray,
+    done: bool,
+}
+
+impl<'a> HurlIterator<'a> {
+    pub fn new(board: &'a Board, start: Coordinate, d1: Direction, d2: Option<Direction>) -> Self {
+        let mut forward = Ray::new(start, d1, d2);
+        let backward = forward.reverse();
+        forward.next();
+        HurlIterator { board: board, start: start, forward: forward, backward: backward, done: false, }
+    }
+}
+
+impl<'a> Iterator for HurlIterator<'a> {
+    type Item = Action;
+
+    fn next(&mut self) -> Option<Action> {
+        if self.done {
+            return None
+        }
+        self.done = true;
+        loop {
+            match (self.forward.next(), self.backward.next()) {
+                (Some(end), Some(previous)) if self.board[end].is_troll() && self.board[previous].is_dwarf() => {
+                    return Some(Action::Hurl(self.start, end))
+                },
+                _ => return None,
+            }
+        }
+    }
 }
 
 // // For now, assume that we're on a standard Thud grid.

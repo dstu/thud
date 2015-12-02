@@ -1,16 +1,15 @@
 extern crate thud;
 
+use std::str::FromStr;
+
 fn main() {
-    let mut board = thud::Board::default();
-    loop {
-        thud::console::write_board(&board);
-        println!("first coordinate: ");
-        let c1 = thud::console::read_coordinate();
-        println!("second coordinate: ");
-        let c2 = thud::console::read_coordinate();
-        let v1 = board[c1];
-        let v2 = board[c2];
-        board[c1] = v2;
-        board[c2] = v1;
+    let mut state = thud::GameState::new(String::from_str("Player 1").ok().expect(""),
+                                         String::from_str("Player 2").ok().expect(""));
+    let mut i = 0u8;
+    while i < 2 {
+        println!("Moves for {}:", state.active_player().name());
+        state.actions(state.active_player().role());
+        state.toggle_player();
+        i += 1;
     }
 }
