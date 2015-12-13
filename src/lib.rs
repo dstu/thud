@@ -402,7 +402,7 @@ impl Board {
         b
     }
 
-    pub fn actions<'s>(&'s self, r: Role) -> ActionIterator<'s> {
+    pub fn role_actions<'s>(&'s self, r: Role) -> ActionIterator<'s> {
         let occupied_cells = self.occupied_iter(r);
         match r {
             Role::Dwarf =>
@@ -425,6 +425,24 @@ impl Board {
                     //         .flat_map(|d| (MoveIterator::new(self, position, *d).take(1)
                     //                        .chain(ShoveIterator::new(self, position, *d))))
                     // })),
+        }
+    }
+
+    pub fn position_actions<'s>(&'s self, position: Coordinate) -> ActionIterator<'s> {
+        match self[position] {
+            BoardContent::Occupied(t) if t.role() == Some(Role::Dwarf) => {
+                ActionIterator::for_dwarf_position(
+                    Direction::all()
+                        .into_iter()
+                        .flat_map(DwarfDirectionConsumer { board: self, position: position, }))
+            },
+            BoardContent::Occupied(t) if t.role() == Some(Role::Troll) => {
+                ActionIterator::for_troll_position(
+                    Direction::all()
+                        .into_iter()
+                        .flat_map(TrollDirectionConsumer { board: self, position: position, }))
+            },
+            _ => ActionIterator::empty(),
         }
     }
 
@@ -550,8 +568,12 @@ impl GameState {
         }
     }
 
-    pub fn actions<'s>(&'s self, r: Role) -> ActionIterator<'s> {
-        self.board.actions(r)
+    pub fn role_actions<'s>(&'s self, r: Role) -> ActionIterator<'s> {
+        self.board.role_actions(r)
+    }
+
+    pub fn position_actions<'s>(&'s self, position: Coordinate) -> ActionIterator<'s> {
+        self.board.position_actions(position)
     }
 
     pub fn toggle_player(&mut self) {
@@ -674,9 +696,20 @@ type TrollActionIter<'a> = FlatMap<OccupiedCellsIter<'a>,
                                        TrollDirectionConsumer<'a>>,
                                TrollCoordinateConsumer<'a>>;
 
+type DwarfPositionActionIter<'a> = FlatMap<slice::Iter<'a, Direction>,
+                                           Chain<MoveIterator<'a>, HurlIterator<'a>>,
+                                           DwarfDirectionConsumer<'a>>;
+
+type TrollPositionActionIter<'a> = FlatMap<slice::Iter<'a, Direction>,
+                                           Chain<Take<MoveIterator<'a>>, ShoveIterator<'a>>,
+                                           TrollDirectionConsumer<'a>>;
+
 enum ActionIteratorInner<'a> {
-    Dwarf(DwarfActionIter<'a>),
-    Troll(TrollActionIter<'a>),
+    Empty,
+    Dwarf(DwarfActionIter<'a>),  // All dwarf actions on the board.
+    Troll(TrollActionIter<'a>),  // All troll actions on the board.
+    DwarfPosition(DwarfPositionActionIter<'a>),  // All actions for a position.
+    TrollPosition(TrollPositionActionIter<'a>),  // All actions for a position.
 }
 
 /// Iterates over player actions on a board.
@@ -685,12 +718,24 @@ pub struct ActionIterator<'a> {
 }
 
 impl<'a> ActionIterator<'a> {
+    fn empty() -> Self {
+        ActionIterator { inner: ActionIteratorInner::Empty, }
+    }
+
     fn for_dwarf(wrapped: DwarfActionIter<'a>) -> Self {
         ActionIterator { inner: ActionIteratorInner::Dwarf(wrapped), }
     }
 
     fn for_troll(wrapped: TrollActionIter<'a>) -> Self {
         ActionIterator { inner: ActionIteratorInner::Troll(wrapped), }
+    }
+
+    fn for_dwarf_position(wrapped: DwarfPositionActionIter<'a>) -> Self {
+        ActionIterator { inner: ActionIteratorInner::DwarfPosition(wrapped), }
+    }
+
+    fn for_troll_position(wrapped: TrollPositionActionIter<'a>) -> Self {
+        ActionIterator { inner: ActionIteratorInner::TrollPosition(wrapped), }
     }
 }
 
@@ -699,8 +744,11 @@ impl<'a> Iterator for ActionIterator<'a> {
 
     fn next(&mut self) -> Option<Action> {
         match self.inner {
+            ActionIteratorInner::Empty => None,
             ActionIteratorInner::Dwarf(ref mut x) => x.next(),
             ActionIteratorInner::Troll(ref mut x) => x.next(),
+            ActionIteratorInner::DwarfPosition(ref mut x) => x.next(),
+            ActionIteratorInner::TrollPosition(ref mut x) => x.next(),
         }
     }
 }
@@ -862,4 +910,3 @@ impl<'a> Iterator for HurlIterator<'a> {
         }
     }
 }
-

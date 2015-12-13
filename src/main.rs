@@ -19,7 +19,7 @@ fn main() {
         {
             let active = state.active_player();
             println!("Moves for {} ({:?}):", active.name(), active.role());
-            for a in state.actions(active.role()) {
+            for a in state.role_actions(active.role()) {
                 println!("  {:?}", a);
             }
         }
