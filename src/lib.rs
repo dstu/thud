@@ -1,8 +1,14 @@
+#![feature(associated_type_defaults)]
+#![feature(unboxed_closures)]
+#![feature(fn_traits)]
+
 pub mod console;
 
-use std::iter::Iterator;
+use std::iter::{Chain, FlatMap, Iterator, Take};
 use std::ops::{Index, IndexMut};
+
 use std::fmt;
+use std::slice;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Token {
@@ -260,16 +266,14 @@ pub enum Direction {
     Up, Down, Left, Right, UpLeft, UpRight, DownLeft, DownRight,
 }
 
-const ALL_DIRECTIONS: [Direction; 8] = [Direction::Up,
-                                        Direction::Down,
-                                        Direction::Left,
-                                        Direction::Right,
-                                        Direction::UpLeft,
-                                        Direction::UpRight,
-                                        Direction::DownLeft,
-                                        Direction::DownRight];
-
-const ALL_DIRECTIONS_REF: &'static [Direction] = &ALL_DIRECTIONS;
+const ALL_DIRECTIONS_REF: &'static [Direction] = &[Direction::Up,
+                                                   Direction::Down,
+                                                   Direction::Left,
+                                                   Direction::Right,
+                                                   Direction::UpLeft,
+                                                   Direction::UpRight,
+                                                   Direction::DownLeft,
+                                                   Direction::DownRight];
 
 impl Direction {
     pub fn reverse(&self) -> Self {
@@ -320,6 +324,18 @@ impl Iterator for Ray {
 
 /// Layout of tokens on the game board, with handles addressing into it and
 /// mutating it.
+///
+///     The octagonal playing area consists of a 15 by 15 square board from
+///     which a triangle of 15 squares in each corner has been removed. The
+///     Thudstone is placed on the centre square of the board, where it remains
+///     for the entire game and may not be moved onto or through. The eight
+///     trolls are placed onto the eight squares orthogonally and diagonally
+///     adjacent to the Thudstone and the thirty-two dwarfs are placed so as to
+///     occupy all the perimeter spaces except for the four in the same
+///     horizontal or vertical line as the Thudstone. One player takes control
+///     of the dwarfs, the other controls the trolls. The dwarfs move first.
+///
+/// This gives us 165 spaces, each of which may contain a piece.
 pub struct Board {
     cells: [BoardContent; 165],
 }
@@ -387,43 +403,52 @@ impl Board {
         b
     }
 
-    pub fn actions(&self, r: Role) // -> ActionIterator 
-    {
-        for (index, content) in self.cells.into_iter().enumerate() {
-            match *content {
-                BoardContent::Occupied(t) if t.role() == Some(r) => {
-                    let position = Coordinate::from_index(index);
-                    println!("moves for {:?} @ {:?}", t, position);
-                    match r {
-                        Role::Dwarf => {
-                            for d in Direction::all() {
-                                // println!("moves going {:?}", d);
-                                for a in MoveIterator::new(self, position, *d) {
-                                    println!("  {:?}", a);
-                                }
-                                // println!("hurls going {:?}", d);
-                                for a in HurlIterator::new(self, position, *d) {
-                                    println!("  {:?}", a);
-                                }
-                            }
-                        },
-                        Role::Troll => {
-                            for d in Direction::all() {
-                                // println!("moves going {:?}", d);
-                                for a in MoveIterator::new(self, position, *d).take(1) {
-                                    println!("  {:?}", a);
-                                }
-                                // println!("shoves going {:?}", d);
-                                for a in ShoveIterator::new(self, position, *d) {
-                                    println!("  {:?}", a);
-                                }
-                            }
-                        },
-                    }
-                },
-                _ => continue,
-            }
+    pub fn actions<'s>(&'s self, r: Role) -> ActionIterator<'s> {
+        let occupied_cells = self.occupied_iter(r);
+        match r {
+            Role::Dwarf =>
+                ActionIterator::for_dwarf(
+                    occupied_cells.flat_map(DwarfCoordinateConsumer { board: self, })),
+                //  occupied_cells.flat_map(|position| {
+                //         Direction::all()
+                //             .into_iter()
+                //             .flat_map(|d| (MoveIterator::new(self, position, *d)
+                //                            .chain(HurlIterator::new(self, position, *d))))
+                // })),
+            Role::Troll =>
+                ActionIterator::for_troll(
+                    occupied_cells.flat_map(TrollCoordinateConsumer { board: self, })),
+                    // occupied_cells.flat_map(|position| {
+                    //     Direction::all()
+                    //         .into_iter()
+                    //         .flat_map(|d| (MoveIterator::new(self, position, *d).take(1)
+                    //                        .chain(ShoveIterator::new(self, position, *d))))
+                    // })),
         }
+    }
+
+    pub fn do_action(&mut self, a: &Action) {
+        match a {
+            &Action::Move(start, end) => {
+                self[end] = self[start];
+                self[start] = BoardContent::Empty;
+            },
+            &Action::Hurl(start, end) => {
+                self[end] = self[start];
+                self[start] = BoardContent::Empty;
+            },
+            &Action::Shove(start, end, ref captured) => {
+                self[end] = self[start];
+                self[start] = BoardContent::Empty;
+                for c in captured {
+                    self[*c] = BoardContent::Empty;
+                }
+            },
+        }
+    }
+
+    pub fn occupied_iter<'s>(&'s self, r: Role) -> OccupiedCellsIter<'s> {
+        OccupiedCellsIter { board: self, role: r, index: 0, }
     }
 }
 
@@ -438,6 +463,32 @@ impl Index<Coordinate> for Board {
 impl IndexMut<Coordinate> for Board {
     fn index_mut(&mut self, i: Coordinate) -> &mut BoardContent {
         &mut self.cells[i.index()]
+    }
+}
+
+pub struct OccupiedCellsIter<'a> {
+    board: &'a Board,
+    role: Role,
+    index: usize,
+}
+
+impl<'a> Iterator for OccupiedCellsIter<'a> {
+    type Item = Coordinate;
+
+    fn next(&mut self) -> Option<Coordinate> {
+        loop {
+            if self.index >= self.board.cells.len() {
+                return None
+            } else {
+                let coordinate = Coordinate::from_index(self.index);
+                self.index += 1;
+                match self.board[coordinate] {
+                    BoardContent::Occupied(t) if t.role() == Some(self.role) =>
+                        return Some(coordinate),
+                    _ => continue,
+                }
+            }
+        }
     }
 }
 
@@ -498,27 +549,177 @@ impl GameState {
         }
     }
 
-    pub fn actions(&self, r: Role) {
+    pub fn actions<'s>(&'s self, r: Role) -> ActionIterator<'s> {
         self.board.actions(r)
     }
 
     pub fn toggle_player(&mut self) {
         self.first_player_active = !self.first_player_active
     }
+
+    pub fn do_action(&mut self, a: &Action) {
+        self.board.do_action(a);
+        self.toggle_player();
+    }
 }
 
-// pub struct ActionIterator<'a> {
-//     cells: &'a Board,
-//     role: Role,
+struct DwarfDirectionConsumer<'a> {
+    board: &'a Board,
+    position: Coordinate,
+}
+
+impl<'a> FnOnce<(&'a Direction,)> for DwarfDirectionConsumer<'a> {
+    type Output = Chain<MoveIterator<'a>, HurlIterator<'a>>;
+
+    extern "rust-call" fn call_once(self, (d,): (&'a Direction,)) -> Chain<MoveIterator<'a>, HurlIterator<'a>> {
+        MoveIterator::new(self.board, self.position, *d)
+            .chain(HurlIterator::new(self.board, self.position, *d))
+    }
+}
+
+impl<'a> FnMut<(&'a Direction,)> for DwarfDirectionConsumer<'a> {
+    extern "rust-call" fn call_mut(&mut self, (d,): (&'a Direction,)) -> Chain<MoveIterator<'a>, HurlIterator<'a>> {
+        MoveIterator::new(self.board, self.position, *d)
+            .chain(HurlIterator::new(self.board, self.position, *d))
+    }
+}
+
+struct DwarfCoordinateConsumer<'a> {
+    board: &'a Board,
+}
+
+impl<'a> FnOnce<(Coordinate,)> for DwarfCoordinateConsumer<'a> {
+    type Output = FlatMap<slice::Iter<'a, Direction>,
+                          Chain<MoveIterator<'a>, HurlIterator<'a>>,
+                          DwarfDirectionConsumer<'a>>;
+
+    extern "rust-call" fn call_once(self, (c,): (Coordinate,)) -> FlatMap<slice::Iter<'a, Direction>,
+                                                                              Chain<MoveIterator<'a>, HurlIterator<'a>>,
+                                                                              DwarfDirectionConsumer<'a>> {
+        Direction::all()
+            .into_iter()
+            .flat_map(DwarfDirectionConsumer { board: self.board, position: c, })
+    }
+}
+
+impl<'a> FnMut<(Coordinate,)> for DwarfCoordinateConsumer<'a> {
+    extern "rust-call" fn call_mut(&mut self, (c,): (Coordinate,)) -> FlatMap<slice::Iter<'a, Direction>,
+                                                                                  Chain<MoveIterator<'a>, HurlIterator<'a>>,
+                                                                                  DwarfDirectionConsumer<'a>> {
+        Direction::all()
+            .into_iter()
+            .flat_map(DwarfDirectionConsumer { board: self.board, position: c, })
+    }
+}
+
+type DwarfActionIter<'a> = FlatMap<OccupiedCellsIter<'a>,
+                               FlatMap<slice::Iter<'a, Direction>,
+                                       Chain<MoveIterator<'a>, HurlIterator<'a>>,
+                                       DwarfDirectionConsumer<'a>>,
+                               DwarfCoordinateConsumer<'a>>;
+
+struct TrollDirectionConsumer<'a> {
+    board: &'a Board,
+    position: Coordinate,
+}
+
+impl<'a> FnOnce<(&'a Direction,)> for TrollDirectionConsumer<'a> {
+    type Output = Chain<Take<MoveIterator<'a>>, ShoveIterator<'a>>;
+
+    extern "rust-call" fn call_once(self, (d,): (&'a Direction,)) -> Chain<Take<MoveIterator<'a>>, ShoveIterator<'a>> {
+        MoveIterator::new(self.board, self.position, *d).take(1)
+            .chain(ShoveIterator::new(self.board, self.position, *d))
+    }
+}
+
+impl<'a> FnMut<(&'a Direction,)> for TrollDirectionConsumer<'a> {
+    extern "rust-call" fn call_mut(&mut self, (d,): (&'a Direction,)) -> Chain<Take<MoveIterator<'a>>, ShoveIterator<'a>> {
+        MoveIterator::new(self.board, self.position, *d).take(1)
+            .chain(ShoveIterator::new(self.board, self.position, *d))
+    }
+}
+
+struct TrollCoordinateConsumer<'a> {
+    board: &'a Board,
+}
+
+impl<'a> FnOnce<(Coordinate,)> for TrollCoordinateConsumer<'a> {
+    type Output = FlatMap<slice::Iter<'a, Direction>,
+                          Chain<Take<MoveIterator<'a>>, ShoveIterator<'a>>,
+                          TrollDirectionConsumer<'a>>;
+
+    extern "rust-call" fn call_once(self, (c,): (Coordinate,)) -> FlatMap<slice::Iter<'a, Direction>,
+                                                                          Chain<Take<MoveIterator<'a>>, ShoveIterator<'a>>,
+                                                                          TrollDirectionConsumer<'a>> {
+        Direction::all()
+            .into_iter()
+            .flat_map(TrollDirectionConsumer { board: self.board, position: c, })
+    }
+}
+
+impl<'a> FnMut<(Coordinate,)> for TrollCoordinateConsumer<'a> {
+    extern "rust-call" fn call_mut(&mut self, (c,): (Coordinate,)) -> FlatMap<slice::Iter<'a, Direction>,
+                                                                              Chain<Take<MoveIterator<'a>>, ShoveIterator<'a>>,
+                                                                              TrollDirectionConsumer<'a>> {
+        Direction::all()
+            .into_iter()
+            .flat_map(TrollDirectionConsumer { board: self.board, position: c, })
+    }
+}
+
+type TrollActionIter<'a> = FlatMap<OccupiedCellsIter<'a>,
+                               FlatMap<slice::Iter<'a, Direction>,
+                                       Chain<Take<MoveIterator<'a>>, ShoveIterator<'a>>,
+                                       TrollDirectionConsumer<'a>>,
+                               TrollCoordinateConsumer<'a>>;
+
+enum ActionIteratorInner<'a> {
+    Dwarf(DwarfActionIter<'a>),
+    Troll(TrollActionIter<'a>),
+}
+
+pub struct ActionIterator<'a> {
+    inner: ActionIteratorInner<'a>,
+}
+
+impl<'a> ActionIterator<'a> {
+    fn for_dwarf(wrapped: DwarfActionIter<'a>) -> Self {
+        ActionIterator { inner: ActionIteratorInner::Dwarf(wrapped), }
+    }
+
+    fn for_troll(wrapped: TrollActionIter<'a>) -> Self {
+        ActionIterator { inner: ActionIteratorInner::Troll(wrapped), }
+    }
+}
+
+impl<'a> Iterator for ActionIterator<'a> {
+    type Item = Action;
+
+    fn next(&mut self) -> Option<Action> {
+        match self.inner {
+            ActionIteratorInner::Dwarf(ref mut x) => x.next(),
+            ActionIteratorInner::Troll(ref mut x) => x.next(),
+        }
+    }
+}
+
+// pub trait ActionIterator<'a>: Iterator<Item=Action> {
+//     fn next(&mut self) -> Option<Action>;
+
+//     fn chain<J: ActionIterator<'a>>(self, other: J) -> ActionChain<'a, Self, J> {
+//         ActionChain { front: self, back: other, state: ChainState::Both, }
+//     }
+
+//     fn take(self, count: usize) -> ActionTake<'a, Self> {
+//         ActionTake { wrapped: self, count: count, }
+//     }
 // }
 
-// impl Iterator for ActionIterator {
+// impl<'a> Iterator for ActionIterator<'a> {
 //     type Item = Action;
 
 //     fn next(&mut self) -> Option<Action> {
-//         if cell_index >= board.cells.size() {
-            
-//         }
+//         self.next_action()
 //     }
 // }
 
@@ -538,7 +739,7 @@ impl<'a> MoveIterator<'a> {
 
 impl<'a> Iterator for MoveIterator<'a> {
     type Item = Action;
-
+    
     fn next(&mut self) -> Option<Action> {
         self.ray.next().and_then(
             |end|
@@ -635,538 +836,46 @@ impl<'a> Iterator for HurlIterator<'a> {
     }
 }
 
-// // For now, assume that we're on a standard Thud grid.
-// #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-// pub struct Coordinate(u8);
-
-// // Number of cells in each row.
-// const ROW_LENGTHS: [u8; 15] = [5, 7, 9, 11, 13, 15, 15, 15, 15, 15, 13, 11, 9, 7, 5];
-
-// // The first cell of each row.
-// const ROW_OFFSETS: [u8; 15] = [0, 5, 12, 21, 32, 45, 60, 75, 90, 105, 120, 133, 144, 153, 160];
-
-// impl Coordinate {
-//     pub fn new(c: u8) -> Self {
-//         assert!(c < 165u8);
-//         Coordinate(c)
-//     }
-
-//     pub fn offset(self) -> u8 {
-//         let Coordinate(c) = self;
-//         c
-//     }
-
-//     pub fn row(self) -> u8 {
-//         let Coordinate(c) = self;
-//         let mut i = 0u8;
-//         loop {
-//             if c < ROW_OFFSETS[i as usize] + ROW_LENGTHS[i as usize]{
-//                 return i
-//             }
-//             i += 1;
-//         }
-//     }
-
-//     pub fn column(self) -> u8 {
-//         let Coordinate(c) = self;
-//         let r = self.row();
-//         c - ROW_OFFSETS[r as usize] + ROW_LENGTHS[r as usize]
-//     }
-
-//     pub fn left(self) -> Option<Self> {
-//         let r = self.row();
-//         let Coordinate(c) = self;
-//         if c == ROW_OFFSETS[r as usize] {
-//             None
-//         } else {
-//             Some(Coordinate::new(c - 1))
-//         }
-//     }
-
-//     pub fn right(self) -> Option<Self> {
-//         let r = self.row();
-//         let Coordinate(c) = self;
-//         if c == 165u8 || c == ROW_OFFSETS[(r + 1) as usize] {
-//             None
-//         } else {
-//             Some(Coordinate::new(c + 1))
-//         }
-//     }
-
-//     pub fn up(self) -> Option<Self> {
-//         let row = self.row();
-//         if row == 0u8 {
-//             None
-//         } else {
-//             let col = self.column();
-//             let prev_row_end = ROW_OFFSETS[(row - 1) as usize] + ROW_LENGTHS[(row - 1) as usize];
-//             if prev_row_end < col {
-//                 None
-//             } else {
-//                 Some(Coordinate::new(ROW_OFFSETS[(row - 1) as usize] + col))
-//             }
-//         }
-//     }
-
-//     pub fn up_left(self) -> Option<Self> {
-//         self.up().and_then(|n| n.left())
-//     }
-
-//     pub fn up_right(self) -> Option<Self> {
-//         self.up().and_then(|n| n.right())
-//     }
-
-//     pub fn down_left(self) -> Option<Self> {
-//         self.down().and_then(|n| n.left())
-//     }
-
-//     pub fn down_right(self) -> Option<Self> {
-//         self.down().and_then(|n| n.right())
-//     }
-
-//     pub fn down(self) -> Option<Self> {
-//         let row = self.row();
-//         if row == 14u8 {
-//             None
-//         } else {
-//             let col = self.column();
-//             if col > ROW_LENGTHS[(row + 1) as usize] {
-//                 None
-//             } else {
-//                 match ROW_LENGTHS[row as usize].cmp(ROW_LENGTHS[(row + 1) as usize]) {
-//                     Ordering::Less =>
-//                         Some(Coordinate::new(ROW_OFFSETS[(row + 1) as usize] + col)),
-//                     Ordering::Greater =>
-//                         Some(Coordinate::new(ROW_OFFSETS[(row + 1) as usize] + col)),
-//                     Ordering::Equal =>
-//                         Some(Coordinate::new(ROW_OFFSETS[(row + 1) as usize] + col)),
-                    
-//                 }
-//             }
-//         }
-//     }
-
-//     /// Returns an iterator over the coordinates adjacent to `c`.
-//     pub fn adjacent_coordinates_iter(self) -> AdjacentCoordinateIter {
-//         AdjacentCoordinateIter {
-//             index: 0u8,
-//             coordinates: [self.up(), self.down(), self.left(), self.right()],
-//         }
-//     }
+// enum ChainState {
+//     Both,
+//     Back,
 // }
 
-// pub struct AdjacentCoordinateIter {
-//     index: u8,
-//     coordinates: [Option<Coordinate>; 4],
+// pub struct ActionChain<'a, I: ActionIterator<'a>, J: ActionIterator<'a>> {
+//     a: PhantomData<&'a ()>,
+//     front: I,
+//     back: J,
+//     state: ChainState,
 // }
 
-// impl Iterator for AdjacentCoordinateIter {
-//     type Item = Coordinate;
-
-//     fn next(&mut self) -> Option<Coordinate> {
-//         while self.index < 4u8 {
-//             self.index += 1u8;
-//             if self.coordinates[self.index as usize].is_some() {
-//                 return self.coordinates[self.index as usize]
-//             }
-//         }
-//         None
-//     }
-// }
-
-// ///     The octagonal playing area consists of a 15 by 15 square board from
-// ///     which a triangle of 15 squares in each corner has been removed. The
-// ///     Thudstone is placed on the centre square of the board, where it remains
-// ///     for the entire game and may not be moved onto or through. The eight
-// ///     trolls are placed onto the eight squares orthogonally and diagonally
-// ///     adjacent to the Thudstone and the thirty-two dwarfs are placed so as to
-// ///     occupy all the perimeter spaces except for the four in the same
-// ///     horizontal or vertical line as the Thudstone. One player takes control
-// ///     of the dwarfs, the other controls the trolls. The dwarfs move first.
-// ///
-// /// This gives us 165 spaces, each of which may contain a piece.
-// pub struct BoardState {
-//     spaces: [Option<Piece>; 165],
-// }
-
-// impl BoardState {
-//     /// Returns a freshly constructed board for a standard game of Thud.
-//     pub fn new() -> Self {
-//         let mut board = BoardState { spaces: [None; 165], };
-//         // Place Dwarfs.
-//         let mut c = Coordinate::new(0u8);
-//         loop {
-//             println!["{:?}", c];
-//             if c.column() != 2 {
-//                 board.set_piece_at(c, Some(Piece::Dwarf));
-//             }
-//             match c.right() {
-//                 Some(new_c) => c = new_c,
-//                 None => break,
-//             }
-//         }
-//         loop {
-//             println!["{:?}", c];
-//             match c.down_right() {
-//                 Some(new_c) => c = new_c,
-//                 None => break,
-//             }
-//         }
-//         loop {
-//             println!["{:?}", c];
-//             if c.row() != 7 {
-//                 board.set_piece_at(c, Some(Piece::Dwarf));
-//             }
-//             match c.down() {
-//                 Some(new_c) => c = new_c,
-//                 None => break,
-//             }
-//         }
-//         loop {
-//             println!["{:?}", c];
-//             match c.down_left() {
-//                 Some(new_c) => c = new_c,
-//                 None => break,
-//             }
-//         }
-//         loop {
-//             println!["{:?}", c];
-//             if c.column() != 2 {
-//                 board.set_piece_at(c, Some(Piece::Dwarf));
-//             }
-//             match c.left() {
-//                 Some(new_c) => c = new_c,
-//                 None => break,
-//             }
-//         }
-//         loop {
-//             println!["{:?}", c];
-//             match c.up_left() {
-//                 Some(new_c) => c = new_c,
-//                 None => break,
-//             }
-//         }
-//         loop {
-//             println!["{:?}", c];
-//             if c.row() != 7 {
-//                 board.set_piece_at(c, Some(Piece::Dwarf));
-//             }
-//             match c.up() {
-//                 Some(new_c) => c = new_c,
-//                 None => break,
-//             }
-//         }
-//         // Place Thudstone.
-//         c = Coordinate::new(82);
-//         board.set_piece_at(c, Some(Piece::Thudstone));
-//         // Place Trolls.
-//         board.set_piece_at(c.up().unwrap(), Some(Piece::Troll));
-//         board.set_piece_at(c.down().unwrap(), Some(Piece::Troll));
-//         board.set_piece_at(c.left().unwrap(), Some(Piece::Troll));
-//         board.set_piece_at(c.right().unwrap(), Some(Piece::Troll));
-//         board.set_piece_at(c.up_left().unwrap(), Some(Piece::Troll));
-//         board.set_piece_at(c.up_right().unwrap(), Some(Piece::Troll));
-//         board.set_piece_at(c.down_left().unwrap(), Some(Piece::Troll));
-//         board.set_piece_at(c.down_right().unwrap(), Some(Piece::Troll));
-//         board
-//     }
-
-//     /// Returns the piece at `c`.
-//     pub fn piece_at(&self, c: Coordinate) -> Option<Piece> {
-//         let Coordinate(offset) = c;
-//         self.spaces[offset as usize]
-//     }
-
-//     /// Sets the piece at `c`.
-//     pub fn set_piece_at(&mut self, c: Coordinate, p: Option<Piece>) {
-//         let Coordinate(offset) = c;
-//         self.spaces[offset as usize] = p;
-//     }
-// }
-
-// #[derive(Clone, Copy, Eq, PartialEq)]
-// pub enum Player {
-//     Dwarf,
-//     Troll,
-// }
-
-// pub struct GameState {
-//     current_player: Player,
-//     actions: Vec<Action>,
-//     board: BoardState,
-// }
-
-// macro_rules! build_dwarf_move_actions {
-//     ($board: expr, $start: expr, $mutator_expr: expr, $result: ident) => (
-//         {
-//             let mutator = $mutator_expr;
-//             let mut end = mutator($start);
-//             loop {
-//                 match end {
-//                     Some(e) if $board.piece_at(e).is_none() => {
-//                         $result.push(Action::Move($start, e));
-//                         end = mutator(e);
-//                     },
-//                     _ => break,
-//                 }
-//             }
-//         })
-// }
-
-// macro_rules! build_dwarf_hurl_actions {
-//     ($board: expr, $start: expr, $forward_expr: expr, $backward_expr: expr, $result: ident) => (
-//         {
-//             let forward = $forward_expr;
-//             let backward = $backward_expr;
-//             let mut end = forward($start);
-//             let mut line_start = $start;
-//             loop {
-//                 match end {
-//                     Some(e) if $board.piece_at(e) == Some(Piece::Troll) => {  // Land on a troll.
-//                         $result.push(Action::Hurl($start, e));
-//                         break
-//                     },
-//                     Some(e) if $board.piece_at(e).is_none() => {  // No obstacles.
-//                         match backward(line_start) {
-//                             Some(s) if $board.piece_at(s) == Some(Piece::Dwarf) => {
-//                                 // More dwarfs behind, so continue search.
-//                                 line_start = s;
-//                                 end = forward(e);
-//                             },
-//                             _ => break,  // No more dwarfs behind.
-//                         }
-//                     },
-//                     _ => break,  // Ran off of end of board or hit a dwarf or the Thudstone.
-//                 }
-//             }
-//         })
-// }
-
-// macro_rules! build_troll_move_actions {
-//     ($board: expr, $start: expr, $mutator_expr: expr, $result: ident) => (
-//         {
-//             let mutator = $mutator_expr;
-//             match mutator($start) {
-//                 Some(e) if $board.piece_at(e).is_none() =>
-//                     $result.push(Action::Move($start, e)),  // Nothing in the way.
-//                 _ => (),  // Obstacle.
-//             }
-//         })
-// }
-
-// macro_rules! build_troll_shove_actions {
-//     ($board: expr, $start: expr, $forward_expr: expr, $backward_expr: expr, $result: ident) => (
-//         {
-//             let forward = $forward_expr;
-//             let backward = $backward_expr;
-//             let mut end = forward($start);
-//             let mut line_start = $start;
-//             loop {
-//                 match end {
-//                     Some(e) if $board.piece_at(e) == None => {
-//                         if e.up().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf)
-//                             .or_else(|| e.down().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf))
-//                             .or_else(|| e.left().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf))
-//                             .or_else(|| e.right().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf))
-//                             .or_else(|| e.up_left().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf))
-//                             .or_else(|| e.up_right().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf))
-//                             .or_else(|| e.down_left().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf))
-//                             .or_else(|| e.down_right().and_then(|c| $board.piece_at(c)).map(|p| p == Piece::Dwarf))
-//                             .unwrap_or(false) {
-//                                 // At least one dwarf is adjacent to this space,
-//                                 // so a shove that lands here will capture.
-//                                 $result.push(Action::Shove($start, e));
-//                                 match backward(line_start) {
-//                                     Some(s) if $board.piece_at(s) == Some(Piece::Troll) => {
-//                                         // More trolls behind, so continue search.
-//                                         line_start = s;
-//                                         end = forward(e);
-//                                     },
-//                                     _ => break,  // No more trolls behind.
-//                                 }
-//                             }
-//                     },
-//                     _ => break,  // Ran off of end of board or hit an occupied square.
-//                 }
-//             }
-//         })
-// }
-
-// impl GameState {
-//     pub fn new() -> Self {
-//         GameState {
-//             current_player: Player::Dwarf,
-//             actions: vec![],
-//             board: BoardState::new(),
-//         }
-//     }
-
-//     pub fn player_actions(&self, p: Player) -> Vec<Action> {
-//         let mut result = vec![];
-//         match p {
-//             Player::Dwarf =>
-//                 for i in 0u8..165u8 {
-//                     let start = Coordinate::new(i);
-//                     if let Some(Piece::Dwarf) = self.board.piece_at(start) {
-//                         // Move.
-//                         build_dwarf_move_actions![
-//                             self.board, start, |c: Coordinate| c.up(), result];
-//                         build_dwarf_move_actions![
-//                             self.board, start, |c: Coordinate| c.down(), result];
-//                         build_dwarf_move_actions![
-//                             self.board, start, |c: Coordinate| c.left(), result];
-//                         build_dwarf_move_actions![
-//                             self.board, start, |c: Coordinate| c.right(), result];
-//                         build_dwarf_move_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.up_left(), result];
-//                         build_dwarf_move_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.up_right(), result];
-//                         build_dwarf_move_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.down_left(), result];
-//                         build_dwarf_move_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.down_right(), result];
-//                         // Hurl.
-//                         build_dwarf_hurl_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.up(), |c: Coordinate| c.down(), result];
-//                         build_dwarf_hurl_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.down(), |c: Coordinate| c.up(), result];
-//                         build_dwarf_hurl_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.left(), |c: Coordinate| c.right(), result];
-//                         build_dwarf_hurl_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.right(), |c: Coordinate| c.left(), result];
-//                         build_dwarf_hurl_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.up_left(), |c: Coordinate| c.down_right(), result];
-//                         build_dwarf_hurl_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.up_right(), |c: Coordinate| c.down_left(), result];
-//                         build_dwarf_hurl_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.down_left(), |c: Coordinate| c.up_right(), result];
-//                         build_dwarf_hurl_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.down_right(), |c: Coordinate| c.up_left(), result];
-//                     }
+// impl<'a, I: ActionIterator<'a>, J: ActionIterator<'a>> ActionIterator<'a> for ActionChain<'a, I, J> {
+//     fn next(&mut self) -> Option<Action> {
+//         match self.state {
+//             ChainState::Both => match self.front.next() {
+//                 s @ Some(..) => s,
+//                 None => {
+//                     self.state = ChainState::Back;
+//                     self.back.next()
 //                 },
-//             Player::Troll =>
-//                 for i in 0u8..165u8 {
-//                     let start = Coordinate::new(i);
-//                     if let Some(Piece::Troll) = self.board.piece_at(start) {
-//                         // Move.
-//                         build_troll_move_actions![
-//                             self.board, start, |c: Coordinate| c.up(), result];
-//                         build_troll_move_actions![
-//                             self.board, start, |c: Coordinate| c.down(), result];
-//                         build_troll_move_actions![
-//                             self.board, start, |c: Coordinate| c.left(), result];
-//                         build_troll_move_actions![
-//                             self.board, start, |c: Coordinate| c.right(), result];
-//                         build_troll_move_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.up_left(), result];
-//                         build_troll_move_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.up_right(), result];
-//                         build_troll_move_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.down_left(), result];
-//                         build_troll_move_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.down_right(), result];
-//                         // Shove.
-//                         build_troll_shove_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.up(), |c: Coordinate| c.down(), result];
-//                         build_troll_shove_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.down(), |c: Coordinate| c.up(), result];
-//                         build_troll_shove_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.left(), |c: Coordinate| c.right(), result];
-//                         build_troll_shove_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.right(), |c: Coordinate| c.left(), result];
-//                         build_troll_shove_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.up_left(),
-//                             |c: Coordinate| c.down_right(), result];
-//                         build_troll_shove_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.up_right(),
-//                             |c: Coordinate| c.down_left(), result];
-//                         build_troll_shove_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.down_left(),
-//                             |c: Coordinate| c.up_right(), result];
-//                         build_troll_shove_actions![
-//                             self.board, start,
-//                             |c: Coordinate| c.down_right(),
-//                             |c: Coordinate| c.up_left(), result];
-//                     }
-//                 },
-//             }
-//         result
-//     }
-
-//     pub fn player(&self) -> Player {
-//         self.current_player
-//     }
-
-//     pub fn advance_player(&mut self) {
-//         self.current_player = match self.current_player {
-//             Player::Dwarf => Player::Troll,
-//             Player::Troll => Player::Dwarf,
-//         }
-//     }
-
-//     fn remove_adjacent_dwarves(&mut self, end: Coordinate) {
-//         for adjacency in [end.up(), end.down(), end.left(), end.right(),
-//                           end.up_left(), end.up_right(),
-//                           end.down_left(), end.down_right()].iter() {
-//             if let Some((e, Some(Piece::Dwarf))) = adjacency.map(|c| (c, self.board.piece_at(c))) {
-//                 self.board.set_piece_at(e, None);
-//             }
-//         }
-//     }
-
-//     pub fn take_action(&mut self, a: Action) {
-//         // TODO: validation.
-//         self.actions.push(a);
-//         match a {
-//             Action::Move(start, end) => {
-//                 let p = self.board.piece_at(start);
-//                 self.board.set_piece_at(end, p);
-//                 self.board.set_piece_at(start, None);
-//                 if self.current_player == Player::Troll {
-//                     self.remove_adjacent_dwarves(end);
-//                 }
 //             },
-//             Action::Hurl(start, end) => {
-//                 let p = self.board.piece_at(start);
-//                 self.board.set_piece_at(end, p);
-//                 self.board.set_piece_at(start, None);
-//             },
-//             Action::Shove(start, end) => {
-//                 let p = self.board.piece_at(start);
-//                 self.board.set_piece_at(end, p);
-//                 self.board.set_piece_at(start, None);
-//                 self.remove_adjacent_dwarves(end);
-//             },
+//             ChainState::Back => self.back.next(),
 //         }
 //     }
 // }
 
-// #[derive(Clone, Copy, Eq, PartialEq)]
-// pub enum Action {
-//     Move(Coordinate, Coordinate),
-//     Hurl(Coordinate, Coordinate),
-//     Shove(Coordinate, Coordinate),
+// pub struct ActionTake<'a, I: ActionIterator<'a>> {
+//     a: PhantomData<&'a ()>,
+//     wrapped: I,
+//     count: usize,
+// }
+
+// impl<'a, I: ActionIterator<'a>> ActionIterator<'a> for ActionTake<'a, I> {
+//     fn next(&mut self) -> Option<Action> {
+//         if self.count != 0 {
+//             self.count -= 1;
+//             self.wrapped.next()
+//         } else {
+//             None
+//         }
+//     }
 // }
