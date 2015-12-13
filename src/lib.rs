@@ -2,7 +2,8 @@
 #![feature(unboxed_closures)]
 #![feature(fn_traits)]
 
-pub mod console;
+pub mod console_ui;
+pub mod gtk_ui;
 
 use std::iter::{Chain, FlatMap, Iterator, Take};
 use std::ops::{Index, IndexMut};

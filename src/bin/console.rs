@@ -11,7 +11,7 @@ fn main() {
     board[thud::Coordinate::new(2, 7).unwrap()] = thud::BoardContent::Occupied(thud::Token::Dwarf);
     board[thud::Coordinate::new(1, 7).unwrap()] = thud::BoardContent::Occupied(thud::Token::Dwarf);
     board[thud::Coordinate::new(0, 7).unwrap()] = thud::BoardContent::Occupied(thud::Token::Dwarf);
-    thud::console::write_board(&board);
+    thud::console_ui::write_board(&board);
     let mut state = thud::GameState::new(
         board, String::from_str("Player 1").ok().expect(""), String::from_str("Player 2").ok().expect(""));
     let mut i = 0u8;
