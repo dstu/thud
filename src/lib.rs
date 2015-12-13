@@ -10,6 +10,7 @@ use std::ops::{Index, IndexMut};
 use std::fmt;
 use std::slice;
 
+/// A physical token on the game board.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Token {
     Stone,
@@ -18,6 +19,7 @@ pub enum Token {
 }
 
 impl Token {
+    /// Returns the token's role, or `None` if the token is the Thudstone.
     pub fn role(&self) -> Option<Role> {
         match *self {
             Token::Stone => None,
@@ -27,6 +29,7 @@ impl Token {
     }
 }
 
+/// The content of a space on the board.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BoardContent {
     Occupied(Token),
@@ -61,24 +64,23 @@ impl BoardContent {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub struct BoardElement {
-    pub content: BoardContent,
-    pub coordinate: Coordinate,
-}
-
 const COL_MULTIPLIER: u8 = 0x10u8;
 const COL_MASK: u8 = 0xF0u8;
 const ROW_MULTIPLIER: u8 = 1u8;
 const ROW_MASK: u8 = 0x0Fu8;
 
-/// A space in the game, where a piece may be placed.
+/// A space on the game board where a piece may be placed.
+///
+/// Coordinates are created by providing a pair of values: `Coordinate::new(row,
+/// column)`. The row and column should be in `[0, 15]`.
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Coordinate {
     packed: u8,
 }
 
 impl Coordinate {
+    /// If `(row, col)` is a playable space on the gameboard, returns a
+    /// coordinate referring to that space, otherwise `None`.
     pub fn new(row: u8, col: u8) -> Option<Self> {
         if row >= 15 || col >= 15 {
             return None
@@ -92,13 +94,11 @@ impl Coordinate {
     }
 
     fn from_index(index: usize) -> Self {
-        // println!("from_index({})", index);
         assert!(index < 165);
         let row = row_of_index(index);
         let row_offset = offset_of_row(row);
         let (row_start, _) = bounds_of_row(row);
         let col = (index - (row_offset as usize) + (row_start as usize)) as u8;
-        // println!("from_index({}) = ({}, {})", index, row, col);
         Coordinate { packed: col * COL_MULTIPLIER + row * ROW_MULTIPLIER, }
     }
 
@@ -193,9 +193,6 @@ impl Coordinate {
     fn index(&self) -> usize {
         let row_offset = offset_of_row(self.row());
         let (row_start, _) = bounds_of_row(self.row());
-        // println!("index of ({}, {}) = {} + {} - {}",
-        //          self.row(), self.col(),
-        //          row_offset, self.col(), row_start);
         (row_offset + self.col() - row_start) as usize
     }
 }
@@ -239,6 +236,8 @@ fn offset_of_row(row: u8) -> u8 {
     }
 }
 
+/// Returns the row (in 15x15 gridspace) that `index` (in linear cellspace) is
+/// in.
 fn row_of_index(index: usize) -> u8 {
     match index {
         0...4 => 0u8,
@@ -409,6 +408,7 @@ impl Board {
             Role::Dwarf =>
                 ActionIterator::for_dwarf(
                     occupied_cells.flat_map(DwarfCoordinateConsumer { board: self, })),
+                //  The above provides a concrete type for these iterator transforms:
                 //  occupied_cells.flat_map(|position| {
                 //         Direction::all()
                 //             .into_iter()
@@ -418,6 +418,7 @@ impl Board {
             Role::Troll =>
                 ActionIterator::for_troll(
                     occupied_cells.flat_map(TrollCoordinateConsumer { board: self, })),
+                    //  The above provides a concrete type for these iterator transforms:
                     // occupied_cells.flat_map(|position| {
                     //     Direction::all()
                     //         .into_iter()
@@ -678,6 +679,7 @@ enum ActionIteratorInner<'a> {
     Troll(TrollActionIter<'a>),
 }
 
+/// Iterates over player actions on a board.
 pub struct ActionIterator<'a> {
     inner: ActionIteratorInner<'a>,
 }
@@ -703,26 +705,20 @@ impl<'a> Iterator for ActionIterator<'a> {
     }
 }
 
-// pub trait ActionIterator<'a>: Iterator<Item=Action> {
-//     fn next(&mut self) -> Option<Action>;
-
-//     fn chain<J: ActionIterator<'a>>(self, other: J) -> ActionChain<'a, Self, J> {
-//         ActionChain { front: self, back: other, state: ChainState::Both, }
-//     }
-
-//     fn take(self, count: usize) -> ActionTake<'a, Self> {
-//         ActionTake { wrapped: self, count: count, }
-//     }
-// }
-
-// impl<'a> Iterator for ActionIterator<'a> {
-//     type Item = Action;
-
-//     fn next(&mut self) -> Option<Action> {
-//         self.next_action()
-//     }
-// }
-
+/// Iterates over move actions that may be made on a board.
+///
+///     Any dwarf is moved like a chess queen, any number of squares in any
+///     orthogonal or diagonal direction, but not onto or through any other
+///     piece, whether Thudstone, dwarf, or troll.
+///
+///     Any troll is moved like a chess king, one square in any orthogonal or
+///     diagonal direction onto an empty square. After the troll has been moved,
+///     only a single dwarf on the eight squares adjacent to the moved troll may
+///     optionally be immediately captured and removed from the board, at the
+///     troll player's discretion.
+///
+/// To limit the number of squares moved in the case of moving a troll, limit a
+/// `Moveiterator` with its `take()` method.
 pub struct MoveIterator<'a> {
     board: &'a Board,
     start: Coordinate,
@@ -730,6 +726,9 @@ pub struct MoveIterator<'a> {
 }
 
 impl<'a> MoveIterator<'a> {
+    /// Creates a new iterator that will iterate over all move actions for the
+    /// piece at `start` in the direction `d`, for arbitrarily many spaces
+    /// (until the edge of the board's playable space is reached).
     fn new(board: &'a Board, start: Coordinate, d: Direction) -> Self {
         let mut ray = Ray::new(start, d);
         ray.next();
@@ -751,6 +750,16 @@ impl<'a> Iterator for MoveIterator<'a> {
     }
 }
 
+/// Iterates over shove actions (Troll capturing moves) that may be made on a
+/// board.
+///
+///     Anywhere there is a straight (orthogonal or diagonal) line of adjacent
+///     trolls on the board, they may shove the endmost troll in the direction
+///     continuing the line, up to as many spaces as there are trolls in the
+///     line. As in a normal move, the troll may not land on an occupied square,
+///     and any (all) dwarfs in the eight squares adjacent to its final position
+///     may immediately be captured. Trolls may only make a shove if by doing so
+///     they capture at least one dwarf.
 pub struct ShoveIterator<'a> {
     board: &'a Board,
     start: Coordinate,
@@ -759,6 +768,8 @@ pub struct ShoveIterator<'a> {
 }
 
 impl<'a> ShoveIterator<'a> {
+    /// Creates an iterator that will iterate over all shove actions for the
+    /// piece at `start` in the direction `d`.
     fn new(board: &'a Board, start: Coordinate, d: Direction) -> Self {
         let mut forward = Ray::new(start, d);
         let backward = forward.reverse();
@@ -796,6 +807,20 @@ impl<'a> Iterator for ShoveIterator<'a> {
     }
 }
 
+/// Iterates over hurl actions (Dwarf capturing actions) that may be performed
+/// on a `Board`.
+///
+///     Anywhere there is a straight (orthogonal or diagonal) line of adjacent
+///     dwarfs on the board, they may hurl the front dwarf in the direction
+///     continuing the line, as long as the space between the lead dwarf and the
+///     troll is less than the number of dwarfs in the line. This is different
+///     from a normal move in that the dwarf is permitted to land on a square
+///     containing a troll, in which case the troll is removed from the board
+///     and the dwarf takes his place. This may only be done if the endmost
+///     dwarf can land on a troll by moving in the direction of the line at most
+///     as many spaces as there are dwarfs in the line. Since a single dwarf is
+///     a line of one in any direction, a dwarf may always move one space to
+///     capture a troll on an immediately adjacent square.
 pub struct HurlIterator<'a> {
     board: &'a Board,
     start: Coordinate,
@@ -805,6 +830,8 @@ pub struct HurlIterator<'a> {
 }
 
 impl<'a> HurlIterator<'a> {
+    /// Creates an iterator that will iterate over all hurl actions for the
+    /// piece at `start` in the direction `d`.
     pub fn new(board: &'a Board, start: Coordinate, d: Direction) -> Self {
         let mut forward = Ray::new(start, d);
         let backward = forward.reverse();
@@ -836,46 +863,3 @@ impl<'a> Iterator for HurlIterator<'a> {
     }
 }
 
-// enum ChainState {
-//     Both,
-//     Back,
-// }
-
-// pub struct ActionChain<'a, I: ActionIterator<'a>, J: ActionIterator<'a>> {
-//     a: PhantomData<&'a ()>,
-//     front: I,
-//     back: J,
-//     state: ChainState,
-// }
-
-// impl<'a, I: ActionIterator<'a>, J: ActionIterator<'a>> ActionIterator<'a> for ActionChain<'a, I, J> {
-//     fn next(&mut self) -> Option<Action> {
-//         match self.state {
-//             ChainState::Both => match self.front.next() {
-//                 s @ Some(..) => s,
-//                 None => {
-//                     self.state = ChainState::Back;
-//                     self.back.next()
-//                 },
-//             },
-//             ChainState::Back => self.back.next(),
-//         }
-//     }
-// }
-
-// pub struct ActionTake<'a, I: ActionIterator<'a>> {
-//     a: PhantomData<&'a ()>,
-//     wrapped: I,
-//     count: usize,
-// }
-
-// impl<'a, I: ActionIterator<'a>> ActionIterator<'a> for ActionTake<'a, I> {
-//     fn next(&mut self) -> Option<Action> {
-//         if self.count != 0 {
-//             self.count -= 1;
-//             self.wrapped.next()
-//         } else {
-//             None
-//         }
-//     }
-// }
