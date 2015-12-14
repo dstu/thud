@@ -2,6 +2,9 @@
 #![feature(unboxed_closures)]
 #![feature(fn_traits)]
 
+extern crate gtk;
+extern crate cairo;
+
 pub mod console_ui;
 pub mod gtk_ui;
 
@@ -467,6 +470,10 @@ impl Board {
         }
     }
 
+    pub fn cells_iter<'s>(&'s self) -> BoardContentsIter<'s> {
+        BoardContentsIter { board: self, index: 0, }
+    }
+
     pub fn occupied_iter<'s>(&'s self, r: Role) -> OccupiedCellsIter<'s> {
         OccupiedCellsIter { board: self, role: r, index: 0, }
     }
@@ -483,6 +490,25 @@ impl Index<Coordinate> for Board {
 impl IndexMut<Coordinate> for Board {
     fn index_mut(&mut self, i: Coordinate) -> &mut BoardContent {
         &mut self.cells[i.index()]
+    }
+}
+
+pub struct BoardContentsIter<'a> {
+    board: &'a Board,
+    index: usize,
+}
+
+impl<'a> Iterator for BoardContentsIter<'a> {
+    type Item = (Coordinate, BoardContent);
+
+    fn next(&mut self) -> Option<(Coordinate, BoardContent)> {
+        if self.index >= self.board.cells.len() {
+            None
+        } else {
+            let coordinate = Coordinate::from_index(self.index);
+            self.index += 1;
+            Some((coordinate, self.board[coordinate]))
+        }
     }
 }
 

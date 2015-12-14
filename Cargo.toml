@@ -3,5 +3,12 @@ name = "thud"
 version = "0.1.0"
 authors = ["Stu Black"]
 
+[dependencies]
+gtk = "0.0.6"
+cairo-rs = "0.0.7"
+
 [[bin]]
 name = "console"
+
+[[bin]]
+name = "gtk"
