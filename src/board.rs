@@ -296,7 +296,8 @@ impl Direction {
     }
 }
 
-/// Describes a line on the game board proceeding in some direction.
+/// Describes a line on the game board proceeding in some direction to the
+/// bounds of the board.
 pub struct Ray {
     here: Option<Coordinate>,
     direction: Direction,
