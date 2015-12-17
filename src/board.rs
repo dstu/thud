@@ -1,7 +1,7 @@
 use ::actions::{Action, ActionIterator,
                 DwarfCoordinateConsumer, DwarfDirectionConsumer,
                 TrollCoordinateConsumer, TrollDirectionConsumer};
-use ::Role;
+use ::game;
 
 use std::clone::Clone;
 use std::cmp::PartialEq;
@@ -19,11 +19,11 @@ pub enum Token {
 
 impl Token {
     /// Returns the token's role, or `None` if the token is the Thudstone.
-    pub fn role(&self) -> Option<Role> {
+    pub fn role(&self) -> Option<game::Role> {
         match *self {
             Token::Stone => None,
-            Token::Dwarf => Some(Role::Dwarf),
-            Token::Troll => Some(Role::Troll),
+            Token::Dwarf => Some(game::Role::Dwarf),
+            Token::Troll => Some(game::Role::Troll),
         }
     }
 }
@@ -55,7 +55,7 @@ impl Content {
         *self == Content::Occupied(Token::Dwarf)
     }
 
-    pub fn role(&self) -> Option<Role> {
+    pub fn role(&self) -> Option<game::Role> {
         match *self {
             Content::Empty => None,
             Content::Occupied(t) => t.role(),
@@ -406,10 +406,10 @@ impl Cells {
         b
     }
 
-    pub fn role_actions<'s>(&'s self, r: Role) -> ActionIterator<'s> {
+    pub fn role_actions<'s>(&'s self, r: game::Role) -> ActionIterator<'s> {
         let occupied_cells = self.occupied_iter(r);
         match r {
-            Role::Dwarf =>
+            game::Role::Dwarf =>
                 ActionIterator::for_dwarf(
                     occupied_cells.flat_map(DwarfCoordinateConsumer::new(self))),
                 //  The above provides a concrete type for these iterator transforms:
@@ -419,7 +419,7 @@ impl Cells {
                 //             .flat_map(|d| (MoveIterator::new(self, position, *d)
                 //                            .chain(HurlIterator::new(self, position, *d))))
                 // })),
-            Role::Troll =>
+            game::Role::Troll =>
                 ActionIterator::for_troll(
                     occupied_cells.flat_map(TrollCoordinateConsumer::new(self))),
                     //  The above provides a concrete type for these iterator transforms:
@@ -434,13 +434,13 @@ impl Cells {
 
     pub fn position_actions<'s>(&'s self, position: Coordinate) -> ActionIterator<'s> {
         match self[position] {
-            Content::Occupied(t) if t.role() == Some(Role::Dwarf) => {
+            Content::Occupied(t) if t.role() == Some(game::Role::Dwarf) => {
                 ActionIterator::for_dwarf_position(
                     Direction::all()
                         .into_iter()
                         .flat_map(DwarfDirectionConsumer::new(self, position)))
             },
-            Content::Occupied(t) if t.role() == Some(Role::Troll) => {
+            Content::Occupied(t) if t.role() == Some(game::Role::Troll) => {
                 ActionIterator::for_troll_position(
                     Direction::all()
                         .into_iter()
@@ -475,7 +475,7 @@ impl Cells {
         ContentsIter { board: self, index: 0, }
     }
 
-    pub fn occupied_iter<'s>(&'s self, r: Role) -> OccupiedCellsIter<'s> {
+    pub fn occupied_iter<'s>(&'s self, r: game::Role) -> OccupiedCellsIter<'s> {
         OccupiedCellsIter { board: self, role: r, index: 0, }
     }
 }
@@ -527,7 +527,7 @@ impl<'a> Iterator for ContentsIter<'a> {
 
 pub struct OccupiedCellsIter<'a> {
     board: &'a Cells,
-    role: Role,
+    role: game::Role,
     index: usize,
 }
 
