@@ -23,12 +23,53 @@ impl Player {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum EndProposal {
+    Neither,
+    One,
+    Two,
+    Both,
+}
+
+impl EndProposal {
+    fn advance(&mut self, player: PlayerMarker) {
+        *self = match (*self, player) {
+            (EndProposal::Both, _) => EndProposal::Both,
+            (EndProposal::One, PlayerMarker::Two) => EndProposal::Both,
+            (EndProposal::Two, PlayerMarker::One) => EndProposal::Both,
+            (_, PlayerMarker::One) => EndProposal::One,
+            (_, PlayerMarker::Two) => EndProposal::Two,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PlayerMarker {
+    One,
+    Two,
+}
+
+impl PlayerMarker {
+    fn index(self) -> usize {
+        match self {
+            PlayerMarker::One => 0,
+            PlayerMarker::Two => 1,
+        }
+    }
+
+    fn toggle(&mut self) {
+        *self = match *self {
+            PlayerMarker::One => PlayerMarker::Two,
+            PlayerMarker::Two => PlayerMarker::One,
+        }
+    }
+}
+
 pub struct State {
     board: board::Cells,
     players: [Player; 2],
-    first_player_active: bool,
-    player_1_conceded: bool,
-    player_2_conceded: bool,
+    active_player: PlayerMarker,
+    end_proposal: EndProposal,
 }
 
 impl State {
@@ -37,9 +78,8 @@ impl State {
             board: board,
             players: [Player { role: Role::Dwarf, name: player1_name, },
                       Player { role: Role::Troll, name: player2_name, },],
-            first_player_active: true,
-            player_1_conceded: false,
-            player_2_conceded: false,
+            active_player: PlayerMarker::One,
+            end_proposal: EndProposal::Neither,
         }
     }
     
@@ -48,11 +88,7 @@ impl State {
     }
 
     pub fn active_player(&self) -> &Player {
-        if self.first_player_active {
-            &self.players[0]
-        } else {
-            &self.players[1]
-        }
+        &self.players[self.active_player.index()]
     }
 
     pub fn role_actions<'s>(&'s self, r: Role) -> actions::ActionIterator<'s> {
@@ -64,23 +100,22 @@ impl State {
     }
 
     pub fn toggle_active_player(&mut self) {
-        self.first_player_active = !self.first_player_active
+        self.active_player.toggle()
     }
 
     pub fn do_action(&mut self, a: &actions::Action) {
         match a {
-            &actions::Action::Concede =>
-                if self.first_player_active {
-                    self.player_1_conceded = true
-                } else {
-                    self.player_2_conceded = true
-                },
+            &actions::Action::Concede => self.end_proposal.advance(self.active_player),
             _ => self.board.do_action(a),
         }
-        self.toggle_active_player();
+        self.active_player.toggle();
     }
 
     pub fn terminated(&self) -> bool {
-        self.player_1_conceded && self.player_2_conceded
+        self.end_proposal == EndProposal::Both
+    }
+
+    pub fn board(&self) -> &board::Cells {
+        &self.board
     }
 }
