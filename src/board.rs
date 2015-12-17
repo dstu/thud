@@ -3,6 +3,7 @@ use ::actions::{Action, ActionIterator,
                 TrollCoordinateConsumer, TrollDirectionConsumer};
 use ::Role;
 
+use std::clone::Clone;
 use std::cmp::PartialEq;
 use std::fmt;
 use std::hash::{Hash, Hasher, SipHasher};
@@ -475,6 +476,18 @@ impl Cells {
 
     pub fn occupied_iter<'s>(&'s self, r: Role) -> OccupiedCellsIter<'s> {
         OccupiedCellsIter { board: self, role: r, index: 0, }
+    }
+}
+
+impl Clone for Cells {
+    fn clone(&self) -> Self {
+        let mut other = Cells::new();
+        other.cells.clone_from_slice(&self.cells);
+        other
+    }
+
+    fn clone_from(&mut self, source: &Cells) {
+        self.cells.clone_from_slice(&source.cells);
     }
 }
 
