@@ -4,9 +4,7 @@ use ::actions::{Action, ActionIterator,
 use ::game;
 
 use std::clone::Clone;
-use std::cmp::PartialEq;
 use std::fmt;
-use std::hash::{Hash, Hasher, SipHasher};
 use std::ops::{Index, IndexMut};
 
 /// A physical token on the game board.
@@ -92,7 +90,7 @@ impl Coordinate {
         }
     }
 
-    fn new_unchecked(row: u8, col: u8) -> Self {
+    pub fn new_unchecked(row: u8, col: u8) -> Self {
         Coordinate { packed: col * COL_MULTIPLIER + row * ROW_MULTIPLIER, }
     }
 
@@ -547,79 +545,6 @@ impl<'a> Iterator for OccupiedCellsIter<'a> {
                     _ => continue,
                 }
             }
-        }
-    }
-}
-
-pub struct Transpositions {
-    board: Cells,
-}
-
-impl Transpositions {
-    pub fn new(board: Cells) -> Self {
-        Transpositions { board: board, }
-    }
-}
-
-impl PartialEq<Cells> for Transpositions {
-    fn eq(&self, other: &Cells) -> bool {
-        for row in 0u8..8u8 {
-            for col in 0u8..8u8 {
-                for &c in [Coordinate::new_unchecked(row, col),
-                          Coordinate::new_unchecked(7u8 - row, col),
-                          Coordinate::new_unchecked(row, 7u8 - col),
-                          Coordinate::new_unchecked(7u8 - row, 7u8 - col),
-                          Coordinate::new_unchecked(col, row),
-                          Coordinate::new_unchecked(7u8 - col, row),
-                          Coordinate::new_unchecked(col, 7u8 - row),
-                          Coordinate::new_unchecked(7u8 - col, 7u8 - row)].iter() {
-                    if self.board[c] != other[c] {
-                        return false
-                    }
-                }
-            }
-        }
-        true
-    }
-}
-
-impl Hash for Transpositions {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        let mut hashers = [SipHasher::new(),
-                           SipHasher::new(),
-                           SipHasher::new(),
-                           SipHasher::new(),
-                           SipHasher::new(),
-                           SipHasher::new(),
-                           SipHasher::new(),
-                           SipHasher::new()];
-        for row in 0u8..8u8 {
-            for col in 0u8..8u8 {
-                let mut i = 0;
-                for &c in &[Coordinate::new_unchecked(row, col),
-                            Coordinate::new_unchecked(7u8 - row, col),
-                            Coordinate::new_unchecked(row, 7u8 - col),
-                            Coordinate::new_unchecked(7u8 - row, 7u8 - col),
-                            Coordinate::new_unchecked(col, row),
-                            Coordinate::new_unchecked(7u8 - col, row),
-                            Coordinate::new_unchecked(col, 7u8 - row),
-                            Coordinate::new_unchecked(7u8 - col, 7u8 - row)] {
-                    self.board[c].hash(&mut hashers[i]);
-                    i += 1;
-                }
-            }
-        }
-        let mut hash_values = [hashers[0].finish(),
-                               hashers[1].finish(),
-                               hashers[2].finish(),
-                               hashers[3].finish(),
-                               hashers[4].finish(),
-                               hashers[5].finish(),
-                               hashers[6].finish(),
-                               hashers[7].finish()];
-        (&mut hash_values).sort();
-        for v in &hash_values {
-            state.write_u64(*v);
         }
     }
 }

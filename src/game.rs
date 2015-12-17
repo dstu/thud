@@ -1,6 +1,8 @@
 use ::actions;
 use ::board;
 
+use std::hash::{Hash, Hasher, SipHasher};
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Role {
     Dwarf,
@@ -23,7 +25,7 @@ impl Player {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 enum EndProposal {
     Neither,
     One,
@@ -82,7 +84,7 @@ impl State {
             end_proposal: EndProposal::Neither,
         }
     }
-    
+
     pub fn new_default(player1_name: String, player2_name: String) -> Self {
         State::new(board::Cells::default(), player1_name, player2_name)
     }
@@ -117,5 +119,101 @@ impl State {
 
     pub fn board(&self) -> &board::Cells {
         &self.board
+    }
+}
+
+impl Clone for State {
+    fn clone(&self) -> Self {
+        State {
+            board: self.board.clone(),
+            players: [self.players[0].clone(),
+                      self.players[1].clone()],
+            active_player: self.active_player,
+            end_proposal: self.end_proposal,
+        }
+    }
+}
+
+pub struct Transpositions {
+    state: State,
+}
+
+impl Transpositions {
+    pub fn new(state: State) -> Self {
+        Transpositions { state: state, }
+    }
+}
+
+impl PartialEq<State> for Transpositions {
+    fn eq(&self, other: &State) -> bool {
+        for row in 0u8..8u8 {
+            for col in 0u8..8u8 {
+                for &c in [board::Coordinate::new_unchecked(row, col),
+                           board::Coordinate::new_unchecked(7u8 - row, col),
+                           board::Coordinate::new_unchecked(row, 7u8 - col),
+                           board::Coordinate::new_unchecked(7u8 - row, 7u8 - col),
+                           board::Coordinate::new_unchecked(col, row),
+                           board::Coordinate::new_unchecked(7u8 - col, row),
+                           board::Coordinate::new_unchecked(col, 7u8 - row),
+                           board::Coordinate::new_unchecked(7u8 - col, 7u8 - row)].iter() {
+                    if self.state.board[c] != other.board[c] {
+                        return false
+                    }
+                }
+            }
+        }
+        true
+    }
+}
+
+impl PartialEq<Transpositions> for Transpositions {
+    fn eq(&self, other: &Transpositions) -> bool {
+        self.eq(&other.state)
+    }
+}
+
+impl Eq for Transpositions { }
+
+impl Hash for Transpositions {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let mut hashers = [SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new()];
+        for h in &mut hashers {
+            self.state.end_proposal.hash(h);
+        }
+        for row in 0u8..8u8 {
+            for col in 0u8..8u8 {
+                let mut i = 0;
+                for &c in &[board::Coordinate::new_unchecked(row, col),
+                            board::Coordinate::new_unchecked(7u8 - row, col),
+                            board::Coordinate::new_unchecked(row, 7u8 - col),
+                            board::Coordinate::new_unchecked(7u8 - row, 7u8 - col),
+                            board::Coordinate::new_unchecked(col, row),
+                            board::Coordinate::new_unchecked(7u8 - col, row),
+                            board::Coordinate::new_unchecked(col, 7u8 - row),
+                            board::Coordinate::new_unchecked(7u8 - col, 7u8 - row)] {
+                    self.state.board[c].hash(&mut hashers[i]);
+                    i += 1;
+                }
+            }
+        }
+        let mut hash_values = [hashers[0].finish(),
+                               hashers[1].finish(),
+                               hashers[2].finish(),
+                               hashers[3].finish(),
+                               hashers[4].finish(),
+                               hashers[5].finish(),
+                               hashers[6].finish(),
+                               hashers[7].finish()];
+        (&mut hash_values).sort();
+        for v in &hash_values {
+            state.write_u64(*v);
+        }
     }
 }
