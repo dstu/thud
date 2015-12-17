@@ -4,9 +4,8 @@ extern crate thud;
 use gtk::traits::*;
 use gtk::signal::Inhibit;
 
+use thud::board;
 use thud::gtk_ui;
-
-use thud::Board;
 
 fn main() {
     if gtk::init().is_err() {
@@ -22,7 +21,7 @@ fn main() {
         Inhibit(false)
     });
 
-    let display = thud::gtk_ui::Display::new(Board::default()).unwrap();
+    let display = gtk_ui::Display::new(board::Cells::default()).unwrap();
 
     window.add(display.widget());
 

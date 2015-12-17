@@ -1,16 +1,17 @@
 extern crate thud;
 
+use thud::board;
 use std::str::FromStr;
 
 fn main() {
-    let mut board = thud::Board::new();
-    board[thud::Coordinate::new(7, 6).unwrap()] = thud::BoardContent::Occupied(thud::Token::Troll);
-    board[thud::Coordinate::new(8, 6).unwrap()] = thud::BoardContent::Occupied(thud::Token::Troll);
-    board[thud::Coordinate::new(9, 6).unwrap()] = thud::BoardContent::Occupied(thud::Token::Troll);
-    board[thud::Coordinate::new(3, 7).unwrap()] = thud::BoardContent::Occupied(thud::Token::Dwarf);
-    board[thud::Coordinate::new(2, 7).unwrap()] = thud::BoardContent::Occupied(thud::Token::Dwarf);
-    board[thud::Coordinate::new(1, 7).unwrap()] = thud::BoardContent::Occupied(thud::Token::Dwarf);
-    board[thud::Coordinate::new(0, 7).unwrap()] = thud::BoardContent::Occupied(thud::Token::Dwarf);
+    let mut board = board::Cells::new();
+    board[board::Coordinate::new(7, 6).unwrap()] = board::Content::Occupied(board::Token::Troll);
+    board[board::Coordinate::new(8, 6).unwrap()] = board::Content::Occupied(board::Token::Troll);
+    board[board::Coordinate::new(9, 6).unwrap()] = board::Content::Occupied(board::Token::Troll);
+    board[board::Coordinate::new(3, 7).unwrap()] = board::Content::Occupied(board::Token::Dwarf);
+    board[board::Coordinate::new(2, 7).unwrap()] = board::Content::Occupied(board::Token::Dwarf);
+    board[board::Coordinate::new(1, 7).unwrap()] = board::Content::Occupied(board::Token::Dwarf);
+    board[board::Coordinate::new(0, 7).unwrap()] = board::Content::Occupied(board::Token::Dwarf);
     thud::console_ui::write_board(&board);
     let mut state = thud::GameState::new(
         board, String::from_str("Player 1").ok().expect(""), String::from_str("Player 2").ok().expect(""));

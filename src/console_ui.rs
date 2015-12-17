@@ -1,22 +1,22 @@
 use std::io;
 use std::io::Write;
 
-use ::Board;
-use ::BoardContent;
-use ::Coordinate;
-use ::Token;
+use ::board::Cells;
+use ::board::Content;
+use ::board::Coordinate;
+use ::board::Token;
 
-pub fn glyph(b: Option<BoardContent>) -> &'static str {
+pub fn glyph(b: Option<Content>) -> &'static str {
     match b {
-        Some(BoardContent::Occupied(Token::Stone)) => "O",
-        Some(BoardContent::Occupied(Token::Dwarf)) => "d",
-        Some(BoardContent::Occupied(Token::Troll)) => "T",
-        Some(BoardContent::Empty) => "_",
+        Some(Content::Occupied(Token::Stone)) => "O",
+        Some(Content::Occupied(Token::Dwarf)) => "d",
+        Some(Content::Occupied(Token::Troll)) => "T",
+        Some(Content::Empty) => "_",
         None => ".",
     }
 }
 
-pub fn write_board(board: &Board) {
+pub fn write_board(board: &Cells) {
     for row in 0u8..15u8 {
         for col in 0u8..15u8 {
             print!("{}", glyph(Coordinate::new(row, col).map(|c| board[c])))
