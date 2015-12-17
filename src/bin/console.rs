@@ -23,7 +23,7 @@ fn main() {
                 println!("  {:?}", a);
             }
         }
-        state.toggle_player();
+        state.toggle_active_player();
         i += 1;
     }
 }

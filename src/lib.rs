@@ -11,11 +11,13 @@ pub mod gtk_ui;
 use std::iter::{Chain, FlatMap, Iterator, Take};
 use std::ops::{Index, IndexMut};
 
+use std::cmp;
 use std::fmt;
+use std::hash::{Hash, Hasher, SipHasher};
 use std::slice;
 
 /// A physical token on the game board.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Token {
     Stone,
     Dwarf,
@@ -34,7 +36,7 @@ impl Token {
 }
 
 /// The content of a space on the board.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum BoardContent {
     Occupied(Token),
     Empty,
@@ -91,10 +93,14 @@ impl Coordinate {
         }
         let (row_start, row_end) = bounds_of_row(row);
         if row_start <= col && col <= row_end {
-            Some(Coordinate { packed: col * COL_MULTIPLIER + row * ROW_MULTIPLIER, })
+            Some(Coordinate::new_unchecked(row, col))
         } else {
             None
         }
+    }
+
+    fn new_unchecked(row: u8, col: u8) -> Self {
+        Coordinate { packed: col * COL_MULTIPLIER + row * ROW_MULTIPLIER, }
     }
 
     fn from_index(index: usize) -> Self {
@@ -467,6 +473,7 @@ impl Board {
                     self[*c] = BoardContent::Empty;
                 }
             },
+            &Action::Concede => (),
         }
     }
 
@@ -538,11 +545,85 @@ impl<'a> Iterator for OccupiedCellsIter<'a> {
     }
 }
 
+pub struct Transpositions {
+    board: Board,
+}
+
+impl Transpositions {
+    pub fn new(board: Board) -> Self {
+        Transpositions { board: board, }
+    }
+}
+
+impl cmp::PartialEq<Board> for Transpositions {
+    fn eq(&self, other: &Board) -> bool {
+        for row in 0u8..8u8 {
+            for col in 0u8..8u8 {
+                for &c in [Coordinate::new_unchecked(row, col),
+                          Coordinate::new_unchecked(7u8 - row, col),
+                          Coordinate::new_unchecked(row, 7u8 - col),
+                          Coordinate::new_unchecked(7u8 - row, 7u8 - col),
+                          Coordinate::new_unchecked(col, row),
+                          Coordinate::new_unchecked(7u8 - col, row),
+                          Coordinate::new_unchecked(col, 7u8 - row),
+                          Coordinate::new_unchecked(7u8 - col, 7u8 - row)].iter() {
+                    if self.board[c] != other[c] {
+                        return false
+                    }
+                }
+            }
+        }
+        true
+    }
+}
+
+impl Hash for Transpositions {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let mut hashers = [SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new()];
+        for row in 0u8..8u8 {
+            for col in 0u8..8u8 {
+                let mut i = 0;
+                for &c in &[Coordinate::new_unchecked(row, col),
+                            Coordinate::new_unchecked(7u8 - row, col),
+                            Coordinate::new_unchecked(row, 7u8 - col),
+                            Coordinate::new_unchecked(7u8 - row, 7u8 - col),
+                            Coordinate::new_unchecked(col, row),
+                            Coordinate::new_unchecked(7u8 - col, row),
+                            Coordinate::new_unchecked(col, 7u8 - row),
+                            Coordinate::new_unchecked(7u8 - col, 7u8 - row)] {
+                    self.board[c].hash(&mut hashers[i]);
+                    i += 1;
+                }
+            }
+        }
+        let mut hash_values = [hashers[0].finish(),
+                               hashers[1].finish(),
+                               hashers[2].finish(),
+                               hashers[3].finish(),
+                               hashers[4].finish(),
+                               hashers[5].finish(),
+                               hashers[6].finish(),
+                               hashers[7].finish()];
+        (&mut hash_values).sort();
+        for v in &hash_values {
+            state.write_u64(*v);
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Action {
     Move(Coordinate, Coordinate),
     Hurl(Coordinate, Coordinate),
     Shove(Coordinate, Coordinate, Vec<Coordinate>),
+    Concede,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -571,6 +652,8 @@ pub struct GameState {
     board: Board,
     players: [Player; 2],
     first_player_active: bool,
+    player_1_conceded: bool,
+    player_2_conceded: bool,
 }
 
 impl GameState {
@@ -580,6 +663,8 @@ impl GameState {
             players: [Player { role: Role::Dwarf, name: player1_name, },
                       Player { role: Role::Troll, name: player2_name, },],
             first_player_active: true,
+            player_1_conceded: false,
+            player_2_conceded: false,
         }
     }
     
@@ -603,13 +688,25 @@ impl GameState {
         self.board.position_actions(position)
     }
 
-    pub fn toggle_player(&mut self) {
+    pub fn toggle_active_player(&mut self) {
         self.first_player_active = !self.first_player_active
     }
 
     pub fn do_action(&mut self, a: &Action) {
-        self.board.do_action(a);
-        self.toggle_player();
+        match a {
+            &Action::Concede =>
+                if self.first_player_active {
+                    self.player_1_conceded = true
+                } else {
+                    self.player_2_conceded = true
+                },
+            _ => self.board.do_action(a),
+        }
+        self.toggle_active_player();
+    }
+
+    pub fn terminated(&self) -> bool {
+        self.player_1_conceded && self.player_2_conceded
     }
 }
 
