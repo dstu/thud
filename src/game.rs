@@ -3,7 +3,7 @@ use ::board;
 
 use std::hash::{Hash, Hasher, SipHasher};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Role {
     Dwarf,
     Troll,
@@ -139,18 +139,13 @@ impl Clone for State {
     }
 }
 
-pub struct Transpositions {
-    state: State,
-}
-
-impl Transpositions {
-    pub fn new(state: State) -> Self {
-        Transpositions { state: state, }
-    }
-}
-
-impl PartialEq<State> for Transpositions {
+impl PartialEq<State> for State {
     fn eq(&self, other: &State) -> bool {
+        if self.active_player != other.active_player
+            || self.end_proposal == other.end_proposal
+            || self.players[0].role() == other.players[0].role() {
+                return false
+            }
         for row in 0u8..8u8 {
             for col in 0u8..8u8 {
                 for &c in [board::Coordinate::new_unchecked(row, col),
@@ -161,7 +156,7 @@ impl PartialEq<State> for Transpositions {
                            board::Coordinate::new_unchecked(7u8 - col, row),
                            board::Coordinate::new_unchecked(col, 7u8 - row),
                            board::Coordinate::new_unchecked(7u8 - col, 7u8 - row)].iter() {
-                    if self.state.board[c] != other.board[c] {
+                    if self.board[c] != other.board[c] {
                         return false
                     }
                 }
@@ -171,15 +166,9 @@ impl PartialEq<State> for Transpositions {
     }
 }
 
-impl PartialEq<Transpositions> for Transpositions {
-    fn eq(&self, other: &Transpositions) -> bool {
-        self.eq(&other.state)
-    }
-}
+impl Eq for State { }
 
-impl Eq for Transpositions { }
-
-impl Hash for Transpositions {
+impl Hash for State {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let mut hashers = [SipHasher::new(),
                            SipHasher::new(),
@@ -190,7 +179,10 @@ impl Hash for Transpositions {
                            SipHasher::new(),
                            SipHasher::new()];
         for h in &mut hashers {
-            self.state.end_proposal.hash(h);
+            self.active_player.hash(h);
+            self.players[0].role().hash(h);
+            self.players[1].role().hash(h);
+            self.end_proposal.hash(h);
         }
         for row in 0u8..8u8 {
             for col in 0u8..8u8 {
@@ -203,7 +195,7 @@ impl Hash for Transpositions {
                             board::Coordinate::new_unchecked(7u8 - col, row),
                             board::Coordinate::new_unchecked(col, 7u8 - row),
                             board::Coordinate::new_unchecked(7u8 - col, 7u8 - row)] {
-                    self.state.board[c].hash(&mut hashers[i]);
+                    self.board[c].hash(&mut hashers[i]);
                     i += 1;
                 }
             }
