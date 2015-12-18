@@ -26,27 +26,24 @@ impl Player {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-enum EndProposal {
+pub enum EndProposal {
     Neither,
-    One,
-    Two,
+    Single(PlayerMarker),
     Both,
 }
 
 impl EndProposal {
     fn advance(&mut self, player: PlayerMarker) {
-        *self = match (*self, player) {
-            (EndProposal::Both, _) => EndProposal::Both,
-            (EndProposal::One, PlayerMarker::Two) => EndProposal::Both,
-            (EndProposal::Two, PlayerMarker::One) => EndProposal::Both,
-            (_, PlayerMarker::One) => EndProposal::One,
-            (_, PlayerMarker::Two) => EndProposal::Two,
+        *self = match *self {
+            EndProposal::Single(p) if p != player => EndProposal::Both,
+            EndProposal::Neither => EndProposal::Single(player),
+            _ => *self,
         }
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PlayerMarker {
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum PlayerMarker {
     One,
     Two,
 }
@@ -119,6 +116,14 @@ impl State {
 
     pub fn board(&self) -> &board::Cells {
         &self.board
+    }
+
+    pub fn player(&self, p: PlayerMarker) -> &Player {
+        &self.players[p.index()]
+    }
+
+    pub fn end_proposal(&self) -> EndProposal {
+        self.end_proposal
     }
 }
 
