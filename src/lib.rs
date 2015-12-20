@@ -6,9 +6,10 @@
 extern crate gtk;
 extern crate cairo;
 
-pub mod console_ui;
-pub mod gtk_ui;
-
 pub mod actions;
 pub mod board;
 pub mod game;
+pub mod search_graph;
+
+pub mod console_ui;
+pub mod gtk_ui;
