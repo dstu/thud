@@ -70,7 +70,7 @@ const ROW_MASK: u8 = 0x0Fu8;
 ///
 /// Coordinates are created by providing a pair of values: `Coordinate::new(row,
 /// column)`. The row and column should be in `[0, 15]`.
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct Coordinate {
     packed: u8,
 }

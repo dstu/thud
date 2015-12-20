@@ -3,7 +3,7 @@ use ::board;
 use std::iter::{Chain, FlatMap, Iterator, Take};
 use std::slice;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Action {
     Move(board::Coordinate, board::Coordinate),
     Hurl(board::Coordinate, board::Coordinate),
