@@ -49,14 +49,14 @@ pub enum PlayerMarker {
 }
 
 impl PlayerMarker {
-    fn index(self) -> usize {
+    pub fn index(self) -> usize {
         match self {
             PlayerMarker::One => 0,
             PlayerMarker::Two => 1,
         }
     }
 
-    fn toggle(&mut self) {
+    pub fn toggle(&mut self) {
         *self = match *self {
             PlayerMarker::One => PlayerMarker::Two,
             PlayerMarker::Two => PlayerMarker::One,

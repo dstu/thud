@@ -6,6 +6,7 @@ authors = ["Stu Black"]
 [dependencies]
 gtk = "0.0.6"
 cairo-rs = "0.0.7"
+rand = "0.3.12"
 
 [[bin]]
 name = "console"

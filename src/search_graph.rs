@@ -3,9 +3,8 @@ use ::game;
 use std::fmt;
 
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
+// use std::collections::hash_map::Entry;
 use std::clone::Clone;
-use std::default::Default;
 use std::fmt::Debug;
 use std::ops::RangeFrom;
 
@@ -33,11 +32,11 @@ struct StateNamespace {
     states: HashMap<game::State, StateId>,
 }
 
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-enum NamespaceInsertion {
-    Present(StateId),
-    New(StateId),
-}
+// #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+// enum NamespaceInsertion {
+//     Present(StateId),
+//     New(StateId),
+// }
 
 impl StateNamespace {
     fn new() -> Self {
@@ -46,13 +45,13 @@ impl StateNamespace {
         }
     }
 
-    fn get_or_insert(&mut self, state: game::State) -> NamespaceInsertion {
-        let next_state_id = StateId(self.states.len());
-        match self.states.entry(state) {
-            Entry::Occupied(e) => NamespaceInsertion::Present(*e.get()),
-            Entry::Vacant(e) => NamespaceInsertion::New(*e.insert(next_state_id)),
-        }
-    }
+    // fn get_or_insert(&mut self, state: game::State) -> NamespaceInsertion {
+    //     let next_state_id = StateId(self.states.len());
+    //     match self.states.entry(state) {
+    //         Entry::Occupied(e) => NamespaceInsertion::Present(*e.get()),
+    //         Entry::Vacant(e) => NamespaceInsertion::New(*e.insert(next_state_id)),
+    //     }
+    // }
 
     fn get(&self, state: &game::State) -> Option<StateId> {
         self.states.get(state).map(|x| *x)
@@ -70,27 +69,18 @@ impl ArcNamespace {
         }
     }
 
-    fn next_id(&mut self) -> ArcId {
-        match self.arc_id_generator.next() {
-            Some(id) => ArcId(id),
-            None => panic!("Exhausted arc ID namespace"),
-        }
-    }
+    // fn next_id(&mut self) -> ArcId {
+    //     match self.arc_id_generator.next() {
+    //         Some(id) => ArcId(id),
+    //         None => panic!("Exhausted arc ID namespace"),
+    //     }
+    // }
 }
 
 pub enum Target<T> {
     Unexpanded,
     Cycle(T),
     Expanded(T),
-}
-
-impl<T> Target<T> {
-    fn to_option(self) -> Option<T> {
-        match self {
-            Target::Expanded(t) => Some(t),
-            _ => None,
-        }
-    }
 }
 
 impl<T> Clone for Target<T> where T: Clone {
@@ -116,37 +106,29 @@ impl<T> fmt::Debug for Target<T> where T: fmt::Debug {
 }
 
 #[derive(Debug)]
-struct Vertex<S> where S: Default + Debug {
+struct Vertex<S> where S: Debug {
     data: S,
     parents: Vec<ArcId>,
     children: Vec<ArcId>,
 }
 
-impl<S> Default for Vertex<S> where S: Debug + Default  {
-    fn default() -> Self {
-        Vertex { data: Default::default(),
-                 parents: Vec::new(),
-                 children: Vec::new(), }
-    }
-}
-
 #[derive(Debug)]
-struct Arc<A> where A: Debug + Default {
+struct Arc<A> where A: Debug {
     data: A,
     source: StateId,
     target: Target<StateId>,
 }
 
-pub struct SearchGraph<S, A> where S: Debug + Default, A: Debug + Default {
+pub struct Graph<S, A> where S: Debug, A: Debug {
     state_ids: StateNamespace,
     arc_ids: ArcNamespace,
     vertices: Vec<Vertex<S>>,  // Indexed by StateId.
     arcs: Vec<Arc<A>>,  // Indexed by ArcId.
 }
 
-impl<S, A> SearchGraph<S, A> where S: Debug + Default, A: Debug + Default {
+impl<S, A> Graph<S, A> where S: Debug, A: Debug {
     pub fn new() -> Self {
-        SearchGraph {
+        Graph {
             state_ids: StateNamespace::new(),
             arc_ids: ArcNamespace::new(),
             vertices: Vec::new(),
@@ -200,16 +182,16 @@ impl<S, A> SearchGraph<S, A> where S: Debug + Default, A: Debug + Default {
         &mut self.arcs[arc.as_usize()]
     }
 
-    fn add_arc(&mut self, data: A, source: StateId, target: Target<StateId>) {
-        let arc = Arc { data: data, source: source, target: target, };
-        let arc_id = self.arc_ids.next_id();
-        if let Target::Expanded(target_id) = target {
-            self.get_vertex_mut(target_id).parents.push(arc_id);
-        }
-        self.get_vertex_mut(source).children.push(arc_id);
-        self.arcs.push(arc);
-        assert!(self.arcs.len() == arc_id.as_usize() + 1);
-    }
+    // fn add_arc(&mut self, data: A, source: StateId, target: Target<StateId>) {
+    //     let arc = Arc { data: data, source: source, target: target, };
+    //     let arc_id = self.arc_ids.next_id();
+    //     if let Target::Expanded(target_id) = target {
+    //         self.get_vertex_mut(target_id).parents.push(arc_id);
+    //     }
+    //     self.get_vertex_mut(source).children.push(arc_id);
+    //     self.arcs.push(arc);
+    //     assert!(self.arcs.len() == arc_id.as_usize() + 1);
+    // }
 
     // fn expand_target(&mut self, from_state: &game::State, id: ArcId) -> Target<StateId> {
     //     let (arc_source, arc_target) = {
@@ -255,7 +237,7 @@ impl<S, A> SearchGraph<S, A> where S: Debug + Default, A: Debug + Default {
         false
     }
 
-    pub fn get_node<'s>(&'s self, state: game::State) -> Option<Node<'s, S, A>> {
+    pub fn get_node<'s>(&'s self, state: &game::State) -> Option<Node<'s, S, A>> {
         match self.state_ids.get(&state) {
             Some(id) => Some(Node { graph: self, id: id, }),
             None => None,
@@ -274,12 +256,12 @@ impl<S, A> SearchGraph<S, A> where S: Debug + Default, A: Debug + Default {
     // }
 }
 
-pub struct Node<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
-    graph: &'a SearchGraph<S, A>,
+pub struct Node<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
+    graph: &'a Graph<S, A>,
     id: StateId,
 }
 
-impl<'a, S, A> Node<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+impl<'a, S, A> Node<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
     fn children(&self) -> &'a [ArcId] {
         &self.graph.get_vertex(self.id).children
     }
@@ -313,12 +295,12 @@ impl<'a, S, A> Node<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default 
     }
 }
 
-pub struct ChildList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
-    graph: &'a SearchGraph<S, A>,
+pub struct ChildList<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
+    graph: &'a Graph<S, A>,
     id: StateId,
 }
 
-impl<'a, S, A> ChildList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+impl<'a, S, A> ChildList<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
     fn vertex(&self) -> &'a Vertex<S> {
         self.graph.get_vertex(self.id)
     }
@@ -336,12 +318,12 @@ impl<'a, S, A> ChildList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Def
     }
 }
 
-pub struct ParentList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
-    graph: &'a SearchGraph<S, A>,
+pub struct ParentList<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
+    graph: &'a Graph<S, A>,
     id: StateId,
 }
 
-impl<'a, S, A> ParentList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+impl<'a, S, A> ParentList<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
     fn vertex(&self) -> &'a Vertex<S> {
         self.graph.get_vertex(self.id)
     }
@@ -359,25 +341,25 @@ impl<'a, S, A> ParentList<'a, S, A> where S: Debug + Default + 'a, A: Debug + De
     }
 }
 
-pub struct Edge<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
-    graph: &'a SearchGraph<S, A>,
+pub struct Edge<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
+    graph: &'a Graph<S, A>,
     id: ArcId,
 }
 
-impl<'a, S, A> Edge<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+impl<'a, S, A> Edge<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
     fn arc(&self) -> &'a Arc<A> {
         self.graph.get_arc(self.id)
     }
 
-    pub fn get_data(&self) -> &'a A {
+    pub fn data(&self) -> &'a A {
         &self.arc().data
     }
 
-    pub fn get_source(&self) -> Node<'a, S, A> {
+    pub fn source(&self) -> Node<'a, S, A> {
         Node { graph: self.graph, id: self.arc().source, }
     }
 
-    pub fn get_target(&self) -> Target<Node<'a, S, A>> {
+    pub fn target(&self) -> Target<Node<'a, S, A>> {
         match self.arc().target {
             Target::Cycle(id) => Target::Cycle(Node { graph: self.graph, id: id, }),
             Target::Unexpanded => Target::Unexpanded,
@@ -386,12 +368,12 @@ impl<'a, S, A> Edge<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default 
     }
 }
 
-pub struct MutNode<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
-    graph: &'a mut SearchGraph<S, A>,
+pub struct MutNode<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
+    graph: &'a mut Graph<S, A>,
     id: StateId,
 }
 
-impl<'a, S, A> MutNode<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+impl<'a, S, A> MutNode<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
     fn vertex<'s>(&'s self) -> &'s Vertex<S> {
         self.graph.get_vertex(self.id)
     }
@@ -441,12 +423,12 @@ impl<'a, S, A> MutNode<'a, S, A> where S: Debug + Default + 'a, A: Debug + Defau
     }
 }
 
-pub struct MutChildList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
-    graph: &'a mut SearchGraph<S, A>,
+pub struct MutChildList<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
+    graph: &'a mut Graph<S, A>,
     id: StateId,
 }
 
-impl<'a, S, A> MutChildList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+impl<'a, S, A> MutChildList<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
     fn vertex<'s>(&'s self) -> &'s Vertex<S> {
         self.graph.get_vertex(self.id)
     }
@@ -473,12 +455,12 @@ impl<'a, S, A> MutChildList<'a, S, A> where S: Debug + Default + 'a, A: Debug + 
     }
 }
 
-pub struct MutParentList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
-    graph: &'a mut SearchGraph<S, A>,
+pub struct MutParentList<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
+    graph: &'a mut Graph<S, A>,
     id: StateId,
 }
 
-impl<'a, S, A> MutParentList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+impl<'a, S, A> MutParentList<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
     fn vertex<'s>(&'s self) -> &'s Vertex<S> {
         self.graph.get_vertex(self.id)
     }
@@ -486,6 +468,7 @@ impl<'a, S, A> MutParentList<'a, S, A> where S: Debug + Default + 'a, A: Debug +
     pub fn len(&self) -> usize {
         self.vertex().parents.len()
     }
+
     pub fn is_empty(&self) -> bool {
         self.vertex().parents.is_empty()
     }
@@ -505,12 +488,12 @@ impl<'a, S, A> MutParentList<'a, S, A> where S: Debug + Default + 'a, A: Debug +
     }
 }
 
-pub struct MutEdge<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
-    graph: &'a mut SearchGraph<S, A>,
+pub struct MutEdge<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
+    graph: &'a mut Graph<S, A>,
     id: ArcId,
 }
 
-impl<'a, S, A> MutEdge<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+impl<'a, S, A> MutEdge<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
     fn arc(&self) -> &Arc<A> {
         self.graph.get_arc(self.id)
     }

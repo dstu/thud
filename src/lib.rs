@@ -5,10 +5,13 @@
 
 extern crate gtk;
 extern crate cairo;
+extern crate rand;
 
 pub mod actions;
 pub mod board;
 pub mod game;
+
+pub mod mcts;
 pub mod search_graph;
 
 pub mod console_ui;
