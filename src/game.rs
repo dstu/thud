@@ -13,6 +13,7 @@ pub enum Role {
 pub struct Player {
     role: Role,
     name: String,
+    marker: PlayerMarker,
 }
 
 impl Player {
@@ -22,6 +23,10 @@ impl Player {
 
     pub fn role(&self) -> Role {
         self.role
+    }
+
+    pub fn marker(&self) -> PlayerMarker {
+        self.marker
     }
 }
 
@@ -75,8 +80,8 @@ impl State {
     pub fn new(board: board::Cells, player1_name: String, player2_name: String) -> Self {
         State {
             board: board,
-            players: [Player { role: Role::Dwarf, name: player1_name, },
-                      Player { role: Role::Troll, name: player2_name, },],
+            players: [Player { role: Role::Dwarf, marker: PlayerMarker::One, name: player1_name, },
+                      Player { role: Role::Troll, marker: PlayerMarker::Two, name: player2_name, },],
             active_player: PlayerMarker::One,
             end_proposal: EndProposal::Neither,
         }
