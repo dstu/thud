@@ -4,7 +4,6 @@ use ::game;
 use ::search_graph;
 
 use rand::Rng;
-use std::ops::Add;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Payoff {
@@ -16,10 +15,6 @@ impl Payoff {
         Payoff { values: [0; 2], }
     }
 
-    pub fn increment(&mut self, player: game::PlayerMarker, value: usize) {
-        self.values[player.index()] += value
-    }
-
     pub fn score(&self, player: game::PlayerMarker) -> usize {
         self.values[player.index()]
     }
@@ -28,15 +23,6 @@ impl Payoff {
 impl Default for Payoff {
     fn default() -> Self {
         Payoff::new()
-    }
-}
-
-impl Add for Payoff {
-    type Output = Payoff;
-
-    fn add(self, other: Payoff) -> Payoff {
-        Payoff { values: [self.values[0] + other.values[0],
-                          self.values[1] + other.values[1]], }
     }
 }
 
@@ -64,15 +50,6 @@ impl Statistics {
 impl Default for Statistics {
     fn default() -> Self {
         Statistics::new()
-    }
-}
-
-impl Add for Statistics {
-    type Output = Statistics;
-
-    fn add(self, other: Statistics) -> Statistics {
-        Statistics { visits: self.visits + other.visits,
-                     payoff: self.payoff + other.payoff, }
     }
 }
 
