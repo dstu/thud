@@ -3,6 +3,7 @@ use ::board;
 use ::game;
 use ::search_graph;
 
+use std::fmt::Debug;
 use rand::Rng;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -82,7 +83,7 @@ pub fn rollout<'a>(mut node: Node<'a>, state: &mut game::State, bias: f64) -> Ro
         match best_child_edge(children, state.active_player().marker(), bias) {
             None => return RolloutResult::Cycle(node),
             Some(edge) => match edge.target() {
-                search_graph::Target::Unexpanded => return RolloutResult::Unexpanded(edge),
+                search_graph::Target::Unexpanded(_) => return RolloutResult::Unexpanded(edge),
                 search_graph::Target::Expanded(n) => node = n,
                 search_graph::Target::Cycle(n) => panic!("Cycle detection failed"),
             },
@@ -98,7 +99,7 @@ pub fn best_child_edge<'a>(children: ChildList<'a>, player: game::PlayerMarker, 
     while i < children.len() {
         let edge = children.get_edge(i);
         match edge.target() {
-            search_graph::Target::Unexpanded => return Some(edge),
+            search_graph::Target::Unexpanded(_) => return Some(edge),
             search_graph::Target::Cycle(_) => (),
             search_graph::Target::Expanded(child) => {
                 let edge_visits = edge.data().payoff.visits as f64;
@@ -139,7 +140,7 @@ pub fn best_parent_edge<'a>(parents: MutParentList<'a>, player: game::PlayerMark
     parents.to_edge_mut(i)
 }
 
-pub fn simulate<R>(mut state: game::State, mut rng: R) -> Payoff where R: Rng {
+pub fn simulate<R>(state: &mut game::State, rng: &mut R) -> Payoff where R: Rng {
     loop {
         let action = match payoff(&state) {
             None => {
@@ -208,5 +209,15 @@ pub fn backprop<'a>(mut node: MutNode<'a>, payoff: Payoff, mut player: game::Pla
         parent_edge.data_mut().payoff.increment_visit(payoff);
         node = parent_edge.to_source();
         player.toggle();
+    }
+}
+
+pub fn expand<'a>(mut edge: MutEdge<'a>, state: game::State) -> MutEdge<'a> {
+    if let search_graph::Target::Unexpanded(e) = edge.to_target() {
+        e.expand(state,
+                 |a| ActionData { action: a, payoff: Default::default(), },
+                 Default::default)
+    } else {
+        panic!("Edge is already expanded");
     }
 }

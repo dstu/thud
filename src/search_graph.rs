@@ -1,9 +1,10 @@
+use ::actions;
 use ::game;
 
 use std::fmt;
 
 use std::collections::HashMap;
-// use std::collections::hash_map::Entry;
+use std::collections::hash_map::Entry;
 use std::clone::Clone;
 use std::fmt::Debug;
 use std::ops::RangeFrom;
@@ -32,11 +33,11 @@ struct StateNamespace {
     states: HashMap<game::State, StateId>,
 }
 
-// #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
-// enum NamespaceInsertion {
-//     Present(StateId),
-//     New(StateId),
-// }
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+enum NamespaceInsertion {
+    Present(StateId),
+    New(StateId),
+}
 
 impl StateNamespace {
     fn new() -> Self {
@@ -45,61 +46,42 @@ impl StateNamespace {
         }
     }
 
-    // fn get_or_insert(&mut self, state: game::State) -> NamespaceInsertion {
-    //     let next_state_id = StateId(self.states.len());
-    //     match self.states.entry(state) {
-    //         Entry::Occupied(e) => NamespaceInsertion::Present(*e.get()),
-    //         Entry::Vacant(e) => NamespaceInsertion::New(*e.insert(next_state_id)),
-    //     }
-    // }
+    fn get_or_insert(&mut self, state: game::State) -> NamespaceInsertion {
+        let next_state_id = StateId(self.states.len());
+        match self.states.entry(state) {
+            Entry::Occupied(e) => NamespaceInsertion::Present(*e.get()),
+            Entry::Vacant(e) => NamespaceInsertion::New(*e.insert(next_state_id)),
+        }
+    }
 
     fn get(&self, state: &game::State) -> Option<StateId> {
         self.states.get(state).map(|x| *x)
     }
 }
 
-struct ArcNamespace {
-    arc_id_generator: RangeFrom<usize>,
-}
-
-impl ArcNamespace {
-    fn new() -> Self {
-        ArcNamespace {
-            arc_id_generator: 0..,
-        }
-    }
-
-    // fn next_id(&mut self) -> ArcId {
-    //     match self.arc_id_generator.next() {
-    //         Some(id) => ArcId(id),
-    //         None => panic!("Exhausted arc ID namespace"),
-    //     }
-    // }
-}
-
-pub enum Target<T> {
-    Unexpanded,
+pub enum Target<T, R> {
+    Unexpanded(R),
     Cycle(T),
     Expanded(T),
 }
 
-impl<T> Clone for Target<T> where T: Clone {
+impl<T, R> Clone for Target<T, R> where T: Clone, R: Clone {
     fn clone(&self) -> Self {
         match self {
             &Target::Cycle(ref t) => Target::Cycle(t.clone()),
-            &Target::Unexpanded => Target::Unexpanded,
+            &Target::Unexpanded(ref r) => Target::Unexpanded(r.clone()),
             &Target::Expanded(ref t) => Target::Expanded(t.clone()),
         }
     }
 }
 
-impl<T> Copy for Target<T> where T: Copy { }
+impl<T, R> Copy for Target<T, R> where T: Copy, R: Copy { }
 
-impl<T> fmt::Debug for Target<T> where T: fmt::Debug {
+impl<T, R> fmt::Debug for Target<T, R> where T: fmt::Debug, R: fmt::Debug {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
             Target::Cycle(ref t) => write!(f, "Cycle({:?})", t),
-            Target::Unexpanded => write!(f, "Unexpanded"),
+            Target::Unexpanded(ref r) => write!(f, "Unexpanded({:?})", r),
             Target::Expanded(ref t) => write!(f, "Expanded({:?})", t),
         }
     }
@@ -116,12 +98,11 @@ struct Vertex<S> where S: Debug {
 struct Arc<A> where A: Debug {
     data: A,
     source: StateId,
-    target: Target<StateId>,
+    target: Target<StateId, ()>,
 }
 
 pub struct Graph<S, A> where S: Debug, A: Debug {
     state_ids: StateNamespace,
-    arc_ids: ArcNamespace,
     vertices: Vec<Vertex<S>>,  // Indexed by StateId.
     arcs: Vec<Arc<A>>,  // Indexed by ArcId.
 }
@@ -130,7 +111,6 @@ impl<S, A> Graph<S, A> where S: Debug, A: Debug {
     pub fn new() -> Self {
         Graph {
             state_ids: StateNamespace::new(),
-            arc_ids: ArcNamespace::new(),
             vertices: Vec::new(),
             arcs: Vec::new(),
         }
@@ -144,36 +124,6 @@ impl<S, A> Graph<S, A> where S: Debug, A: Debug {
         &mut self.vertices[state.as_usize()]
     }
 
-    // fn get_or_add_state_ref(&mut self, state: &game::State) -> NamespaceInsertion {
-    //     let key = state.clone();
-    //     match self.state_ids.get_or_insert(key) {
-    //         NamespaceInsertion::New(state_id) => {
-    //             self.vertices.push(Default::default());
-    //             for action in state.role_actions(state.active_player().role()) {
-    //                 self.add_arc(action, state_id, Target::Unexpanded);
-    //             }
-    //             assert!(self.vertices.len() == state_id.as_usize() + 1);
-    //             NamespaceInsertion::New(state_id)
-    //         },
-    //         x @ _ => x,
-    //     }
-    // }
-
-    // fn get_or_add_state(&mut self, state: game::State) -> NamespaceInsertion {
-    //     let key = state.clone();
-    //     match self.state_ids.get_or_insert(key) {
-    //         NamespaceInsertion::New(state_id) => {
-    //             self.vertices.push(Default::default());
-    //             for action in state.role_actions(state.active_player().role()) {
-    //                 self.add_arc(action, state_id, Target::Unexpanded);
-    //             }
-    //             assert!(self.vertices.len() == state_id.as_usize() + 1);
-    //             NamespaceInsertion::New(state_id)
-    //         },
-    //         x @ _ => x,
-    //     }        
-    // }
-
     fn get_arc(&self, arc: ArcId) -> &Arc<A> {
         &self.arcs[arc.as_usize()]
     }
@@ -182,43 +132,20 @@ impl<S, A> Graph<S, A> where S: Debug, A: Debug {
         &mut self.arcs[arc.as_usize()]
     }
 
-    // fn add_arc(&mut self, data: A, source: StateId, target: Target<StateId>) {
-    //     let arc = Arc { data: data, source: source, target: target, };
-    //     let arc_id = self.arc_ids.next_id();
-    //     if let Target::Expanded(target_id) = target {
-    //         self.get_vertex_mut(target_id).parents.push(arc_id);
-    //     }
-    //     self.get_vertex_mut(source).children.push(arc_id);
-    //     self.arcs.push(arc);
-    //     assert!(self.arcs.len() == arc_id.as_usize() + 1);
-    // }
+    fn add_vertex(&mut self, data: S) -> &mut Vertex<S> {
+        self.vertices.push(Vertex { data: data, parents: Vec::new(), children: Vec::new() });
+        self.vertices.last_mut().unwrap()
+    }
 
-    // fn expand_target(&mut self, from_state: &game::State, id: ArcId) -> Target<StateId> {
-    //     let (arc_source, arc_target) = {
-    //         let arc = &self.arcs[id.as_usize()];
-    //         (arc.source, arc.target)
-    //     };
-    //     if let Target::Unexpanded = arc_target {
-    //         let mut target_state = from_state.clone();
-    //         target_state.do_action(&self.get_arc(id).action);
-    //         match self.get_or_add_state(target_state) {
-    //             NamespaceInsertion::New(target_id) => {
-    //                 self.vertices.push(Default::default());
-    //                 self.get_arc_mut(id).target = Target::Expanded(target_id);
-    //             },
-    //             NamespaceInsertion::Present(target_id) => {
-    //                 if self.path_exists(target_id, arc_source) {
-    //                     self.get_arc_mut(id).target = Target::Cycle(target_id);
-    //                 } else {
-    //                     self.get_arc_mut(id).target = Target::Expanded(target_id);
-    //                 }
-    //             },
-    //         }
-    //         self.get_arc(id).target
-    //     } else {
-    //         panic!("Arc {:?} already expanded", self.get_arc(id));
-    //     }
-    // }
+    fn add_arc(&mut self, data: A, source: StateId, target: Target<StateId, ()>) {
+        let arc = Arc { data: data, source: source, target: target, };
+        let arc_id = ArcId(self.arcs.len());
+        if let Target::Expanded(target_id) = target {
+            self.get_vertex_mut(target_id).parents.push(arc_id);
+        }
+        self.get_vertex_mut(source).children.push(arc_id);
+        self.arcs.push(arc);
+    }
 
     fn path_exists(&self, source: StateId, target: StateId) -> bool {
         let mut frontier = vec![target];
@@ -244,16 +171,20 @@ impl<S, A> Graph<S, A> where S: Debug, A: Debug {
         }
     }
 
-    // pub fn get_node_mut<'s>(&'s mut self, state: game::State) -> Option<MutNode<'s, S, A>> {
-    //     match self.state_ids.get(&state) {
-    //         Some(id) => Some(MutNode { graph: self, state: state, id: id, }),
-    //         None => None,
-    //     }
-    // }
+    pub fn get_node_mut<'s>(&'s mut self, state: &game::State) -> Option<MutNode<'s, S, A>> {
+        match self.state_ids.get(state) {
+            Some(id) => Some(MutNode { graph: self, id: id, }),
+            None => None,
+        }
+    }
 
-    // pub fn promote_node_mut<'s>(&'s mut self, node: Node<'s, S, A>) -> MutNode<'s, S, A> {
-    //     MutNode { graph: self, id: node.id, }
-    // }
+    pub fn promote_node_mut<'s>(&'s mut self, node: Node<'s, S, A>) -> MutNode<'s, S, A> {
+        MutNode { graph: self, id: node.id, }
+    }
+
+    pub fn promote_edge_mut<'s>(&'s mut self, edge: Edge<'s, S, A>) -> MutEdge<'s, S, A> {
+        MutEdge { graph: self, id: edge.id, }
+    }
 }
 
 pub struct Node<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
@@ -367,10 +298,10 @@ impl<'a, S, A> Edge<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
         Node { graph: self.graph, id: self.arc().source, }
     }
 
-    pub fn target(&self) -> Target<Node<'a, S, A>> {
+    pub fn target(&self) -> Target<Node<'a, S, A>, ()> {
         match self.arc().target {
             Target::Cycle(id) => Target::Cycle(Node { graph: self.graph, id: id, }),
-            Target::Unexpanded => Target::Unexpanded,
+            Target::Unexpanded(_) => Target::Unexpanded(()),
             Target::Expanded(id) => Target::Expanded(Node { graph: self.graph, id: id, }),
         }
     }
@@ -518,28 +449,28 @@ impl<'a, S, A> MutEdge<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
         &mut self.arc_mut().data
     }
 
-    pub fn get_target<'s>(&'s self) -> Target<Node<'s, S, A>> {
+    pub fn get_target<'s>(&'s self) -> Target<Node<'s, S, A>, ()> {
         match self.arc().target {
             Target::Cycle(id) => Target::Cycle(Node { graph: self.graph, id: id, }),
-            Target::Unexpanded => Target::Unexpanded,
+            Target::Unexpanded(_) => Target::Unexpanded(()),
             Target::Expanded(id) =>
                 Target::Expanded(Node { graph: self.graph, id: id, }),
         }
     }
 
-    pub fn get_target_mut<'s>(&'s mut self) -> Target<MutNode<'s, S, A>> {
+    pub fn get_target_mut<'s>(&'s mut self) -> Target<MutNode<'s, S, A>, Expander<'s, S, A>> {
         match self.arc().target {
             Target::Cycle(id) => Target::Cycle(MutNode { graph: self.graph, id: id, }),
-            Target::Unexpanded => Target::Unexpanded,
+            Target::Unexpanded(_) => Target::Unexpanded(Expander { graph: self.graph, id: self.id, }),
             Target::Expanded(id) =>
                 Target::Expanded(MutNode { graph: self.graph, id: id, }),
         }
     }
 
-    pub fn to_target(self) -> Target<MutNode<'a, S, A>> {
+    pub fn to_target(self) -> Target<MutNode<'a, S, A>, Expander<'a, S, A>> {
         match self.arc().target {
             Target::Cycle(id) => Target::Cycle(MutNode { graph: self.graph, id: id, }),
-            Target::Unexpanded => Target::Unexpanded,
+            Target::Unexpanded(_) => Target::Unexpanded(Expander { graph: self.graph, id: self.id, }),
             Target::Expanded(id) =>
                 Target::Expanded(MutNode { graph: self.graph, id: id, }),
         }
@@ -558,4 +489,50 @@ impl<'a, S, A> MutEdge<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
         let id = self.arc().source;
         MutNode { graph: self.graph, id: id, }
     }
+}
+
+pub struct Expander<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
+    graph: &'a mut Graph<S, A>,
+    id: ArcId,
+}
+
+impl<'a, S, A> Expander<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
+    fn arc(&self) -> &Arc<A> {
+        self.graph.get_arc(self.id)
+    }
+
+    fn arc_mut(&mut self) -> &mut Arc<A> {
+        self.graph.get_arc_mut(self.id)
+    }
+
+    pub fn to_edge(self) -> MutEdge<'a, S, A> {
+        MutEdge { graph: self.graph, id: self.id, }
+    }
+
+    pub fn expand<F, G>(mut self, state: game::State, f: F, g: G) -> MutEdge<'a, S, A>
+        where F: Fn(actions::Action) -> A, G: FnOnce() -> S {
+            let saved_state = state.clone();
+            let mut actions = saved_state.role_actions(state.active_player().role());
+            match self.graph.state_ids.get_or_insert(state) {
+                NamespaceInsertion::Present(target_id) => {
+                    if self.graph.path_exists(self.arc().source, target_id) {
+                        self.arc_mut().target = Target::Cycle(target_id);
+                    } else {
+                        self.arc_mut().target = Target::Expanded(target_id);
+                        self.graph.get_vertex_mut(target_id).parents.push(self.id);
+                        loop {
+                            match actions.next() {
+                                None => break,
+                                Some(action) => self.graph.add_arc(f(action), target_id, Target::Unexpanded(())),
+                            }
+                        }
+                    }
+                },
+                NamespaceInsertion::New(target_id) => {
+                    self.arc_mut().target = Target::Expanded(target_id);
+                    self.graph.add_vertex(g()).parents.push(self.id);
+                }
+            }
+            MutEdge { graph: self.graph, id: self.id, }
+        }
 }
