@@ -1,11 +1,12 @@
 use ::game;
 
-use ::actions::Action;
+use std::fmt;
 
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::clone::Clone;
 use std::default::Default;
+use std::fmt::Debug;
 use std::ops::RangeFrom;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -77,133 +78,165 @@ impl ArcNamespace {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-enum ActionTarget {
+pub enum Target<T> {
     Unexpanded,
-    Cycle,
-    State(StateId),
+    Cycle(T),
+    Expanded(T),
 }
 
-impl ActionTarget {
-    fn unwrap(self) -> StateId {
+impl<T> Target<T> {
+    fn to_option(self) -> Option<T> {
         match self {
-            ActionTarget::State(id) => id,
-            _ => panic!("Can't unwrap {:?}", self),
-        }
-    }
-
-    fn to_option(self) -> Option<StateId> {
-        match self {
-            ActionTarget::State(id) => Some(id),
+            Target::Expanded(t) => Some(t),
             _ => None,
         }
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-struct Arc {
-    action: Action,
-    source: StateId,
-    target: ActionTarget,
+impl<T> Clone for Target<T> where T: Clone {
+    fn clone(&self) -> Self {
+        match self {
+            &Target::Cycle(ref t) => Target::Cycle(t.clone()),
+            &Target::Unexpanded => Target::Unexpanded,
+            &Target::Expanded(ref t) => Target::Expanded(t.clone()),
+        }
+    }
 }
 
-pub struct SearchGraph<S, A> where S: Default, A: Default {
-    root_id: StateId,
+impl<T> Copy for Target<T> where T: Copy { }
+
+impl<T> fmt::Debug for Target<T> where T: fmt::Debug {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match *self {
+            Target::Cycle(ref t) => write!(f, "Cycle({:?})", t),
+            Target::Unexpanded => write!(f, "Unexpanded"),
+            Target::Expanded(ref t) => write!(f, "Expanded({:?})", t),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Vertex<S> where S: Default + Debug {
+    data: S,
+    parents: Vec<ArcId>,
+    children: Vec<ArcId>,
+}
+
+impl<S> Default for Vertex<S> where S: Debug + Default  {
+    fn default() -> Self {
+        Vertex { data: Default::default(),
+                 parents: Vec::new(),
+                 children: Vec::new(), }
+    }
+}
+
+#[derive(Debug)]
+struct Arc<A> where A: Debug + Default {
+    data: A,
+    source: StateId,
+    target: Target<StateId>,
+}
+
+pub struct SearchGraph<S, A> where S: Debug + Default, A: Debug + Default {
     state_ids: StateNamespace,
     arc_ids: ArcNamespace,
-    state_out: Vec<Vec<ArcId>>,  // Indexed by StateId.
-    state_in: Vec<Vec<ArcId>>,  // Indexed by StateId.
-    state_data: Vec<S>,  // Indexed by StateId.
-    arcs: Vec<Arc>,  // Indexed by ArcId.
-    arc_data: Vec<A>,  // Indexed by ArcId.
+    vertices: Vec<Vertex<S>>,  // Indexed by StateId.
+    arcs: Vec<Arc<A>>,  // Indexed by ArcId.
 }
 
-impl<S, A> SearchGraph<S, A> where S: Default, A: Default {
-    pub fn new(root_state: &game::State) -> Self {
-        let mut graph = SearchGraph {
-            root_id: StateId(0),
+impl<S, A> SearchGraph<S, A> where S: Debug + Default, A: Debug + Default {
+    pub fn new() -> Self {
+        SearchGraph {
             state_ids: StateNamespace::new(),
             arc_ids: ArcNamespace::new(),
-            state_out: Vec::new(),
-            state_in: Vec::new(),
+            vertices: Vec::new(),
             arcs: Vec::new(),
-            state_data: Vec::new(),
-            arc_data: Vec::new(),
-        };
-        graph.add_state(&root_state);
-        graph
-    }
-
-    fn add_state(&mut self, state: &game::State) -> NamespaceInsertion {
-        let actions = state.role_actions(state.active_player().role());
-        match self.state_ids.get_or_insert(state.clone()) {
-            NamespaceInsertion::New(state_id) => {
-                self.state_data.push(Default::default());
-                self.state_out.push(Vec::new());
-                self.state_in.push(Vec::new());
-                for action in actions {
-                    self.add_arc(action, state_id, ActionTarget::Unexpanded);
-                }
-                assert!(self.state_data.len() == state_id.as_usize() + 1);
-                assert!(self.state_out.len() == state_id.as_usize() + 1);
-                assert!(self.state_in.len() == state_id.as_usize() + 1);
-                NamespaceInsertion::New(state_id)
-            },
-            x @ _ => x,
         }
     }
 
-    fn add_arc(&mut self, action: Action, source: StateId, target: ActionTarget) {
-        let arc = Arc { action: action, source: source, target: target, };
+    fn get_vertex(&self, state: StateId) -> &Vertex<S> {
+        &self.vertices[state.as_usize()]
+    }
+
+    fn get_vertex_mut(&mut self, state: StateId) -> &mut Vertex<S> {
+        &mut self.vertices[state.as_usize()]
+    }
+
+    // fn get_or_add_state_ref(&mut self, state: &game::State) -> NamespaceInsertion {
+    //     let key = state.clone();
+    //     match self.state_ids.get_or_insert(key) {
+    //         NamespaceInsertion::New(state_id) => {
+    //             self.vertices.push(Default::default());
+    //             for action in state.role_actions(state.active_player().role()) {
+    //                 self.add_arc(action, state_id, Target::Unexpanded);
+    //             }
+    //             assert!(self.vertices.len() == state_id.as_usize() + 1);
+    //             NamespaceInsertion::New(state_id)
+    //         },
+    //         x @ _ => x,
+    //     }
+    // }
+
+    // fn get_or_add_state(&mut self, state: game::State) -> NamespaceInsertion {
+    //     let key = state.clone();
+    //     match self.state_ids.get_or_insert(key) {
+    //         NamespaceInsertion::New(state_id) => {
+    //             self.vertices.push(Default::default());
+    //             for action in state.role_actions(state.active_player().role()) {
+    //                 self.add_arc(action, state_id, Target::Unexpanded);
+    //             }
+    //             assert!(self.vertices.len() == state_id.as_usize() + 1);
+    //             NamespaceInsertion::New(state_id)
+    //         },
+    //         x @ _ => x,
+    //     }        
+    // }
+
+    fn get_arc(&self, arc: ArcId) -> &Arc<A> {
+        &self.arcs[arc.as_usize()]
+    }
+
+    fn get_arc_mut(&mut self, arc: ArcId) -> &mut Arc<A> {
+        &mut self.arcs[arc.as_usize()]
+    }
+
+    fn add_arc(&mut self, data: A, source: StateId, target: Target<StateId>) {
+        let arc = Arc { data: data, source: source, target: target, };
         let arc_id = self.arc_ids.next_id();
-        if let ActionTarget::State(target_id) = target {
-            self.state_in[target_id.as_usize()].push(arc_id);
+        if let Target::Expanded(target_id) = target {
+            self.get_vertex_mut(target_id).parents.push(arc_id);
         }
-        self.state_out[source.as_usize()].push(arc_id);
+        self.get_vertex_mut(source).children.push(arc_id);
         self.arcs.push(arc);
-        self.arc_data.push(Default::default());
         assert!(self.arcs.len() == arc_id.as_usize() + 1);
-        assert!(self.arc_data.len() == arc_id.as_usize() + 1);
     }
 
-    fn expand_action_target(&mut self, from_state: &game::State, id: ArcId) -> Option<StateId> {
-        let (arc_source, arc_target) = {
-            let arc = &self.arcs[id.as_usize()];
-            (arc.source, arc.target)
-        };
-        let new_target = match arc_target {
-            ActionTarget::Unexpanded => {
-                match self.state_ids.states.get(from_state).map(|x| *x) {
-                    Some(source_id) => {
-                        if source_id != arc_source {
-                            panic!("Source state ID {:?} does not match action source {:?}",
-                                   source_id, arc_source);
-                        }
-                        let mut target_state = from_state.clone();
-                        target_state.do_action(&self.arcs[id.as_usize()].action);
-                        match self.add_state(&target_state) {
-                            NamespaceInsertion::New(target_id) => {
-                                self.state_in[target_id.as_usize()].push(id);
-                                ActionTarget::State(target_id)
-                            },
-                            NamespaceInsertion::Present(target_id) => {
-                                if self.path_exists(target_id, source_id) {
-                                    ActionTarget::Cycle
-                                } else {
-                                    ActionTarget::State(target_id)
-                                }
-                            },
-                        }
-                    },
-                    None =>
-                        panic!("Source state supplied for action {:?} does not match known states",
-                               self.arcs[id.as_usize()]),
-                }
-            },
-            _ => panic!("Action {:?} already expanded", self.arcs[id.as_usize()]),
-        };
-        self.arcs[id.as_usize()].target = new_target;
-    }
+    // fn expand_target(&mut self, from_state: &game::State, id: ArcId) -> Target<StateId> {
+    //     let (arc_source, arc_target) = {
+    //         let arc = &self.arcs[id.as_usize()];
+    //         (arc.source, arc.target)
+    //     };
+    //     if let Target::Unexpanded = arc_target {
+    //         let mut target_state = from_state.clone();
+    //         target_state.do_action(&self.get_arc(id).action);
+    //         match self.get_or_add_state(target_state) {
+    //             NamespaceInsertion::New(target_id) => {
+    //                 self.vertices.push(Default::default());
+    //                 self.get_arc_mut(id).target = Target::Expanded(target_id);
+    //             },
+    //             NamespaceInsertion::Present(target_id) => {
+    //                 if self.path_exists(target_id, arc_source) {
+    //                     self.get_arc_mut(id).target = Target::Cycle(target_id);
+    //                 } else {
+    //                     self.get_arc_mut(id).target = Target::Expanded(target_id);
+    //                 }
+    //             },
+    //         }
+    //         self.get_arc(id).target
+    //     } else {
+    //         panic!("Arc {:?} already expanded", self.get_arc(id));
+    //     }
+    // }
 
     fn path_exists(&self, source: StateId, target: StateId) -> bool {
         let mut frontier = vec![target];
@@ -212,8 +245,9 @@ impl<S, A> SearchGraph<S, A> where S: Default, A: Default {
             if source == state {
                 return true
             }
-            for arc in self.state_out[state.as_usize()].iter().map(|&x| &self.arcs[x.as_usize()]) {
-                if let ActionTarget::State(target_id) = arc.target {
+            for arc_id in &self.get_vertex(state).children {
+                let arc = self.get_arc(*arc_id);
+                if let Target::Expanded(target_id) = arc.target {
                     frontier.push(target_id);
                 }
             }
@@ -221,308 +255,302 @@ impl<S, A> SearchGraph<S, A> where S: Default, A: Default {
         false
     }
 
-    pub fn get_node<'s>(&'s self, state: &game::State) -> Option<Node<'s, S, A>> {
-        match self.state_ids.get(state) {
-            Some(id) => Some(Node { graph: self, state: state.clone(), id: id, }),
+    pub fn get_node<'s>(&'s self, state: game::State) -> Option<Node<'s, S, A>> {
+        match self.state_ids.get(&state) {
+            Some(id) => Some(Node { graph: self, id: id, }),
             None => None,
         }
     }
 
-    pub fn get_node_mut<'s>(&'s mut self, state: &game::State) -> Option<MutNode<'s, S, A>> {
-        match self.state_ids.get(state) {
-            Some(id) => Some(MutNode { graph: self, state: state.clone(), id: id, }),
-            None => None,
-        }
-    }
+    // pub fn get_node_mut<'s>(&'s mut self, state: game::State) -> Option<MutNode<'s, S, A>> {
+    //     match self.state_ids.get(&state) {
+    //         Some(id) => Some(MutNode { graph: self, state: state, id: id, }),
+    //         None => None,
+    //     }
+    // }
 
-    pub fn promote_node_mut<'s>(&'s mut self, node: Node<'s, S, A>) -> MutNode<'s, S, A> {
-        MutNode { graph: self, state: node.state, id: node.id, }
-    }
+    // pub fn promote_node_mut<'s>(&'s mut self, node: Node<'s, S, A>) -> MutNode<'s, S, A> {
+    //     MutNode { graph: self, id: node.id, }
+    // }
 }
 
-pub struct Node<'a, S, A> where S: Default + 'a, A: Default + 'a {
+pub struct Node<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
     graph: &'a SearchGraph<S, A>,
-    state: game::State,
     id: StateId,
 }
 
-impl<'a, S, A> Node<'a, S, A> where S: Default + 'a, A: Default + 'a {
-    fn child_actions(&self) -> &'a [ArcId] {
-        &self.graph.state_out[self.id.as_usize()]
+impl<'a, S, A> Node<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+    fn children(&self) -> &'a [ArcId] {
+        &self.graph.get_vertex(self.id).children
     }
 
-    fn parent_actions(&self) -> &'a [ArcId] {
-        &self.graph.state_in[self.id.as_usize()]
+    fn child(&self, i: usize) -> ArcId {
+        self.children()[i]
+    }
+
+    fn parents(&self) -> &'a [ArcId] {
+        &self.graph.get_vertex(self.id).parents
     }
 
     pub fn data(&self) -> &'a S {
-        &self.graph.state_data[self.id.as_usize()]
+        &self.graph.get_vertex(self.id).data
     }
 
-    pub fn out_edges(&self) -> OutEdgeList<'a, S, A> {
-        OutEdgeList { graph: self.graph, state: self.state, children: self.child_actions(), }
+    pub fn is_leaf(&self) -> bool {
+        self.children().is_empty()
     }
 
-    pub fn in_edges(&self) -> InEdgeList<'a, S, A> {
-        InEdgeList { graph: self.graph, state: self.state, parents: self.parent_actions(), }
+    pub fn is_root(&self) -> bool {
+        self.parents().is_empty()
+    }
+
+    pub fn child_list(&self) -> ChildList<'a, S, A> {
+        ChildList { graph: self.graph, id: self.id, }
+    }
+
+    pub fn parent_list(&self) -> ParentList<'a, S, A> {
+        ParentList { graph: self.graph, id: self.id, }
     }
 }
 
-pub enum OutEdge<'a, S, A> where S: Default + 'a, A: Default + 'a {
-    Cycle,
-    Unexpanded,
-    Expanded(ExpandedData<'a, S, A>),
-}
-
-pub struct ExpandedData<'a, S, A> where S: Default + 'a, A: Default + 'a {
+pub struct ChildList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
     graph: &'a SearchGraph<S, A>,
-    state: game::State,
-    id: ArcId,
-}
-
-impl<'a, S, A> ExpandedData<'a, S, A> where S: Default + 'a, A: Default + 'a {
-    fn arc(&self) -> &'a Arc {
-        &self.graph.arcs[self.id.as_usize()]
-    }
-    
-    pub fn action(&self) -> &'a Action {
-        &self.arc().action
-    }
-
-    pub fn source(&self) -> Node<'a, S, A> {
-        Node { graph: self.graph, state: self.state, id: self.arc().source, }
-    }
-
-    pub fn target(&self) -> Node<'a, S, A> {
-        let mut target_state = self.state.clone();
-        target_state.do_action(self.action());
-        Node { graph: self.graph, state: target_state, id: self.arc().target.unwrap(), }
-    }
-
-    pub fn data(&self) -> &'a A {
-        &self.graph.arc_data[self.id.as_usize()]
-    }
-}
-
-pub struct OutEdgeList<'a, S, A> where S: Default + 'a, A: Default + 'a {
-    graph: &'a SearchGraph<S, A>,
-    state: game::State,
-    children: &'a [ArcId],
-}
-
-impl<'a, S, A> OutEdgeList<'a, S, A> where S: Default + 'a, A: Default + 'a {
-    pub fn is_empty(&self) -> bool {
-        self.children.is_empty()
-    }
-
-    pub fn len(&self) -> usize {
-        self.children.len()
-    }
-
-    pub fn get(&self, i: usize) -> OutEdge<'a, S, A> {
-        match self.graph.arcs[self.children[i].as_usize()].target {
-            ActionTarget::Unexpanded => OutEdge::Unexpanded,
-            ActionTarget::Cycle => OutEdge::Cycle,
-            ActionTarget::State(_) =>
-                OutEdge::Expanded(ExpandedData { graph: self.graph, state: self.state, id: self.children[i], }),
-        }
-    }
-}
-
-pub struct InEdgeList<'a, S, A> where S: Default + 'a, A: Default + 'a {
-    graph: &'a SearchGraph<S, A>,
-    state: game::State,
-    parents: &'a [ArcId],
-}
-
-impl<'a, S, A> InEdgeList<'a, S, A> where S: Default + 'a, A: Default + 'a {
-    pub fn is_empty(&self) -> bool {
-        self.parents.is_empty()
-    }
-
-    pub fn len(&self) -> usize {
-        self.parents.len()
-    }
-
-    pub fn get(&self, i: usize) -> ExpandedData<'a, S, A> {
-        let mut parent_state = self.state.clone();
-        ExpandedData { graph: self.graph, state: self.state, id: self.parents[i], }
-    }
-}
-
-pub struct MutNode<'a, S, A> where S: Default + 'a, A: Default + 'a {
-    graph: &'a mut SearchGraph<S, A>,
-    state: game::State,
     id: StateId,
 }
 
-impl<'a, S, A> MutNode<'a, S, A> where S: Default + 'a, A: Default + 'a {
-    fn child_actions(&self) -> &[ArcId] {
-        &self.graph.state_out[self.id.as_usize()]
+impl<'a, S, A> ChildList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+    fn vertex(&self) -> &'a Vertex<S> {
+        self.graph.get_vertex(self.id)
+    }
+    
+    pub fn len(&self) -> usize {
+        self.vertex().children.len()
     }
 
-    fn parent_actions(&self) -> &[ArcId] {
-        &self.graph.state_in[self.id.as_usize()]
-    }
-
-    pub fn data(&self) -> &S {
-        &self.graph.state_data[self.id.as_usize()]
-    }
-
-    pub fn data_mut(&mut self) -> &mut S {
-        &mut self.graph.state_data[self.id.as_usize()]
-    }
-
-    pub fn out_edges<'s>(&'s self) -> OutEdgeList<'s, S, A> {
-        OutEdgeList { graph: self.graph, state: self.state, children: self.child_actions(), }
-    }
-
-    pub fn out_edges_mut(mut self) -> MutOutEdgeList<'a, S, A> {
-        MutOutEdgeList { graph: self.graph, state: self.state, source_id: self.id, }
-    }
-
-    pub fn in_edges<'s>(&'s self) -> InEdgeList<'s, S, A> {
-        InEdgeList { graph: self.graph, parents: self.parent_actions(), }
-    }
-
-    pub fn in_edges_mut(mut self) -> MutInEdgeList<'a, S, A> {
-        MutInEdgeList { graph: self.graph, target_id: self.id, }
-    }
-}
-
-pub struct MutOutEdgeList<'a, S, A> where S: Default + 'a, A: Default + 'a {
-    graph: &'a mut SearchGraph<S, A>,
-    state: game::State,
-    source_id: StateId,
-}
-
-impl<'a, S, A> MutOutEdgeList<'a, S, A> where S: Default + 'a, A: Default + 'a {
     pub fn is_empty(&self) -> bool {
-        self.graph.state_out[self.source_id.as_usize()].is_empty()
+        self.vertex().children.is_empty()
+    }
+
+    pub fn get_edge(&self, i: usize) -> Edge<'a, S, A> {
+        Edge { graph: self.graph, id: self.vertex().children[i], }
+    }
+}
+
+pub struct ParentList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+    graph: &'a SearchGraph<S, A>,
+    id: StateId,
+}
+
+impl<'a, S, A> ParentList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+    fn vertex(&self) -> &'a Vertex<S> {
+        self.graph.get_vertex(self.id)
     }
 
     pub fn len(&self) -> usize {
-        self.graph.state_out[self.source_id.as_usize()].len()
+        self.vertex().parents.len()
     }
 
-    pub fn get<'s>(&'s self, i: usize) -> OutEdge<'s, S, A> {
-        match self.graph.arcs[self.graph.state_out[self.source_id.as_usize()][i].as_usize()].target {
-            ActionTarget::Unexpanded => OutEdge::Unexpanded,
-            ActionTarget::Cycle => OutEdge::Cycle,
-            ActionTarget::State(_) =>
-                OutEdge::Expanded(ExpandedData { graph: self.graph, id: self.graph.state_out[self.source_id.as_usize()][i], }),
-        }
+    pub fn is_empty(&self) -> bool {
+        self.vertex().parents.is_empty()
     }
 
-    pub fn get_mut(self, i: usize) -> MutOutEdge<'a, S, A> {
-        match self.graph.arcs[self.graph.state_out[self.source_id.as_usize()][i].as_usize()].target {
-            ActionTarget::Unexpanded => {
-                let id = self.graph.state_out[self.source_id.as_usize()][i];
-                MutOutEdge::Unexpanded(MutUnexpandedData { graph: self.graph, state: self.state, id: id, })
-            },
-            ActionTarget::Cycle => MutOutEdge::Cycle,
-            ActionTarget::State(_) => {
-                let id = self.graph.state_out[self.source_id.as_usize()][i];
-                MutOutEdge::Expanded(MutExpandedData { graph: self.graph, state: self.state, id: id, })
-            },
+    pub fn get_edge(&self, i: usize) -> Edge<'a, S, A> {
+        Edge { graph: self.graph, id: self.vertex().parents[i] }
+    }
+}
+
+pub struct Edge<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+    graph: &'a SearchGraph<S, A>,
+    id: ArcId,
+}
+
+impl<'a, S, A> Edge<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+    fn arc(&self) -> &'a Arc<A> {
+        self.graph.get_arc(self.id)
+    }
+
+    pub fn get_data(&self) -> &'a A {
+        &self.arc().data
+    }
+
+    pub fn get_source(&self) -> Node<'a, S, A> {
+        Node { graph: self.graph, id: self.arc().source, }
+    }
+
+    pub fn get_target(&self) -> Target<Node<'a, S, A>> {
+        match self.arc().target {
+            Target::Cycle(id) => Target::Cycle(Node { graph: self.graph, id: id, }),
+            Target::Unexpanded => Target::Unexpanded,
+            Target::Expanded(id) => Target::Expanded(Node { graph: self.graph, id: id, }),
         }
     }
 }
 
-pub enum MutOutEdge<'a, S, A> where S: Default + 'a, A: Default + 'a {
-    Cycle,
-    Unexpanded(MutUnexpandedData<'a, S, A>),
-    Expanded(MutExpandedData<'a, S, A>),
-}
-
-pub struct MutUnexpandedData<'a, S, A> where S: Default + 'a, A: Default + 'a {
+pub struct MutNode<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
     graph: &'a mut SearchGraph<S, A>,
-    state: game::State,
-    id: ArcId,
+    id: StateId,
 }
 
-impl<'a, S, A> MutUnexpandedData<'a, S, A> where S: Default + 'a, A: Default + 'a {
-    pub fn action(&self) -> &Action {
-        &self.graph.arcs[self.id.as_usize()].action
+impl<'a, S, A> MutNode<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+    fn vertex<'s>(&'s self) -> &'s Vertex<S> {
+        self.graph.get_vertex(self.id)
     }
 
-    pub fn source<'s>(&'s self) -> Node<'s, S, A> {
-        let id = self.graph.arcs[self.id.as_usize()].source;
-        Node { graph: self.graph, id: id, }
+    fn vertex_mut<'s>(&'s mut self) -> &'s mut Vertex<S> {
+        self.graph.get_vertex_mut(self.id)
     }
 
-    pub fn source_mut(self) -> MutNode<'a, S, A> {
-        let id = self.graph.arcs[self.id.as_usize()].source;
-        MutNode { graph: self.graph, id: id, }
+    pub fn data<'s>(&'s self) -> &'s S {
+        &self.vertex().data
     }
 
-    pub fn expand(mut self) -> Option<MutExpandedData<'a, S, A>> {
-        self.graph.expand_action_target(&self.state, self.id).map(|target_id| {
-            MutExpandedData { graph: self.graph, id: target_id, }
-        })
+    pub fn data_mut<'s>(&'s mut self) -> &'s mut S {
+        &mut self.vertex_mut().data
+    }
+
+    pub fn is_leaf(&self) -> bool {
+        self.vertex().children.is_empty()
+    }
+
+    pub fn is_root(&self) -> bool {
+        self.vertex().parents.is_empty()
+    }
+
+    pub fn child_list<'s>(&'s self) -> ChildList<'s, S, A> {
+        ChildList { graph: self.graph, id: self.id, }
+    }
+
+    pub fn child_list_mut<'s>(&'s mut self) -> MutChildList<'s, S, A> {
+        MutChildList { graph: self.graph, id: self.id, }
+    }
+
+    pub fn to_child_list_mut(self) -> MutChildList<'a, S, A> {
+        MutChildList { graph: self.graph, id: self.id, }
+    }
+
+    pub fn parent_list<'s>(&'s self) -> ParentList<'s, S, A> {
+        ParentList { graph: self.graph, id: self.id, }
+    }
+
+    pub fn parent_list_mut<'s>(&'s mut self) -> MutParentList<'s, S, A> {
+        MutParentList { graph: self.graph, id: self.id, }
+    }
+
+    pub fn to_parent_list_mut(self) -> MutParentList<'a, S, A> {
+        MutParentList { graph: self.graph, id: self.id, }
     }
 }
 
-pub struct MutExpandedData<'a, S, A> where S: Default + 'a, A: Default + 'a {
+pub struct MutChildList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
     graph: &'a mut SearchGraph<S, A>,
-    state: game::State,
-    id: ArcId,
+    id: StateId,
 }
 
-impl<'a, S, A> MutExpandedData<'a, S, A> where S: Default + 'a, A: Default + 'a {
-    pub fn action(&self) -> &Action {
-        &self.graph.arcs[self.id.as_usize()].action
-    }
-
-    pub fn source<'s>(&'s self) -> Node<'s, S, A> {
-        let id = self.graph.arcs[self.id.as_usize()].source;
-        Node { graph: self.graph, id: id, }
-    }
-
-    pub fn source_mut(self) -> MutNode<'a, S, A> {
-        let id = self.graph.arcs[self.id.as_usize()].source;
-        MutNode { graph: self.graph, id: id, }
-    }
-
-    pub fn target<'s>(&'s self) -> Node<'s, S, A> {
-        let id = self.graph.arcs[self.id.as_usize()].target.unwrap();
-        Node { graph: self.graph, id: id, }
-    }
-
-    pub fn target_mut(self) -> MutNode<'a, S, A> {
-        let id = self.graph.arcs[self.id.as_usize()].target.unwrap();
-        MutNode { graph: self.graph, id: id, }
-    }
-
-    pub fn data(&self) -> &A {
-        &self.graph.arc_data[self.id.as_usize()]
-    }
-
-    pub fn data_mut(&mut self) -> &mut A {
-        &mut self.graph.arc_data[self.id.as_usize()]
-    }
-}
-
-pub struct MutInEdgeList<'a, S, A> where S: Default + 'a, A: Default + 'a {
-    graph: &'a mut SearchGraph<S, A>,
-    target_id: StateId,
-}
-
-impl<'a, S, A> MutInEdgeList<'a, S, A> where S: Default + 'a, A: Default + 'a {
-    pub fn is_empty(&self) -> bool {
-        self.graph.state_in[self.target_id.as_usize()].is_empty()
+impl<'a, S, A> MutChildList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+    fn vertex<'s>(&'s self) -> &'s Vertex<S> {
+        self.graph.get_vertex(self.id)
     }
 
     pub fn len(&self) -> usize {
-        self.graph.state_in[self.target_id.as_usize()].len()
+        self.vertex().children.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.vertex().children.is_empty()
     }
 
-    pub fn get<'s>(&'s self, i: usize) -> ExpandedData<'s, S, A> {
-        ExpandedData { graph: self.graph, id: self.graph.state_in[self.target_id.as_usize()][i], }
+    pub fn get_edge<'s>(&'s self, i: usize) -> Edge<'s, S, A> {
+        Edge { graph: self.graph, id: self.vertex().children[i], }
     }
 
-    pub fn get_mut(self, i: usize) -> MutExpandedData<'a, S, A> {
-        let id = self.graph.state_in[self.target_id.as_usize()][i];
-        MutExpandedData { graph: self.graph, id: id, }
+    pub fn get_edge_mut<'s>(&'s mut self, i: usize) -> MutEdge<'s, S, A> {
+        let id = self.vertex().children[i];
+        MutEdge { graph: self.graph, id: id, }
+    }
+
+    pub fn to_edge_mut(self, i: usize) -> MutEdge<'a, S, A> {
+        let id = self.vertex().children[i];
+        MutEdge { graph: self.graph, id: id, }
+    }
+}
+
+pub struct MutParentList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+    graph: &'a mut SearchGraph<S, A>,
+    id: StateId,
+}
+
+impl<'a, S, A> MutParentList<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+    fn vertex<'s>(&'s self) -> &'s Vertex<S> {
+        self.graph.get_vertex(self.id)
+    }
+
+    pub fn len(&self) -> usize {
+        self.vertex().parents.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.vertex().parents.is_empty()
+    }
+
+    pub fn get_edge<'s>(&'s self, i: usize) -> Edge<'s, S, A> {
+        Edge { graph: self.graph, id: self.vertex().parents[i], }
+    }
+
+    pub fn get_edge_mut<'s>(&'s mut self, i: usize) -> MutEdge<'s, S, A> {
+        let id = self.vertex().parents[i];
+        MutEdge { graph: self.graph, id: id, }
+    }
+
+    pub fn to_edge_mut(self, i: usize) -> MutEdge<'a, S, A> {
+        let id = self.vertex().parents[i];
+        MutEdge { graph: self.graph, id: id, }
+    }
+}
+
+pub struct MutEdge<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+    graph: &'a mut SearchGraph<S, A>,
+    id: ArcId,
+}
+
+impl<'a, S, A> MutEdge<'a, S, A> where S: Debug + Default + 'a, A: Debug + Default + 'a {
+    fn arc(&self) -> &Arc<A> {
+        self.graph.get_arc(self.id)
+    }
+
+    fn arc_mut(&mut self) -> &mut Arc<A> {
+        self.graph.get_arc_mut(self.id)
+    }
+
+    pub fn get_data(&self) -> &A {
+        &self.arc().data
+    }
+
+    pub fn get_data_mut(&mut self) -> &mut A {
+        &mut self.arc_mut().data
+    }
+
+    pub fn get_target<'s>(&'s self) -> Target<Node<'s, S, A>> {
+        match self.arc().target {
+            Target::Cycle(id) => Target::Cycle(Node { graph: self.graph, id: id, }),
+            Target::Unexpanded => Target::Unexpanded,
+            Target::Expanded(id) =>
+                Target::Expanded(Node { graph: self.graph, id: id, }),
+        }
+    }
+
+    pub fn get_target_mut<'s>(&'s mut self) -> Target<MutNode<'s, S, A>> {
+        match self.arc().target {
+            Target::Cycle(id) => Target::Cycle(MutNode { graph: self.graph, id: id, }),
+            Target::Unexpanded => Target::Unexpanded,
+            Target::Expanded(id) =>
+                Target::Expanded(MutNode { graph: self.graph, id: id, }),
+        }
+    }
+
+    pub fn to_target(self) -> Target<MutNode<'a, S, A>> {
+        match self.arc().target {
+            Target::Cycle(id) => Target::Cycle(MutNode { graph: self.graph, id: id, }),
+            Target::Unexpanded => Target::Unexpanded,
+            Target::Expanded(id) =>
+                Target::Expanded(MutNode { graph: self.graph, id: id, }),
+        }
     }
 }
