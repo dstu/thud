@@ -337,11 +337,11 @@ impl<'a, S, A> MutNode<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
         self.vertex().parents.is_empty()
     }
 
-    pub fn child_list<'s>(&'s self) -> ChildList<'s, S, A> {
+    pub fn get_child_list<'s>(&'s self) -> ChildList<'s, S, A> {
         ChildList { graph: self.graph, id: self.id, }
     }
 
-    pub fn child_list_mut<'s>(&'s mut self) -> MutChildList<'s, S, A> {
+    pub fn get_child_list_mut<'s>(&'s mut self) -> MutChildList<'s, S, A> {
         MutChildList { graph: self.graph, id: self.id, }
     }
 
@@ -349,11 +349,11 @@ impl<'a, S, A> MutNode<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
         MutChildList { graph: self.graph, id: self.id, }
     }
 
-    pub fn parent_list<'s>(&'s self) -> ParentList<'s, S, A> {
+    pub fn get_parent_list<'s>(&'s self) -> ParentList<'s, S, A> {
         ParentList { graph: self.graph, id: self.id, }
     }
 
-    pub fn parent_list_mut<'s>(&'s mut self) -> MutParentList<'s, S, A> {
+    pub fn get_parent_list_mut<'s>(&'s mut self) -> MutParentList<'s, S, A> {
         MutParentList { graph: self.graph, id: self.id, }
     }
 
@@ -509,7 +509,7 @@ impl<'a, S, A> Expander<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
         MutEdge { graph: self.graph, id: self.id, }
     }
 
-    pub fn expand<F, G>(mut self, state: game::State, f: F, g: G) -> MutEdge<'a, S, A>
+    pub fn expand<F, G>(mut self, mut state: game::State, f: F, g: G) -> MutEdge<'a, S, A>
         where F: Fn(actions::Action) -> A, G: FnOnce() -> S {
             let saved_state = state.clone();
             let mut actions = saved_state.role_actions(state.active_player().role());
