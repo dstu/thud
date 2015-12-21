@@ -313,6 +313,10 @@ impl<'a, S, A> ChildList<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
         self.vertex().children.is_empty()
     }
 
+    pub fn source_node(&self) -> Node<'a, S, A> {
+        Node { graph: self.graph, id: self.id, }
+    }
+
     pub fn get_edge(&self, i: usize) -> Edge<'a, S, A> {
         Edge { graph: self.graph, id: self.vertex().children[i], }
     }
@@ -334,6 +338,10 @@ impl<'a, S, A> ParentList<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
 
     pub fn is_empty(&self) -> bool {
         self.vertex().parents.is_empty()
+    }
+
+    pub fn target_node(&self) -> Node<'a, S, A> {
+        Node { graph: self.graph, id: self.id, }
     }
 
     pub fn get_edge(&self, i: usize) -> Edge<'a, S, A> {
@@ -502,11 +510,11 @@ impl<'a, S, A> MutEdge<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
         self.graph.get_arc_mut(self.id)
     }
 
-    pub fn get_data(&self) -> &A {
+    pub fn data(&self) -> &A {
         &self.arc().data
     }
 
-    pub fn get_data_mut(&mut self) -> &mut A {
+    pub fn data_mut(&mut self) -> &mut A {
         &mut self.arc_mut().data
     }
 
@@ -535,5 +543,19 @@ impl<'a, S, A> MutEdge<'a, S, A> where S: Debug + 'a, A: Debug + 'a {
             Target::Expanded(id) =>
                 Target::Expanded(MutNode { graph: self.graph, id: id, }),
         }
+    }
+
+    pub fn get_source<'s>(&'s self) -> Node<'s, S, A> {
+        Node { graph: self.graph, id: self.arc().source, }
+    }
+
+    pub fn get_source_mut<'s>(&'s mut self) -> MutNode<'s, S, A> {
+        let id = self.arc().source;
+        MutNode { graph: self.graph, id: id, }
+    }
+
+    pub fn to_source(self) -> MutNode<'a, S, A> {
+        let id = self.arc().source;
+        MutNode { graph: self.graph, id: id, }
     }
 }
