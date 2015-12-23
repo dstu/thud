@@ -177,14 +177,6 @@ impl<T, S, A> Graph<T, S, A> where T: Hash + Eq + Clone, S: Debug, A: Debug {
             None => None,
         }
     }
-
-    pub fn promote_node_mut<'s>(&'s mut self, node: Node<'s, T, S, A>) -> MutNode<'s, T, S, A> {
-        MutNode { graph: self, id: node.id, }
-    }
-
-    pub fn promote_edge_mut<'s>(&'s mut self, edge: Edge<'s, T, S, A>) -> MutEdge<'s, T, S, A> {
-        MutEdge { graph: self, id: edge.id, }
-    }
 }
 
 pub struct Node<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 'a, A: Debug + 'a {
@@ -217,11 +209,11 @@ impl<'a, T, S, A> Node<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 
         self.parents().is_empty()
     }
 
-    pub fn child_list(&self) -> ChildList<'a, T, S, A> {
+    pub fn get_child_list(&self) -> ChildList<'a, T, S, A> {
         ChildList { graph: self.graph, id: self.id, }
     }
 
-    pub fn parent_list(&self) -> ParentList<'a, T, S, A> {
+    pub fn get_parent_list(&self) -> ParentList<'a, T, S, A> {
         ParentList { graph: self.graph, id: self.id, }
     }
 }
@@ -244,7 +236,7 @@ impl<'a, T, S, A> ChildList<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Deb
         self.vertex().children.is_empty()
     }
 
-    pub fn source_node(&self) -> Node<'a, T, S, A> {
+    pub fn get_source_node(&self) -> Node<'a, T, S, A> {
         Node { graph: self.graph, id: self.id, }
     }
 
@@ -290,15 +282,15 @@ impl<'a, T, S, A> Edge<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 
         self.graph.get_arc(self.id)
     }
 
-    pub fn data(&self) -> &'a A {
+    pub fn get_data(&self) -> &'a A {
         &self.arc().data
     }
 
-    pub fn source(&self) -> Node<'a, T, S, A> {
+    pub fn get_source(&self) -> Node<'a, T, S, A> {
         Node { graph: self.graph, id: self.arc().source, }
     }
 
-    pub fn target(&self) -> Target<Node<'a, T, S, A>, ()> {
+    pub fn get_target(&self) -> Target<Node<'a, T, S, A>, ()> {
         match self.arc().target {
             Target::Cycle(id) => Target::Cycle(Node { graph: self.graph, id: id, }),
             Target::Unexpanded(_) => Target::Unexpanded(()),
@@ -345,7 +337,7 @@ impl<'a, T, S, A> MutNode<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug
         MutChildList { graph: self.graph, id: self.id, }
     }
 
-    pub fn to_child_list_mut(self) -> MutChildList<'a, T, S, A> {
+    pub fn to_child_list(self) -> MutChildList<'a, T, S, A> {
         MutChildList { graph: self.graph, id: self.id, }
     }
 
@@ -357,8 +349,16 @@ impl<'a, T, S, A> MutNode<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug
         MutParentList { graph: self.graph, id: self.id, }
     }
 
-    pub fn to_parent_list_mut(self) -> MutParentList<'a, T, S, A> {
+    pub fn to_parent_list(self) -> MutParentList<'a, T, S, A> {
         MutParentList { graph: self.graph, id: self.id, }
+    }
+
+    pub fn get_child_adder<'s>(&'s mut self) -> EdgeAdder<'s, T, S, A> {
+        EdgeAdder { graph: self.graph, id: self.id, }
+    }
+
+    pub fn to_child_adder(self) -> EdgeAdder<'a, T, S, A> {
+        EdgeAdder { graph: self.graph, id: self.id, }
     }
 }
 
@@ -388,9 +388,21 @@ impl<'a, T, S, A> MutChildList<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: 
         MutEdge { graph: self.graph, id: id, }
     }
 
-    pub fn to_edge_mut(self, i: usize) -> MutEdge<'a, T, S, A> {
+    pub fn to_edge(self, i: usize) -> MutEdge<'a, T, S, A> {
         let id = self.vertex().children[i];
         MutEdge { graph: self.graph, id: id, }
+    }
+
+    pub fn get_source_node<'s>(&'s self) -> Node<'s, T, S, A> {
+        Node { graph: self.graph, id: self.id, }
+    }
+
+    pub fn get_source_node_mut<'s>(&'s mut self) -> MutNode<'s, T, S, A> {
+        MutNode { graph: self.graph, id: self.id, }
+    }
+
+    pub fn to_source_node(self) -> MutNode<'a, T, S, A> {
+        MutNode { graph: self.graph, id: self.id, }
     }
 }
 
@@ -421,7 +433,7 @@ impl<'a, T, S, A> MutParentList<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S:
         MutEdge { graph: self.graph, id: id, }
     }
 
-    pub fn to_edge_mut(self, i: usize) -> MutEdge<'a, T, S, A> {
+    pub fn to_edge(self, i: usize) -> MutEdge<'a, T, S, A> {
         let id = self.vertex().parents[i];
         MutEdge { graph: self.graph, id: id, }
     }
@@ -458,19 +470,19 @@ impl<'a, T, S, A> MutEdge<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug
         }
     }
 
-    pub fn get_target_mut<'s>(&'s mut self) -> Target<MutNode<'s, T, S, A>, Expander<'s, T, S, A>> {
+    pub fn get_target_mut<'s>(&'s mut self) -> Target<MutNode<'s, T, S, A>, EdgeExpander<'s, T, S, A>> {
         match self.arc().target {
             Target::Cycle(id) => Target::Cycle(MutNode { graph: self.graph, id: id, }),
-            Target::Unexpanded(_) => Target::Unexpanded(Expander { graph: self.graph, id: self.id, }),
+            Target::Unexpanded(_) => Target::Unexpanded(EdgeExpander { graph: self.graph, id: self.id, }),
             Target::Expanded(id) =>
                 Target::Expanded(MutNode { graph: self.graph, id: id, }),
         }
     }
 
-    pub fn to_target(self) -> Target<MutNode<'a, T, S, A>, Expander<'a, T, S, A>> {
+    pub fn to_target(self) -> Target<MutNode<'a, T, S, A>, EdgeExpander<'a, T, S, A>> {
         match self.arc().target {
             Target::Cycle(id) => Target::Cycle(MutNode { graph: self.graph, id: id, }),
-            Target::Unexpanded(_) => Target::Unexpanded(Expander { graph: self.graph, id: self.id, }),
+            Target::Unexpanded(_) => Target::Unexpanded(EdgeExpander { graph: self.graph, id: self.id, }),
             Target::Expanded(id) =>
                 Target::Expanded(MutNode { graph: self.graph, id: id, }),
         }
@@ -491,12 +503,12 @@ impl<'a, T, S, A> MutEdge<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug
     }
 }
 
-pub struct Expander<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 'a, A: Debug + 'a {
+pub struct EdgeExpander<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 'a, A: Debug + 'a {
     graph: &'a mut Graph<T, S, A>,
     id: ArcId,
 }
 
-impl<'a, T, S, A> Expander<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 'a, A: Debug + 'a {
+impl<'a, T, S, A> EdgeExpander<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 'a, A: Debug + 'a {
     fn arc(&self) -> &Arc<A> {
         self.graph.get_arc(self.id)
     }
@@ -505,29 +517,26 @@ impl<'a, T, S, A> Expander<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debu
         self.graph.get_arc_mut(self.id)
     }
 
+    pub fn get_edge<'s>(&'s self) -> Edge<'s, T, S, A> {
+        Edge { graph: self.graph, id: self.id, }
+    }
+
+    pub fn get_edge_mut<'s>(&'s mut self) -> MutEdge<'s, T, S, A> {
+        MutEdge { graph: self.graph, id: self.id, }
+    }
+
     pub fn to_edge(self) -> MutEdge<'a, T, S, A> {
         MutEdge { graph: self.graph, id: self.id, }
     }
 
-    pub fn expand<F, G>(mut self, mut state: T, f: F, g: G) -> MutEdge<'a, T, S, A>
+    pub fn expand<F, G>(mut self, state: T, f: F, g: G) -> MutEdge<'a, T, S, A>
         where F: Fn(actions::Action) -> A, G: FnOnce() -> S {
-            // TODO: Get rid of expansion in here and do it from outside, so T
-            // can be generic and not game::State.
-            let saved_state = state.clone();
-            let mut actions = saved_state.role_actions(state.active_player().role());
             match self.graph.state_ids.get_or_insert(state) {
                 NamespaceInsertion::Present(target_id) => {
                     if self.graph.path_exists(self.arc().source, target_id) {
                         self.arc_mut().target = Target::Cycle(target_id);
                     } else {
                         self.arc_mut().target = Target::Expanded(target_id);
-                        self.graph.get_vertex_mut(target_id).parents.push(self.id);
-                        loop {
-                            match actions.next() {
-                                None => break,
-                                Some(action) => self.graph.add_arc(f(action), target_id, Target::Unexpanded(())),
-                            }
-                        }
                     }
                 },
                 NamespaceInsertion::New(target_id) => {
@@ -537,4 +546,29 @@ impl<'a, T, S, A> Expander<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debu
             }
             MutEdge { graph: self.graph, id: self.id, }
         }
+}
+
+pub struct EdgeAdder<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 'a, A: Debug + 'a {
+    graph: &'a mut Graph<T, S, A>,
+    id: StateId,
+}
+
+impl<'a, T, S, A> EdgeAdder<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 'a, A: Debug + 'a {
+    fn vertex_mut(&mut self) -> &mut Vertex<S> {
+        self.graph.get_vertex_mut(self.id)
+    }
+
+    pub fn add<'s>(&'s mut self, data: A) -> MutEdge<'s, T, S, A> {
+        let arc_id = ArcId(self.graph.arcs.len());
+        self.vertex_mut().children.push(arc_id);
+        self.graph.arcs.push(Arc { data: data, source: self.id, target: Target::Unexpanded(()), });
+        MutEdge { graph: self.graph, id: arc_id, }
+    }
+
+    pub fn to_add(mut self, data: A) -> MutEdge<'a, T, S, A> {
+        let arc_id = ArcId(self.graph.arcs.len());
+        self.vertex_mut().children.push(arc_id);
+        self.graph.arcs.push(Arc { data: data, source: self.id, target: Target::Unexpanded(()), });
+        MutEdge { graph: self.graph, id: arc_id, }
+    }
 }
