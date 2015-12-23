@@ -153,16 +153,18 @@ impl PartialEq<State> for State {
             }
         for row in 0u8..8u8 {
             for col in 0u8..8u8 {
-                for &c in [board::Coordinate::new_unchecked(row, col),
-                           board::Coordinate::new_unchecked(7u8 - row, col),
-                           board::Coordinate::new_unchecked(row, 7u8 - col),
-                           board::Coordinate::new_unchecked(7u8 - row, 7u8 - col),
-                           board::Coordinate::new_unchecked(col, row),
-                           board::Coordinate::new_unchecked(7u8 - col, row),
-                           board::Coordinate::new_unchecked(col, 7u8 - row),
-                           board::Coordinate::new_unchecked(7u8 - col, 7u8 - row)].iter() {
-                    if self.board[c] != other.board[c] {
-                        return false
+                for &c in [board::Coordinate::new(row, col),
+                           board::Coordinate::new(7u8 - row, col),
+                           board::Coordinate::new(row, 7u8 - col),
+                           board::Coordinate::new(7u8 - row, 7u8 - col),
+                           board::Coordinate::new(col, row),
+                           board::Coordinate::new(7u8 - col, row),
+                           board::Coordinate::new(col, 7u8 - row),
+                           board::Coordinate::new(7u8 - col, 7u8 - row)].iter() {
+                    if let Some(c) = c {
+                        if self.board[c] != other.board[c] {
+                            return false
+                        }
                     }
                 }
             }
@@ -192,15 +194,17 @@ impl Hash for State {
         for row in 0u8..8u8 {
             for col in 0u8..8u8 {
                 let mut i = 0;
-                for &c in &[board::Coordinate::new_unchecked(row, col),
-                            board::Coordinate::new_unchecked(7u8 - row, col),
-                            board::Coordinate::new_unchecked(row, 7u8 - col),
-                            board::Coordinate::new_unchecked(7u8 - row, 7u8 - col),
-                            board::Coordinate::new_unchecked(col, row),
-                            board::Coordinate::new_unchecked(7u8 - col, row),
-                            board::Coordinate::new_unchecked(col, 7u8 - row),
-                            board::Coordinate::new_unchecked(7u8 - col, 7u8 - row)] {
-                    self.board[c].hash(&mut hashers[i]);
+                for &c in &[board::Coordinate::new(row, col),
+                            board::Coordinate::new(7u8 - row, col),
+                            board::Coordinate::new(row, 7u8 - col),
+                            board::Coordinate::new(7u8 - row, 7u8 - col),
+                            board::Coordinate::new(col, row),
+                            board::Coordinate::new(7u8 - col, row),
+                            board::Coordinate::new(col, 7u8 - row),
+                            board::Coordinate::new(7u8 - col, 7u8 - row)] {
+                    if let Some(c) = c {
+                        self.board[c].hash(&mut hashers[i]);
+                    }
                     i += 1;
                 }
             }

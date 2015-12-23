@@ -111,7 +111,7 @@ pub fn rollout<'a>(mut node: MutNode<'a>, state: &mut game::State, bias: f64) ->
 }
 
 fn best_child_edge<'a>(children: ChildList<'a>, player: game::PlayerMarker, bias: f64) -> Option<usize> {
-    let parent_visits = children.get_source_node().data().statistics.visits as f64;
+    let parent_visits = children.get_source_node().get_data().statistics.visits as f64;
     let mut best_edge_index = None;
     let mut best_edge_uct = 0.0;
     for i in 0..children.len() {
@@ -120,8 +120,8 @@ fn best_child_edge<'a>(children: ChildList<'a>, player: game::PlayerMarker, bias
             search_graph::Target::Unexpanded(_) => return Some(i),
             search_graph::Target::Cycle(_) => (),
             search_graph::Target::Expanded(e) => {
-                let edge_visits = e.data().statistics.visits as f64;
-                let edge_payoff = e.data().statistics.payoff.score(player) as f64;
+                let edge_visits = e.get_data().statistics.visits as f64;
+                let edge_payoff = e.get_data().statistics.payoff.score(player) as f64;
                 let uct = edge_payoff / edge_visits
                     + bias * f64::sqrt(f64::ln(parent_visits) / edge_visits);
                 if uct > best_edge_uct {
@@ -140,7 +140,7 @@ fn best_parent_edge<'a>(parents: ParentList<'a>, player: game::PlayerMarker, bia
     let mut best_edge_uct = 0.0;
     for i in 0..parents.len() {
         let edge = parents.get_edge(i);
-        let parent_visits = edge.get_source().data().statistics.visits as f64;
+        let parent_visits = edge.get_source().get_data().statistics.visits as f64;
         let edge_payoff = edge.get_data().statistics.payoff.score(player) as f64;
         let edge_visits = edge.get_data().statistics.visits as f64;
         let uct = edge_payoff / edge_visits
@@ -215,7 +215,7 @@ pub fn payoff(state: &game::State) -> Option<Payoff> {
 
 fn backprop_payoff<'a>(mut node: MutNode<'a>, payoff: Payoff, mut player: game::PlayerMarker, bias: f64) {
     loop {
-        node.data_mut().statistics.increment_visit(payoff);
+        node.get_data_mut().statistics.increment_visit(payoff);
         node = match best_parent_edge(node.get_parent_list(), player, bias) {
             None => break,
             Some(i) => node.to_parent_list().to_edge(i).to_source(),
@@ -226,7 +226,7 @@ fn backprop_payoff<'a>(mut node: MutNode<'a>, payoff: Payoff, mut player: game::
 
 fn backprop_cycle<'a>(mut node: MutNode<'a>) {
     // loop {
-        node.data_mut().cycle = true;
+        node.get_data_mut().cycle = true;
         let mut parents = node.to_parent_list();
         for i in 0..parents.len() {
             set_cycle_from_children(parents.get_edge_mut(i).get_source_mut());
@@ -240,17 +240,17 @@ fn set_cycle_from_children<'a>(mut node: MutNode<'a>) {
         for i in 0..children.len() {
             match children.get_edge_mut(i).get_target_mut() {
                 search_graph::Target::Unexpanded(_) => return,
-                search_graph::Target::Expanded(ref node) if !node.data().cycle => return,
+                search_graph::Target::Expanded(ref node) if !node.get_data().cycle => return,
                 _ => (),
             }
         }
     }
-    node.data_mut().cycle = true;
+    node.get_data_mut().cycle = true;
 }
 
 fn backprop_known_payoff<'a>(mut node: MutNode<'a>, p: Payoff) {
     // loop {
-        node.data_mut().known_payoff = Some(p);
+        node.get_data_mut().known_payoff = Some(p);
         let mut parents = node.to_parent_list();
         for i in 0..parents.len() {
             set_known_payoff_from_children(parents.get_edge_mut(i).get_source_mut());
@@ -269,7 +269,7 @@ fn set_known_payoff_from_children<'a>(mut node: MutNode<'a>) {
                     break
                 },
                 search_graph::Target::Expanded(node) =>
-                    match node.data().known_payoff {
+                    match node.get_data().known_payoff {
                         None => return,
                         Some(known) => payoff = match payoff {
                             None => Some(known),
@@ -281,27 +281,7 @@ fn set_known_payoff_from_children<'a>(mut node: MutNode<'a>) {
             }
         }
     }
-    node.data_mut().known_payoff = payoff;
-}
-
-pub fn expand<'a>(edge: MutEdge<'a>, state: game::State) -> MutEdge<'a> {
-    if let search_graph::Target::Unexpanded(e) = edge.to_target() {
-        let key = state.clone();
-        let mut edge = e.expand(key, EdgeData::new, Default::default);
-        match edge.get_target_mut() {
-            search_graph::Target::Unexpanded(_) => panic!("Edge expansion failed"),
-            search_graph::Target::Cycle(_) => (),
-            search_graph::Target::Expanded(new_node) => {
-                let mut adder = new_node.to_child_adder();
-                for a in state.role_actions(state.active_player().role()) {
-                    adder.add(EdgeData::new(a));
-                }
-            },
-        }
-        edge
-    } else {
-        panic!("Edge is already expanded");
-    }
+    node.get_data_mut().known_payoff = payoff;
 }
 
 pub fn iterate_search<'a, R>(rng: &mut R, graph: &'a mut Graph, mut state: game::State, bias: f64) where R: Rng {
@@ -309,7 +289,7 @@ pub fn iterate_search<'a, R>(rng: &mut R, graph: &'a mut Graph, mut state: game:
         match rollout(node, &mut state, bias) {
             Rollout::Unexpanded(expander) => {
                 state.do_action(&expander.get_edge().get_data().action);
-                match expander.expand(state.clone(), EdgeData::new, Default::default).to_target() {
+                match expander.expand(state.clone(), Default::default).to_target() {
                     search_graph::Target::Expanded(node) => {
                         let payoff = simulate(&mut state, rng);
                         backprop_payoff(node, payoff, state.active_player().marker(), bias);

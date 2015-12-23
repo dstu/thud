@@ -1,5 +1,3 @@
-use ::actions;
-
 use std::fmt;
 
 use std::collections::HashMap;
@@ -7,7 +5,6 @@ use std::collections::hash_map::Entry;
 use std::clone::Clone;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::ops::RangeFrom;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct ArcId(usize);
@@ -148,10 +145,10 @@ impl<T, S, A> Graph<T, S, A> where T: Hash + Eq + Clone, S: Debug, A: Debug {
     }
 
     fn path_exists(&self, source: StateId, target: StateId) -> bool {
-        let mut frontier = vec![target];
+        let mut frontier = vec![source];
         while !frontier.is_empty() {
             let state = frontier.pop().unwrap();
-            if source == state {
+            if target == state {
                 return true
             }
             for arc_id in &self.get_vertex(state).children {
@@ -189,15 +186,11 @@ impl<'a, T, S, A> Node<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 
         &self.graph.get_vertex(self.id).children
     }
 
-    fn child(&self, i: usize) -> ArcId {
-        self.children()[i]
-    }
-
     fn parents(&self) -> &'a [ArcId] {
         &self.graph.get_vertex(self.id).parents
     }
 
-    pub fn data(&self) -> &'a S {
+    pub fn get_data(&self) -> &'a S {
         &self.graph.get_vertex(self.id).data
     }
 
@@ -313,11 +306,11 @@ impl<'a, T, S, A> MutNode<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug
         self.graph.get_vertex_mut(self.id)
     }
 
-    pub fn data<'s>(&'s self) -> &'s S {
+    pub fn get_data<'s>(&'s self) -> &'s S {
         &self.vertex().data
     }
 
-    pub fn data_mut<'s>(&'s mut self) -> &'s mut S {
+    pub fn get_data_mut<'s>(&'s mut self) -> &'s mut S {
         &mut self.vertex_mut().data
     }
 
@@ -453,11 +446,11 @@ impl<'a, T, S, A> MutEdge<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug
         self.graph.get_arc_mut(self.id)
     }
 
-    pub fn data(&self) -> &A {
+    pub fn get_data(&self) -> &A {
         &self.arc().data
     }
 
-    pub fn data_mut(&mut self) -> &mut A {
+    pub fn get_data_mut(&mut self) -> &mut A {
         &mut self.arc_mut().data
     }
 
@@ -529,23 +522,22 @@ impl<'a, T, S, A> EdgeExpander<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: 
         MutEdge { graph: self.graph, id: self.id, }
     }
 
-    pub fn expand<F, G>(mut self, state: T, f: F, g: G) -> MutEdge<'a, T, S, A>
-        where F: Fn(actions::Action) -> A, G: FnOnce() -> S {
-            match self.graph.state_ids.get_or_insert(state) {
-                NamespaceInsertion::Present(target_id) => {
-                    if self.graph.path_exists(self.arc().source, target_id) {
-                        self.arc_mut().target = Target::Cycle(target_id);
-                    } else {
-                        self.arc_mut().target = Target::Expanded(target_id);
-                    }
-                },
-                NamespaceInsertion::New(target_id) => {
+    pub fn expand<G>(mut self, state: T, g: G) -> MutEdge<'a, T, S, A> where G: FnOnce() -> S {
+        match self.graph.state_ids.get_or_insert(state) {
+            NamespaceInsertion::Present(target_id) => {
+                if self.graph.path_exists(target_id, self.arc().source) {
+                    self.arc_mut().target = Target::Cycle(target_id);
+                } else {
                     self.arc_mut().target = Target::Expanded(target_id);
-                    self.graph.add_vertex(g()).parents.push(self.id);
                 }
+            },
+            NamespaceInsertion::New(target_id) => {
+                self.arc_mut().target = Target::Expanded(target_id);
+                self.graph.add_vertex(g()).parents.push(self.id);
             }
-            MutEdge { graph: self.graph, id: self.id, }
         }
+        MutEdge { graph: self.graph, id: self.id, }
+    }
 }
 
 pub struct EdgeAdder<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 'a, A: Debug + 'a {
@@ -554,21 +546,15 @@ pub struct EdgeAdder<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 'a
 }
 
 impl<'a, T, S, A> EdgeAdder<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 'a, A: Debug + 'a {
-    fn vertex_mut(&mut self) -> &mut Vertex<S> {
-        self.graph.get_vertex_mut(self.id)
-    }
-
     pub fn add<'s>(&'s mut self, data: A) -> MutEdge<'s, T, S, A> {
         let arc_id = ArcId(self.graph.arcs.len());
-        self.vertex_mut().children.push(arc_id);
-        self.graph.arcs.push(Arc { data: data, source: self.id, target: Target::Unexpanded(()), });
+        self.graph.add_arc(data, self.id, Target::Unexpanded(()));
         MutEdge { graph: self.graph, id: arc_id, }
     }
 
     pub fn to_add(mut self, data: A) -> MutEdge<'a, T, S, A> {
         let arc_id = ArcId(self.graph.arcs.len());
-        self.vertex_mut().children.push(arc_id);
-        self.graph.arcs.push(Arc { data: data, source: self.id, target: Target::Unexpanded(()), });
+        self.graph.add_arc(data, self.id, Target::Unexpanded(()));
         MutEdge { graph: self.graph, id: arc_id, }
     }
 }
