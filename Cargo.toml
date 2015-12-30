@@ -13,3 +13,9 @@ name = "console"
 
 [[bin]]
 name = "gtk"
+
+[[bin]]
+name = "board_to_image"
+
+[[bin]]
+name = "console_mcts"

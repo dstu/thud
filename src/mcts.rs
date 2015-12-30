@@ -4,10 +4,11 @@ use ::game;
 use ::search_graph;
 
 use std::cmp;
+use std::fmt;
 
 use rand::Rng;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Payoff {
     values: [usize; 2],
 }
@@ -24,7 +25,13 @@ impl Default for Payoff {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+impl fmt::Debug for Payoff {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "[{}, {}]", self.values[0], self.values[1])
+    }
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Statistics {
     visits: usize,
     payoff: Payoff,
@@ -44,11 +51,17 @@ impl Default for Statistics {
     }
 }
 
+impl fmt::Debug for Statistics {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "Statistics(visits: {}, payoff: {:?})", self.visits, self.payoff)
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct NodeData {
+    pub statistics: Statistics,
     cycle: bool,
     known_payoff: Option<Payoff>,
-    statistics: Statistics,
 }
 
 impl Default for NodeData {
@@ -63,10 +76,10 @@ impl Default for NodeData {
 
 #[derive(Clone, Debug)]
 pub struct EdgeData {
-    action: actions::Action,
+    pub action: actions::Action,
+    pub statistics: Statistics,
     cycle: bool,
     known_payoff: Option<Payoff>,
-    statistics: Statistics,
 }
 
 impl EdgeData {

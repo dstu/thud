@@ -17,13 +17,13 @@ pub struct Display {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DisplayProperties {
-    margin_left: f64,
-    margin_right: f64,
-    margin_top: f64,
-    margin_bottom: f64,
-    border_width: f64,
-    cell_dimension: f64,
-    active_position: Option<Coordinate>,
+    pub margin_left: f64,
+    pub margin_right: f64,
+    pub margin_top: f64,
+    pub margin_bottom: f64,
+    pub border_width: f64,
+    pub cell_dimension: f64,
+    pub active_position: Option<Coordinate>,
 }
 
 struct BoxBounds {
@@ -174,3 +174,4 @@ impl Display {
         });
     }
 }
+

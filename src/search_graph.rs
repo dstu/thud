@@ -174,6 +174,17 @@ impl<T, S, A> Graph<T, S, A> where T: Hash + Eq + Clone, S: Debug, A: Debug {
             None => None,
         }
     }
+
+    pub fn add_root<'s>(&'s mut self, state: T, data: S) -> MutNode<'s, T, S, A> {
+        let node_id = match self.state_ids.get_or_insert(state) {
+            NamespaceInsertion::Present(id) => id,
+            NamespaceInsertion::New(id) => {
+                self.add_vertex(data);
+                id
+            },
+        };
+        MutNode { graph: self, id: node_id, }
+    }
 }
 
 pub struct Node<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 'a, A: Debug + 'a {
@@ -184,6 +195,10 @@ pub struct Node<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 'a, A: 
 impl<'a, T, S, A> Node<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 'a, A: Debug + 'a {
     fn children(&self) -> &'a [ArcId] {
         &self.graph.get_vertex(self.id).children
+    }
+
+    pub fn get_id(&self) -> usize {
+        self.id.as_usize()
     }
 
     fn parents(&self) -> &'a [ArcId] {
@@ -273,6 +288,10 @@ pub struct Edge<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 'a, A: 
 impl<'a, T, S, A> Edge<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug + 'a, A: Debug + 'a {
     fn arc(&self) -> &'a Arc<A> {
         self.graph.get_arc(self.id)
+    }
+
+    pub fn get_id(&self) -> usize {
+        self.id.as_usize()
     }
 
     pub fn get_data(&self) -> &'a A {

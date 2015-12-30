@@ -87,6 +87,10 @@ impl State {
         }
     }
 
+    pub fn cells(&self) -> &board::Cells {
+        &self.board
+    }
+
     pub fn new_default(player1_name: String, player2_name: String) -> Self {
         State::new(board::Cells::default(), player1_name, player2_name)
     }

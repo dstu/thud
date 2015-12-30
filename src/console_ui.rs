@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::io;
 use std::io::Write;
 
@@ -5,6 +6,10 @@ use ::board::Cells;
 use ::board::Content;
 use ::board::Coordinate;
 use ::board::Token;
+
+use ::game;
+use ::mcts;
+use ::search_graph;
 
 pub fn glyph(b: Option<Content>) -> &'static str {
     match b {
@@ -59,5 +64,44 @@ pub fn read_coordinate() -> Coordinate {
             },
             Some(c) => return c,
         }
+    }
+}
+
+pub fn write_search_graph(graph: &mcts::Graph, state: &game::State) {
+    println!("to play: {} [{:?}]",
+             state.active_player().name(), state.active_player().role());
+    match graph.get_node(state) {
+        None => println!("no matching node for game state"),
+        Some(node) => {
+            write_board(state.cells());
+            write_node_tree(&node, 0, &mut HashSet::new());
+        },
+    }
+}
+
+fn write_node_tree<'a>(n: &mcts::Node<'a>, indentation_level: usize, visited_nodes: &mut HashSet<usize>) {
+    if indentation_level > 0 {
+        for _ in 0..(indentation_level - 1) {
+            print!(" ");
+        }
+    }
+    if visited_nodes.insert(n.get_id()) {
+        let children = n.get_child_list();
+        for i in 0..children.len() {
+            let edge_data = children.get_edge(i).get_data();
+            print!("+-{:?}: {:?}--", edge_data.action, edge_data.statistics);
+            match children.get_edge(i).get_target() {
+                search_graph::Target::Unexpanded(_) =>
+                    println!("Unexpanded"),
+                search_graph::Target::Cycle(target) =>
+                    println!("Cycle({})", target.get_id()),
+                search_graph::Target::Expanded(target) => {
+                    println!("Expanded({:?})", target.get_data().statistics);
+                    write_node_tree(&target, indentation_level + 1, visited_nodes);
+                },
+            }
+        }
+    } else {
+        println!("=>{}", n.get_id());
     }
 }
