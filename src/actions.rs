@@ -204,15 +204,15 @@ impl<'a> Iterator for ActionIterator<'a> {
 
 /// Iterates over move actions that may be made on a board.
 ///
-///     Any dwarf is moved like a chess queen, any number of squares in any
-///     orthogonal or diagonal direction, but not onto or through any other
-///     piece, whether Thudstone, dwarf, or troll.
+/// Any dwarf is moved like a chess queen, any number of squares in any
+/// orthogonal or diagonal direction, but not onto or through any other piece,
+/// whether Thudstone, dwarf, or troll.
 ///
-///     Any troll is moved like a chess king, one square in any orthogonal or
-///     diagonal direction onto an empty square. After the troll has been moved,
-///     only a single dwarf on the eight squares adjacent to the moved troll may
-///     optionally be immediately captured and removed from the board, at the
-///     troll player's discretion.
+/// Any troll is moved like a chess king, one square in any orthogonal or
+/// diagonal direction onto an empty square. After the troll has been moved,
+/// only a single dwarf on the eight squares adjacent to the moved troll may
+/// optionally be immediately captured and removed from the board, at the troll
+/// player's discretion.
 ///
 /// To limit the number of squares moved in the case of moving a troll, limit a
 /// `Moveiterator` with its `take()` method.
@@ -251,13 +251,13 @@ impl<'a> Iterator for MoveIterator<'a> {
 /// Iterates over shove actions (Troll capturing moves) that may be made on a
 /// board.
 ///
-///     Anywhere there is a straight (orthogonal or diagonal) line of adjacent
-///     trolls on the board, they may shove the endmost troll in the direction
-///     continuing the line, up to as many spaces as there are trolls in the
-///     line. As in a normal move, the troll may not land on an occupied square,
-///     and any (all) dwarfs in the eight squares adjacent to its final position
-///     may immediately be captured. Trolls may only make a shove if by doing so
-///     they capture at least one dwarf.
+/// Anywhere there is a straight (orthogonal or diagonal) line of adjacent
+/// trolls on the board, they may shove the endmost troll in the direction
+/// continuing the line, up to as many spaces as there are trolls in the
+/// line. As in a normal move, the troll may not land on an occupied square, and
+/// any (all) dwarfs in the eight squares adjacent to its final position may
+/// immediately be captured. Trolls may only make a shove if by doing so they
+/// capture at least one dwarf.
 pub struct ShoveIterator<'a> {
     board: &'a board::Cells,
     start: board::Coordinate,
@@ -308,17 +308,17 @@ impl<'a> Iterator for ShoveIterator<'a> {
 /// Iterates over hurl actions (Dwarf capturing actions) that may be performed
 /// on a `Board`.
 ///
-///     Anywhere there is a straight (orthogonal or diagonal) line of adjacent
-///     dwarfs on the board, they may hurl the front dwarf in the direction
-///     continuing the line, as long as the space between the lead dwarf and the
-///     troll is less than the number of dwarfs in the line. This is different
-///     from a normal move in that the dwarf is permitted to land on a square
-///     containing a troll, in which case the troll is removed from the board
-///     and the dwarf takes his place. This may only be done if the endmost
-///     dwarf can land on a troll by moving in the direction of the line at most
-///     as many spaces as there are dwarfs in the line. Since a single dwarf is
-///     a line of one in any direction, a dwarf may always move one space to
-///     capture a troll on an immediately adjacent square.
+/// Anywhere there is a straight (orthogonal or diagonal) line of adjacent
+/// dwarfs on the board, they may hurl the front dwarf in the direction
+/// continuing the line, as long as the space between the lead dwarf and the
+/// troll is less than the number of dwarfs in the line. This is different from
+/// a normal move in that the dwarf is permitted to land on a square containing
+/// a troll, in which case the troll is removed from the board and the dwarf
+/// takes his place. This may only be done if the endmost dwarf can land on a
+/// troll by moving in the direction of the line at most as many spaces as there
+/// are dwarfs in the line. Since a single dwarf is a line of one in any
+/// direction, a dwarf may always move one space to capture a troll on an
+/// immediately adjacent square.
 pub struct HurlIterator<'a> {
     board: &'a board::Cells,
     start: board::Coordinate,

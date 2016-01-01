@@ -121,6 +121,8 @@ impl State {
 
     pub fn terminated(&self) -> bool {
         self.end_proposal == EndProposal::Both
+            || self.board.occupied_iter(Role::Dwarf).count() == 0
+            || self.board.occupied_iter(Role::Troll).count() == 0
     }
 
     pub fn board(&self) -> &board::Cells {
@@ -151,20 +153,20 @@ impl Clone for State {
 impl PartialEq<State> for State {
     fn eq(&self, other: &State) -> bool {
         if self.active_player != other.active_player
-            || self.end_proposal == other.end_proposal
-            || self.players[0].role() == other.players[0].role() {
+            || self.end_proposal != other.end_proposal
+            || self.players[0].role() != other.players[0].role() {
                 return false
             }
-        for row in 0u8..8u8 {
-            for col in 0u8..8u8 {
+        for row in 0u8..15u8 {
+            for col in 0u8..15u8 {
                 for &c in [board::Coordinate::new(row, col),
-                           board::Coordinate::new(7u8 - row, col),
-                           board::Coordinate::new(row, 7u8 - col),
-                           board::Coordinate::new(7u8 - row, 7u8 - col),
+                           board::Coordinate::new(14u8 - row, col),
+                           board::Coordinate::new(row, 14u8 - col),
+                           board::Coordinate::new(14u8 - row, 14u8 - col),
                            board::Coordinate::new(col, row),
-                           board::Coordinate::new(7u8 - col, row),
-                           board::Coordinate::new(col, 7u8 - row),
-                           board::Coordinate::new(7u8 - col, 7u8 - row)].iter() {
+                           board::Coordinate::new(14u8 - col, row),
+                           board::Coordinate::new(col, 14u8 - row),
+                           board::Coordinate::new(14u8 - col, 14u8 - row)].iter() {
                     if let Some(c) = c {
                         if self.board[c] != other.board[c] {
                             return false
@@ -195,17 +197,17 @@ impl Hash for State {
             self.players[1].role().hash(h);
             self.end_proposal.hash(h);
         }
-        for row in 0u8..8u8 {
-            for col in 0u8..8u8 {
+        for row in 0u8..15u8 {
+            for col in 0u8..15u8 {
                 let mut i = 0;
                 for &c in &[board::Coordinate::new(row, col),
-                            board::Coordinate::new(7u8 - row, col),
-                            board::Coordinate::new(row, 7u8 - col),
-                            board::Coordinate::new(7u8 - row, 7u8 - col),
+                            board::Coordinate::new(14u8 - row, col),
+                            board::Coordinate::new(row, 14u8 - col),
+                            board::Coordinate::new(14u8 - row, 14u8 - col),
                             board::Coordinate::new(col, row),
-                            board::Coordinate::new(7u8 - col, row),
-                            board::Coordinate::new(col, 7u8 - row),
-                            board::Coordinate::new(7u8 - col, 7u8 - row)] {
+                            board::Coordinate::new(14u8 - col, row),
+                            board::Coordinate::new(col, 14u8 - row),
+                            board::Coordinate::new(14u8 - col, 14u8 - row)] {
                     if let Some(c) = c {
                         self.board[c].hash(&mut hashers[i]);
                     }
@@ -225,5 +227,61 @@ impl Hash for State {
         for v in &hash_values {
             state.write_u64(*v);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use ::actions;
+    use ::board;
+    use ::console_ui;
+    use super::*;
+
+    fn new_state() -> State {
+        State::new(board::Cells::default(),
+                   String::from_str("Player 1").ok().unwrap(),
+                   String::from_str("Player 2").ok().unwrap())
+    }
+
+    #[test]
+    fn null_move_equivalence() {
+        assert!(new_state() == new_state())
+    }
+
+    #[test]
+    fn simple_move_equivalence() {
+        let mut s1 = new_state();
+        s1.do_action(&actions::Action::Move(board::Coordinate::new(2, 3).unwrap(),
+                                            board::Coordinate::new(10, 3).unwrap()));
+        let mut s2 = new_state();
+        s2.do_action(&actions::Action::Move(board::Coordinate::new(2, 3).unwrap(),
+                                            board::Coordinate::new(10, 3).unwrap()));
+        assert!(s1 == s2);
+    }
+
+    #[test]
+    fn simple_move_nonequivalence_1() {
+        let mut s1 = new_state();
+        s1.do_action(&actions::Action::Move(board::Coordinate::new(2, 3).unwrap(),
+                                            board::Coordinate::new(10, 3).unwrap()));
+        let mut s2 = new_state();
+        s2.do_action(&actions::Action::Move(board::Coordinate::new(14, 9).unwrap(),
+                                            board::Coordinate::new(6, 1).unwrap()));
+        assert!(s1 != s2);
+    }
+
+    #[test]
+    fn simple_move_nonequivalence_2() {
+        let mut s1 = new_state();
+        s1.do_action(&actions::Action::Move(board::Coordinate::new(0, 5).unwrap(),
+                                            board::Coordinate::new(8, 5).unwrap()));
+        console_ui::write_board(s1.board());
+        let mut s2 = new_state();
+        s2.do_action(&actions::Action::Move(board::Coordinate::new(0, 5).unwrap(),
+                                            board::Coordinate::new(9, 5).unwrap()));
+        console_ui::write_board(s2.board());
+        assert!(s1 != s2);
     }
 }

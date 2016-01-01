@@ -326,15 +326,15 @@ impl Iterator for Ray {
 /// Layout of tokens on the game board, with handles addressing into it and
 /// mutating it.
 ///
-///     The octagonal playing area consists of a 15 by 15 square board from
-///     which a triangle of 15 squares in each corner has been removed. The
-///     Thudstone is placed on the centre square of the board, where it remains
-///     for the entire game and may not be moved onto or through. The eight
-///     trolls are placed onto the eight squares orthogonally and diagonally
-///     adjacent to the Thudstone and the thirty-two dwarfs are placed so as to
-///     occupy all the perimeter spaces except for the four in the same
-///     horizontal or vertical line as the Thudstone. One player takes control
-///     of the dwarfs, the other controls the trolls. The dwarfs move first.
+/// The octagonal playing area consists of a 15 by 15 square board from which a
+/// triangle of 15 squares in each corner has been removed. The Thudstone is
+/// placed on the centre square of the board, where it remains for the entire
+/// game and may not be moved onto or through. The eight trolls are placed onto
+/// the eight squares orthogonally and diagonally adjacent to the Thudstone and
+/// the thirty-two dwarfs are placed so as to occupy all the perimeter spaces
+/// except for the four in the same horizontal or vertical line as the
+/// Thudstone. One player takes control of the dwarfs, the other controls the
+/// trolls. The dwarfs move first.
 ///
 /// This gives us 165 spaces, each of which may contain a piece.
 pub struct Cells {

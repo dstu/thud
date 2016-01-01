@@ -88,20 +88,21 @@ fn write_node_tree<'a>(n: &mcts::Node<'a>, indentation_level: usize, visited_nod
     if visited_nodes.insert(n.get_id()) {
         let children = n.get_child_list();
         for i in 0..children.len() {
-            let edge_data = children.get_edge(i).get_data();
-            print!("+-{:?}: {:?}--", edge_data.action, edge_data.statistics);
+            let e = children.get_edge(i);
+            let edge_data = e.get_data();
+            print!("+-{}: {:?}: {:?}--", e.get_id(), edge_data.action, edge_data.statistics);
             match children.get_edge(i).get_target() {
                 search_graph::Target::Unexpanded(_) =>
                     println!("Unexpanded"),
                 search_graph::Target::Cycle(target) =>
                     println!("Cycle({})", target.get_id()),
                 search_graph::Target::Expanded(target) => {
-                    println!("Expanded({:?})", target.get_data().statistics);
+                    println!("Expanded({}, {:?})", target.get_id(), target.get_data().statistics);
                     write_node_tree(&target, indentation_level + 1, visited_nodes);
                 },
             }
         }
     } else {
-        println!("=>{}", n.get_id());
+        println!("+-Printed ({})", n.get_id());
     }
 }

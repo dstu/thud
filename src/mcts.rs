@@ -1,5 +1,6 @@
 use ::actions;
 use ::board;
+use ::console_ui;
 use ::game;
 use ::search_graph;
 
@@ -127,20 +128,35 @@ fn best_child_edge<'a>(children: ChildList<'a>, player: game::PlayerMarker, bias
     let parent_visits = children.get_source_node().get_data().statistics.visits as f64;
     let mut best_edge_index = None;
     let mut best_edge_uct = 0.0;
+    println!("best_child_edge: visiting {} children", children.len());
     for i in 0..children.len() {
         let edge = children.get_edge(i);
         match edge.get_target() {
-            search_graph::Target::Unexpanded(_) => return Some(i),
-            search_graph::Target::Cycle(_) => (),
+            search_graph::Target::Unexpanded(_) => {
+                println!("best_child_edge: edge {} is unexpanded", i);
+                return Some(i)
+            },
+            search_graph::Target::Cycle(_) => {
+                println!("best_child_edge: ignoring edge {}, which is cycle", i);
+                ()
+            },
             search_graph::Target::Expanded(e) => {
                 let edge_visits = e.get_data().statistics.visits as f64;
-                let edge_payoff = e.get_data().statistics.payoff.score(player) as f64;
-                let uct = edge_payoff / edge_visits
-                    + bias * f64::sqrt(f64::ln(parent_visits) / edge_visits);
-                if uct > best_edge_uct {
-                    // TODO tie-breaking.
+                if edge_visits == 0.0 {
+                    println!("best_child_edge: edge {} because it hasn't been visited yet", i);
                     best_edge_index = Some(i);
-                    best_edge_uct = uct;
+                    best_edge_uct = 0.0;
+                } else {
+                    let edge_payoff = e.get_data().statistics.payoff.score(player) as f64;
+                    let uct = edge_payoff / edge_visits
+                        + bias * f64::sqrt(f64::ln(parent_visits) / edge_visits);
+                    if uct > best_edge_uct {
+                        println!("best_child_edge: edge {}, value {} is new best edge (old index {:?}, value {})",
+                                 i, uct, best_edge_index, best_edge_uct);
+                        // TODO tie-breaking.
+                        best_edge_index = Some(i);
+                        best_edge_uct = uct;
+                    }
                 }
             },
         }
@@ -148,23 +164,45 @@ fn best_child_edge<'a>(children: ChildList<'a>, player: game::PlayerMarker, bias
     best_edge_index
 }
 
+// fn best_parent_edge<'a>(parents: ParentList<'a>, player: game::PlayerMarker, bias: f64) -> Option<usize> {
+//     let mut best_edge_index = None;
+//     let mut best_edge_uct = 0.0;
+//     for i in 0..parents.len() {
+//         println!("best_parent_edge: examining edge {}/{}", i, parents.len());
+//         let edge = parents.get_edge(i);
+//         let parent_visits = edge.get_source().get_data().statistics.visits as f64;
+//         if parent_visits == 0.0 {
+//             continue
+//         }
+//         let edge_payoff = edge.get_data().statistics.payoff.score(player) as f64;
+//         let edge_visits = edge.get_data().statistics.visits as f64;
+//         if edge_visits == 0.0 {
+//             println!("best_parent_edge: choosing parent {} because this edge hasn't been visited", i);
+//             return Some(i)
+//         } else {
+//             let uct = edge_payoff / edge_visits
+//                 + bias * f64::sqrt(f64::ln(parent_visits) / edge_visits);
+//             if uct > best_edge_uct {
+//                 println!("best_parent_edge: new best edge {}, value {} (old best edge {:?}, value {})",
+//                          i, uct, best_edge_index, best_edge_uct);
+//                 // TODO tie-breaking.
+//                 best_edge_index = Some(i);
+//                 best_edge_uct = uct;
+//             }
+//         }
+//     }
+//     best_edge_index
+// }
+
 fn best_parent_edge<'a>(parents: ParentList<'a>, player: game::PlayerMarker, bias: f64) -> Option<usize> {
-    let mut best_edge_index = None;
-    let mut best_edge_uct = 0.0;
-    for i in 0..parents.len() {
-        let edge = parents.get_edge(i);
-        let parent_visits = edge.get_source().get_data().statistics.visits as f64;
-        let edge_payoff = edge.get_data().statistics.payoff.score(player) as f64;
-        let edge_visits = edge.get_data().statistics.visits as f64;
-        let uct = edge_payoff / edge_visits
-            + bias * f64::sqrt(f64::ln(parent_visits) / edge_visits);
-        if uct > best_edge_uct {
-            // TODO tie-breaking.
-            best_edge_index = Some(i);
-            best_edge_uct = uct;
-        }
+    match parents.len() {
+        0 => None,
+        1 => Some(0),
+        _ => {
+            println!("defaulting to first parent because best parent selection not done yet");
+            Some(0)
+        },
     }
-    best_edge_index
 }
 
 pub fn simulate<R>(state: &mut game::State, rng: &mut R) -> Payoff where R: Rng {
@@ -187,7 +225,12 @@ pub fn simulate<R>(state: &mut game::State, rng: &mut R) -> Payoff where R: Rng 
                         },
                     }
                 }
-                selected.expect("Terminal state has no payoff")
+                if let Some(s) = selected {
+                    s
+                } else {
+                    console_ui::write_board(state.board());
+                    panic!("Terminal state has no payoff");
+                }
             },
             Some(p) => return p,
         };
@@ -231,7 +274,11 @@ fn backprop_payoff<'a>(mut node: MutNode<'a>, payoff: Payoff, mut player: game::
         node.get_data_mut().statistics.increment_visit(payoff);
         node = match best_parent_edge(node.get_parent_list(), player, bias) {
             None => break,
-            Some(i) => node.to_parent_list().to_edge(i).to_source(),
+            Some(i) => {
+                let mut to_parent = node.to_parent_list().to_edge(i);
+                to_parent.get_data_mut().statistics.increment_visit(payoff);
+                to_parent.to_source()
+            },
         };
         player.toggle();
     }
@@ -297,11 +344,13 @@ fn set_known_payoff_from_children<'a>(mut node: MutNode<'a>) {
     node.get_data_mut().known_payoff = payoff;
 }
 
-pub fn iterate_search<'a, R>(rng: &mut R, graph: &'a mut Graph, mut state: game::State, bias: f64) where R: Rng {
+pub fn iterate_search<'a, R>(mut state: game::State, graph: &'a mut Graph, rng: &mut R, bias: f64) where R: Rng {
     if let Some(node) = graph.get_node_mut(&state) {
         match rollout(node, &mut state, bias) {
             Rollout::Unexpanded(expander) => {
                 state.do_action(&expander.get_edge().get_data().action);
+                println!("after action {:?}:", expander.get_edge().get_data().action);
+                console_ui::write_board(state.board());
                 match expander.expand(state.clone(), Default::default).to_target() {
                     search_graph::Target::Expanded(node) => {
                         let payoff = simulate(&mut state, rng);
@@ -312,7 +361,10 @@ pub fn iterate_search<'a, R>(rng: &mut R, graph: &'a mut Graph, mut state: game:
                 }
             },
             Rollout::Terminal(node) => match payoff(&state) {
-                None => panic!("Terminal node has no payoff"),
+                None => {
+                    console_ui::write_board(state.board());
+                    panic!("Terminal node has no payoff")
+                },
                 Some(p) => backprop_known_payoff(node, p),
             },
             Rollout::Cycle(_) => panic!("Hit cycle in search"),
