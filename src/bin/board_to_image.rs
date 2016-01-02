@@ -8,7 +8,7 @@ use std::io::prelude::*;
 use std::iter;
 
 fn main() {
-    let display = gtk_ui::DisplayProperties::new();
+    let display = gtk_ui::BoardDisplayProperties::new();
 
     let image_buffer = cairo::ImageSurface::create(
         cairo::Format::Rgb30,

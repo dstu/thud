@@ -1,9 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use ::board::Cells;
-use ::board::Content;
-use ::board::Coordinate;
-use ::board::Token;
+use ::board;
+use board::Cells;
+use board::Content;
+use board::Coordinate;
+use board::Token;
 use ::mcts;
 use ::search_graph;
 
@@ -14,20 +15,22 @@ use gtk::signal::Inhibit;
 use gtk::traits::*;
 
 
-pub struct Display {
+pub struct BoardDisplay {
     canvas: gtk::DrawingArea,
     board: Arc<Mutex<Cells>>,
-    properties: DisplayProperties,
+    properties: BoardDisplayProperties,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct DisplayProperties {
+pub struct BoardDisplayProperties {
     pub margin_left: f64,
     pub margin_right: f64,
     pub margin_top: f64,
     pub margin_bottom: f64,
     pub border_width: f64,
     pub cell_dimension: f64,
+    pub token_width: f64,
+    pub token_height: f64,
     pub active_position: Option<Coordinate>,
 }
 
@@ -43,15 +46,17 @@ impl BoxBounds {
     }
 }
 
-impl DisplayProperties {
+impl BoardDisplayProperties {
     pub fn new() -> Self {
-        DisplayProperties {
-            margin_left: 10.0,
+        BoardDisplayProperties {
+            margin_left: 30.0,
             margin_right: 10.0,
-            margin_top: 10.0,
+            margin_top: 30.0,
             margin_bottom: 10.0,
-            border_width: 1.0,
+            border_width: 2.0,
             cell_dimension: 60.0,
+            token_height: 30.0,
+            token_width: 30.0,
             active_position: None,
         }
     }
@@ -126,11 +131,7 @@ impl DisplayProperties {
     }
 
     fn draw_cell(self, cr: &mut cairo::Context, position: Coordinate, content: Content) {
-        if self.active_position == Some(position) {
-            cr.set_source_rgb(0f64, 0.5, 0.7);
-        } else {
-            cr.set_source_rgb(0.0, 0.0, 0.0);
-        }
+        cr.set_source_rgb(0.0, 0.0, 0.0);
         cr.set_line_width(self.border_width);
         let bounds = self.bounds_of(position);
         cr.rectangle(bounds.top_left_x,
@@ -139,20 +140,97 @@ impl DisplayProperties {
         cr.stroke();
         match content {
             Content::Empty => (),
-            Content::Occupied(Token::Dwarf) => (),
-            Content::Occupied(Token::Troll) => (),
-            Content::Occupied(Token::Stone) => (),
+            Content::Occupied(Token::Dwarf) => {
+                cr.set_source_rgb(1.0, 0.0, 0.0);
+                let padding = (self.cell_dimension - self.token_width) / 2.0;
+                cr.rectangle(bounds.top_left_x + padding,
+                             bounds.top_left_y + padding,
+                             bounds.length - padding * 2.0,
+                             bounds.length - padding * 2.0);
+                cr.fill();
+            },
+            Content::Occupied(Token::Troll) => {
+                cr.set_source_rgb(0.0, 0.8, 0.8);
+                let padding = (self.cell_dimension - self.token_width) / 2.0;
+                cr.rectangle(bounds.top_left_x + padding,
+                             bounds.top_left_y + padding,
+                             bounds.length - padding * 2.0,
+                             bounds.length - padding * 2.0);
+                cr.fill();
+            },
+            Content::Occupied(Token::Stone) => {
+                cr.set_source_rgb(1.0, 1.0, 1.0);
+                let padding = (self.cell_dimension - self.token_width) / 2.0;
+                cr.rectangle(bounds.top_left_x + padding,
+                             bounds.top_left_y + padding,
+                             bounds.length - padding * 2.0,
+                             bounds.length - padding * 2.0);
+                cr.fill();
+            },
+        }
+    }
+
+    fn draw_active_cell(self, cr: &mut cairo::Context, position: Coordinate, content: Content) {
+        cr.set_source_rgb(0f64, 0.5, 0.7);
+        cr.set_line_width(self.border_width);
+        let bounds = self.bounds_of(position);
+        cr.rectangle(bounds.top_left_x, bounds.top_left_y,
+                     bounds.length, bounds.length);
+        cr.stroke();
+        match content {
+            Content::Empty => (),
+            Content::Occupied(Token::Dwarf) => {
+                cr.set_source_rgb(1.0, 0.0, 0.0);
+                let padding = (self.cell_dimension - self.token_width) / 2.0;
+                cr.rectangle(bounds.top_left_x + padding,
+                             bounds.top_left_y + padding,
+                             bounds.length - padding * 2.0,
+                             bounds.length - padding * 2.0);
+                cr.fill();
+            },
+            Content::Occupied(Token::Troll) => {
+                cr.set_source_rgb(0.0, 0.8, 0.8);
+                let padding = (self.cell_dimension - self.token_width) / 2.0;
+                cr.rectangle(bounds.top_left_x + padding,
+                             bounds.top_left_y + padding,
+                             bounds.length - padding * 2.0,
+                             bounds.length - padding * 2.0);
+                cr.fill();
+            },
+            Content::Occupied(Token::Stone) => {
+                cr.set_source_rgb(0.0, 0.0, 0.0);
+                let padding = (self.cell_dimension - self.token_width) / 2.0;
+                cr.rectangle(bounds.top_left_x + padding,
+                             bounds.top_left_y + padding,
+                             bounds.length - padding * 2.0,
+                             bounds.length - padding * 2.0);
+                cr.fill();
+            },
+        }
+    }
+
+    fn draw_cells<'a>(self, cr: &mut cairo::Context, contents: board::ContentsIter<'a>) {
+        let mut active_content = None;
+        for (position, content) in contents {
+            if self.active_position == Some(position) {
+                active_content = Some(content);
+            } else {
+                self.draw_cell(cr, position, content);
+            }
+        }
+        if let (Some(position), Some(content)) = (self.active_position, active_content) {
+            self.draw_active_cell(cr, position, content);
         }
     }
 }
 
-impl Display {
+impl BoardDisplay {
     pub fn new(board: Cells) -> Option<Self> {
         gtk::DrawingArea::new()
             .map(move |canvas| {
-                let mut d = Display { canvas: canvas,
-                                      board: Arc::new(Mutex::new(board)),
-                                      properties: DisplayProperties::new(), };
+                let mut d = BoardDisplay { canvas: canvas,
+                                           board: Arc::new(Mutex::new(board)),
+                                           properties: BoardDisplayProperties::new(), };
                 d.init();
                 d
             })
@@ -172,9 +250,7 @@ impl Display {
                 _ => return Inhibit(false),
             };
             // props.draw_board_decorations(&mut cr);
-            for (position, content) in board.cells_iter() {
-                props.draw_cell(&mut cr, position, content);
-            }
+            props.draw_cells(&mut cr, board.cells_iter());
             Inhibit(false)
         });
     }
@@ -243,8 +319,8 @@ impl SearchGraphColumn {
                 SearchGraphColumn::EdgeStatus =>
                     v.set_string(match e.get_target() {
                         search_graph::Target::Unexpanded(_) => "Unexpanded",
-                        search_graph::Target::Cycle(target) => "Cycle",
-                        search_graph::Target::Expanded(target) => "Expanded",
+                        search_graph::Target::Cycle(_) => "Cycle",
+                        search_graph::Target::Expanded(_) => "Expanded",
                     }),
                 SearchGraphColumn::EdgeTarget =>
                     v.set_string(self.edge_target(e).as_str()),
@@ -262,7 +338,7 @@ impl SearchGraphColumn {
     }
 
     pub fn new_view_column(self, col_number: i32) -> gtk::TreeViewColumn {
-        let mut c = gtk::TreeViewColumn::new().unwrap();
+        let c = gtk::TreeViewColumn::new().unwrap();
         let cell = gtk::CellRendererText::new().unwrap();
         c.set_title(self.label());
         c.pack_start(&cell, true);
@@ -288,19 +364,23 @@ impl SearchGraphStore {
         self.columns.as_slice()
     }
 
-    pub fn update<'a>(&mut self, root: &mcts::Node<'a>) {
+    pub fn update<'a>(&mut self, root: mcts::Node<'a>) {
         self.store.clear();
-        let i = self.store.append(None);
 
-        let n = root;
-        // loop {
-        self.set_node_columns(&n, &i);
-        let children = n.get_child_list();
-        for c in 0..children.len() {
-            self.set_edge_columns(
-                &children.get_edge(c), &self.store.append(Some(&i)));
+        let mut nodes = vec![(root, self.store.append(None))];
+        while !nodes.is_empty() {
+            let (n, parent) = nodes.pop().unwrap();
+            self.set_node_columns(&n, &parent);
+            let children = n.get_child_list();
+            for c in 0..children.len() {
+                let e = children.get_edge(c);
+                let e_i = self.store.append(Some(&parent));
+                self.set_edge_columns(&e, &e_i);
+                if let search_graph::Target::Expanded(t) = e.get_target() {
+                    nodes.push((t, self.store.append(Some(&e_i))));
+                }
+            }
         }
-        // }
     }
 
     fn set_node_columns<'a>(&self, n: &mcts::Node<'a>, i: &gtk::TreeIter) {

@@ -116,7 +116,7 @@ impl State {
             &actions::Action::Concede => self.end_proposal.advance(self.active_player),
             _ => self.board.do_action(a),
         }
-        self.active_player.toggle();
+        self.toggle_active_player();
     }
 
     pub fn terminated(&self) -> bool {

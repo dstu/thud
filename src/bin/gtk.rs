@@ -21,7 +21,7 @@ fn main() {
         Inhibit(false)
     });
 
-    let display = gtk_ui::Display::new(board::Cells::default()).unwrap();
+    let display = gtk_ui::BoardDisplay::new(board::Cells::default()).unwrap();
 
     window.add(display.widget());
 

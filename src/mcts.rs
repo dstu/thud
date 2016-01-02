@@ -353,19 +353,19 @@ pub fn iterate_search<'a, R>(mut state: game::State, graph: &'a mut Graph, rng: 
         match rollout(node, &mut state, bias) {
             Rollout::Unexpanded(expander) => {
                 state.do_action(&expander.get_edge().get_data().action);
-                // println!("after action {:?}:", expander.get_edge().get_data().action);
-                // console_ui::write_board(state.board());
                 match expander.expand(state.clone(), Default::default).to_target() {
                     search_graph::Target::Expanded(mut node) => {
-                        let payoff = simulate(&mut state, rng);
-                        let payoff_player = state.active_player().marker();
                         {
                             let mut adder = node.get_child_adder();
-                            state.toggle_active_player();
                             for a in state.role_actions(state.active_player().role()).into_iter() {
                                 adder.add(EdgeData::new(a));
                             }
                         }
+                        let payoff = simulate(&mut state, rng);
+                        let payoff_player = state.active_player().marker();
+                        // TODO: make sure correct player is getting payoff. We
+                        // may get payoff *after* the player getting the payoff
+                        // has moved.
                         backprop_payoff(node, payoff, payoff_player, bias);
                     },
                     search_graph::Target::Cycle(node) => backprop_cycle(node),
