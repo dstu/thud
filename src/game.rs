@@ -277,11 +277,9 @@ mod tests {
         let mut s1 = new_state();
         s1.do_action(&actions::Action::Move(board::Coordinate::new(0, 5).unwrap(),
                                             board::Coordinate::new(8, 5).unwrap()));
-        console_ui::write_board(s1.board());
         let mut s2 = new_state();
         s2.do_action(&actions::Action::Move(board::Coordinate::new(0, 5).unwrap(),
                                             board::Coordinate::new(9, 5).unwrap()));
-        console_ui::write_board(s2.board());
         assert!(s1 != s2);
     }
 }

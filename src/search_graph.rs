@@ -325,6 +325,10 @@ impl<'a, T, S, A> MutNode<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug
         self.graph.get_vertex_mut(self.id)
     }
 
+    pub fn get_id(&self) -> usize {
+        self.id.as_usize()
+    }
+
     pub fn get_data<'s>(&'s self) -> &'s S {
         &self.vertex().data
     }
@@ -463,6 +467,10 @@ impl<'a, T, S, A> MutEdge<'a, T, S, A> where T: Hash + Eq + Clone + 'a, S: Debug
 
     fn arc_mut(&mut self) -> &mut Arc<A> {
         self.graph.get_arc_mut(self.id)
+    }
+
+    pub fn get_id(&self) -> usize {
+        self.id.as_usize()
     }
 
     pub fn get_data(&self) -> &A {

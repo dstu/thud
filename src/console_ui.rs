@@ -80,17 +80,16 @@ pub fn write_search_graph(graph: &mcts::Graph, state: &game::State) {
 }
 
 fn write_node_tree<'a>(n: &mcts::Node<'a>, indentation_level: usize, visited_nodes: &mut HashSet<usize>) {
-    if indentation_level > 0 {
-        for _ in 0..(indentation_level - 1) {
-            print!(" ");
-        }
-    }
     if visited_nodes.insert(n.get_id()) {
         let children = n.get_child_list();
         for i in 0..children.len() {
             let e = children.get_edge(i);
             let edge_data = e.get_data();
-            print!("+-{}: {:?}: {:?}--", e.get_id(), edge_data.action, edge_data.statistics);
+            print!("+");
+            for _ in 0..(indentation_level + 1) {
+                print!("-");
+            }
+            print!("{}: {:?}: {:?}--", e.get_id(), edge_data.action, edge_data.statistics);
             match children.get_edge(i).get_target() {
                 search_graph::Target::Unexpanded(_) =>
                     println!("Unexpanded"),
@@ -103,6 +102,10 @@ fn write_node_tree<'a>(n: &mcts::Node<'a>, indentation_level: usize, visited_nod
             }
         }
     } else {
-        println!("+-Printed ({})", n.get_id());
+        print!("+");
+        for _ in 0..(indentation_level + 1) {
+            print!("-");
+        }
+        println!("Printed ({})", n.get_id());
     }
 }
