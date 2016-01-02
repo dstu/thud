@@ -1,10 +1,12 @@
 #![feature(associated_type_defaults)]
 #![feature(clone_from_slice)]
+#![feature(convert)]
 #![feature(fn_traits)]
 #![feature(unboxed_closures)]
 
-extern crate gtk;
 extern crate cairo;
+extern crate glib;
+extern crate gtk;
 extern crate rand;
 
 pub mod actions;

@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Stu Black"]
 
 [dependencies]
+glib = "0.0.7"
 gtk = "0.0.6"
 cairo-rs = "0.0.7"
 rand = "0.3.12"
@@ -19,3 +20,6 @@ name = "board_to_image"
 
 [[bin]]
 name = "console_mcts"
+
+[[bin]]
+name = "gtk_mcts"

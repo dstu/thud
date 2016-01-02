@@ -1,13 +1,18 @@
+use std::sync::{Arc, Mutex};
+
 use ::board::Cells;
 use ::board::Content;
 use ::board::Coordinate;
 use ::board::Token;
-use std::sync::{Arc, Mutex};
+use ::mcts;
+use ::search_graph;
 
 use cairo;
+use glib;
 use gtk;
 use gtk::signal::Inhibit;
 use gtk::traits::*;
+
 
 pub struct Display {
     canvas: gtk::DrawingArea,
@@ -175,3 +180,138 @@ impl Display {
     }
 }
 
+pub struct SearchGraphStore {
+    store: gtk::TreeStore,
+    columns: Vec<SearchGraphColumn>,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum SearchGraphColumn {
+    Id,
+    Statistics,
+    Action,
+    EdgeStatus,
+    EdgeTarget,
+}
+
+impl SearchGraphColumn {
+    pub fn glib_type(self) -> glib::types::Type {
+        glib::types::Type::String
+    }
+
+    pub fn label(&self) -> &str {
+        match *self {
+            SearchGraphColumn::Id => "Id",
+            SearchGraphColumn::Statistics => "Statistics",
+            SearchGraphColumn::Action => "Action",
+            SearchGraphColumn::EdgeStatus => "Edge status",
+            SearchGraphColumn::EdgeTarget => "Edge target",
+        }
+    }
+
+    pub fn node_value<'a>(self, n: &mcts::Node<'a>) -> glib::Value {
+        unsafe {
+            let mut v = glib::Value::new();
+            v.init(self.glib_type());
+            match self {
+                SearchGraphColumn::Id =>
+                    v.set_string(format!("node:{}", n.get_id()).as_str()),
+                SearchGraphColumn::Statistics =>
+                    v.set_string(format!("{:?}", n.get_data().statistics).as_str()),
+                SearchGraphColumn::Action =>
+                    v.set_string(""),
+                SearchGraphColumn::EdgeStatus =>
+                    v.set_string(""),
+                SearchGraphColumn::EdgeTarget =>
+                    v.set_string(""),
+            }
+            v
+        }
+    }
+        
+    pub fn edge_value<'a>(self, e: &mcts::Edge<'a>) -> glib::Value {
+        unsafe {
+            let mut v = glib::Value::new();
+            v.init(self.glib_type());
+            match self {
+                SearchGraphColumn::Id =>
+                    v.set_string(format!("edge:{}", e.get_id()).as_str()),
+                SearchGraphColumn::Statistics =>
+                    v.set_string(format!("{:?}", e.get_data().statistics).as_str()),
+                SearchGraphColumn::Action =>
+                    v.set_string(format!("{:?}", e.get_data().action).as_str()),
+                SearchGraphColumn::EdgeStatus =>
+                    v.set_string(match e.get_target() {
+                        search_graph::Target::Unexpanded(_) => "Unexpanded",
+                        search_graph::Target::Cycle(target) => "Cycle",
+                        search_graph::Target::Expanded(target) => "Expanded",
+                    }),
+                SearchGraphColumn::EdgeTarget =>
+                    v.set_string(self.edge_target(e).as_str()),
+            }
+            v
+        }
+    }
+
+    fn edge_target<'a>(self, e: &mcts::Edge<'a>) -> String {
+        match e.get_target() {
+            search_graph::Target::Unexpanded(_) => String::new(),
+            search_graph::Target::Cycle(t) => format!("node:{}", t.get_id()),
+            search_graph::Target::Expanded(t) => format!("node:{}", t.get_id()),
+        }
+    }
+
+    pub fn new_view_column(self, col_number: i32) -> gtk::TreeViewColumn {
+        let mut c = gtk::TreeViewColumn::new().unwrap();
+        let cell = gtk::CellRendererText::new().unwrap();
+        c.set_title(self.label());
+        c.pack_start(&cell, true);
+        c.add_attribute(&cell, "text", col_number);
+        c
+    }
+}
+
+impl SearchGraphStore {
+    pub fn new(columns: &[SearchGraphColumn]) -> Self {
+        let template: Vec<glib::types::Type> = columns.iter().map(|c| c.glib_type()).collect();
+        SearchGraphStore {
+            store: gtk::TreeStore::new(template.as_slice()).unwrap(),
+            columns: columns.iter().map(|x| *x).collect(),
+        }
+    }
+
+    pub fn model(&self) -> gtk::TreeModel {
+        self.store.get_model().unwrap()
+    }
+
+    pub fn columns(&self) -> &[SearchGraphColumn] {
+        self.columns.as_slice()
+    }
+
+    pub fn update<'a>(&mut self, root: &mcts::Node<'a>) {
+        self.store.clear();
+        let i = self.store.append(None);
+
+        let n = root;
+        // loop {
+        self.set_node_columns(&n, &i);
+        let children = n.get_child_list();
+        for c in 0..children.len() {
+            self.set_edge_columns(
+                &children.get_edge(c), &self.store.append(Some(&i)));
+        }
+        // }
+    }
+
+    fn set_node_columns<'a>(&self, n: &mcts::Node<'a>, i: &gtk::TreeIter) {
+        for (col_number, col) in self.columns.iter().enumerate() {
+            self.store.set_value(i, col_number as i32, &col.node_value(n));
+        }
+    }
+
+    fn set_edge_columns<'a>(&self, e: &mcts::Edge<'a>, i: &gtk::TreeIter) {
+        for (col_number, col) in self.columns.iter().enumerate() {
+            self.store.set_value(i, col_number as i32, &col.edge_value(e));
+        }
+    }
+}
