@@ -7,6 +7,7 @@
 extern crate cairo;
 extern crate glib;
 extern crate gtk;
+extern crate gtk_sys;
 extern crate rand;
 
 pub mod actions;

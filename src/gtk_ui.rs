@@ -13,7 +13,7 @@ use glib;
 use gtk;
 use gtk::signal::Inhibit;
 use gtk::traits::*;
-
+use ::gtk_sys::gtk_widget_add_events;
 
 pub struct BoardDisplay {
     canvas: gtk::DrawingArea,
@@ -31,7 +31,7 @@ pub struct BoardDisplayProperties {
     pub cell_dimension: f64,
     pub token_width: f64,
     pub token_height: f64,
-    pub active_position: Option<Coordinate>,
+    click_state: ClickState,
 }
 
 struct BoxBounds {
@@ -46,6 +46,13 @@ impl BoxBounds {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ClickState {
+    Pressed(Coordinate),
+    Active(Coordinate),
+    Inactive,
+}
+
 impl BoardDisplayProperties {
     pub fn new() -> Self {
         BoardDisplayProperties {
@@ -57,7 +64,7 @@ impl BoardDisplayProperties {
             cell_dimension: 60.0,
             token_height: 30.0,
             token_width: 30.0,
-            active_position: None,
+            click_state: ClickState::Inactive,
         }
     }
 
@@ -209,17 +216,58 @@ impl BoardDisplayProperties {
         }
     }
 
+    fn draw_pressed_cell(self, cr: &mut cairo::Context, position: Coordinate, content: Content) {
+        cr.set_source_rgb(0.0, 0.7, 0.5);
+        cr.set_line_width(self.border_width);
+        let bounds = self.bounds_of(position);
+        cr.rectangle(bounds.top_left_x, bounds.top_left_y,
+                     bounds.length, bounds.length);
+        cr.stroke();
+        match content {
+            Content::Empty => (),
+            Content::Occupied(Token::Dwarf) => {
+                cr.set_source_rgb(1.0, 0.0, 0.0);
+                let padding = (self.cell_dimension - self.token_width) / 2.0;
+                cr.rectangle(bounds.top_left_x + padding,
+                             bounds.top_left_y + padding,
+                             bounds.length - padding * 2.0,
+                             bounds.length - padding * 2.0);
+                cr.fill();
+            },
+            Content::Occupied(Token::Troll) => {
+                cr.set_source_rgb(0.0, 0.8, 0.8);
+                let padding = (self.cell_dimension - self.token_width) / 2.0;
+                cr.rectangle(bounds.top_left_x + padding,
+                             bounds.top_left_y + padding,
+                             bounds.length - padding * 2.0,
+                             bounds.length - padding * 2.0);
+                cr.fill();
+            },
+            Content::Occupied(Token::Stone) => {
+                cr.set_source_rgb(0.0, 0.0, 0.0);
+                let padding = (self.cell_dimension - self.token_width) / 2.0;
+                cr.rectangle(bounds.top_left_x + padding,
+                             bounds.top_left_y + padding,
+                             bounds.length - padding * 2.0,
+                             bounds.length - padding * 2.0);
+                cr.fill();
+            },
+        }
+    }
+
     fn draw_cells<'a>(self, cr: &mut cairo::Context, contents: board::ContentsIter<'a>) {
         let mut active_content = None;
         for (position, content) in contents {
-            if self.active_position == Some(position) {
-                active_content = Some(content);
-            } else {
-                self.draw_cell(cr, position, content);
+            match self.click_state {
+                ClickState::Active(p) if p == position => active_content = Some(content),
+                ClickState::Pressed(p) if p == position => active_content = Some(content),
+                _ => self.draw_cell(cr, position, content),
             }
         }
-        if let (Some(position), Some(content)) = (self.active_position, active_content) {
-            self.draw_active_cell(cr, position, content);
+        match (self.click_state, active_content) {
+            (ClickState::Active(position), Some(content)) => self.draw_active_cell(cr, position, content),
+            (ClickState::Pressed(position), Some(content)) => self.draw_pressed_cell(cr, position, content),
+            _ => (),
         }
     }
 }
@@ -241,9 +289,17 @@ impl BoardDisplay {
     }
 
     fn init(&mut self) {
-        self.properties.active_position = Coordinate::new(7, 7);
+        self.properties.click_state = ClickState::Inactive;
         let board_arc = self.board.clone();
         let props = self.properties;
+        unsafe {
+            gtk_widget_add_events(self.canvas.pointer,
+                                  (1 << 8)  // GDK_BUTTON_PRESS_MASK.
+                                  | (1 << 9)  // GDK_BUTTON_RELEASE MASK.
+                                  | (1 << 2)  // GDK_POINTER_MOTION_MASK.
+                                  );
+        }
+        // println!("events: {:?}", self.canvas.get_events());
         self.canvas.connect_draw(move |_, mut cr| {
             let board = match board_arc.try_lock() {
                 Result::Ok(guard) => guard,
@@ -252,6 +308,28 @@ impl BoardDisplay {
             // props.draw_board_decorations(&mut cr);
             props.draw_cells(&mut cr, board.cells_iter());
             Inhibit(false)
+        });
+        self.canvas.connect_button_press_event(move |_, evt| {
+            println!("Button down: ({}, {})", evt.x, evt.y);
+            if evt.button != 0 {
+                return Inhibit(false)
+            }
+            if let Some(coordinate) = props.coordinate_of(evt.x, evt.y) {
+                println!("Button down: {:?}", coordinate);
+                // TODO update self.props.click_state.
+            }
+            Inhibit(true)
+        });
+        self.canvas.connect_button_release_event(move |_, evt| {
+            println!("Button up: ({}, {})", evt.x, evt.y);
+            if evt.button != 0 {
+                return Inhibit(false)
+            }
+            if let Some(coordinate) = props.coordinate_of(evt.x, evt.y) {
+                println!("Button up: {:?}", coordinate);
+                // TODO update self.props.click_state.
+            }
+            Inhibit(true)
         });
     }
 }
