@@ -1,10 +1,7 @@
+use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 
 use ::board;
-use board::Cells;
-use board::Content;
-use board::Coordinate;
-use board::Token;
 use ::mcts;
 use ::search_graph;
 
@@ -16,9 +13,11 @@ use gtk::traits::*;
 use ::gtk_sys::gtk_widget_add_events;
 
 pub struct BoardDisplay {
-    canvas: gtk::DrawingArea,
-    board: Arc<Mutex<Cells>>,
-    properties: BoardDisplayProperties,
+    canvas: Arc<Mutex<gtk::DrawingArea>>,
+    board: Arc<Mutex<board::Cells>>,
+    properties: Arc<Mutex<BoardDisplayProperties>>,
+    mouse_down: Arc<Mutex<Option<board::Coordinate>>>,
+    action_progression: Arc<Mutex<ActionProgression>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -31,7 +30,13 @@ pub struct BoardDisplayProperties {
     pub cell_dimension: f64,
     pub token_width: f64,
     pub token_height: f64,
-    click_state: ClickState,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ActionProgression {
+    Inactive,
+    Selected(board::Coordinate),
+    Targeted(board::Coordinate, board::Coordinate),
 }
 
 struct BoxBounds {
@@ -46,13 +51,6 @@ impl BoxBounds {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum ClickState {
-    Pressed(Coordinate),
-    Active(Coordinate),
-    Inactive,
-}
-
 impl BoardDisplayProperties {
     pub fn new() -> Self {
         BoardDisplayProperties {
@@ -64,11 +62,10 @@ impl BoardDisplayProperties {
             cell_dimension: 60.0,
             token_height: 30.0,
             token_width: 30.0,
-            click_state: ClickState::Inactive,
         }
     }
 
-    fn coordinate_of(self, mouse_x: f64, mouse_y: f64) -> Option<Coordinate> {
+    fn coordinate_of(&self, mouse_x: f64, mouse_y: f64) -> Option<board::Coordinate> {
         let margin_adjusted_x = mouse_x - self.margin_left;
         let margin_adjusted_y = mouse_y - self.margin_top;
         let cell_increment = self.cell_dimension + self.border_width;
@@ -77,21 +74,16 @@ impl BoardDisplayProperties {
         if row >= 15.0 || col >= 15.0 {
             return None
         }
-        let row_start = ((row as u8) as f64) * cell_increment;
-        let col_start = ((col as u8) as f64) * cell_increment;
-        if row_start <= self.border_width || col_start <= self.border_width {
-            return None
-        }
-        Coordinate::new(row as u8, col as u8)
+        board::Coordinate::new(row as u8, col as u8)
     }
 
-    fn bounds_of(self, position: Coordinate) -> BoxBounds {
+    fn bounds_of(&self, position: board::Coordinate) -> BoxBounds {
         BoxBounds::new(self.margin_left + (position.col() as f64) * self.cell_dimension,
                        self.margin_top + (position.row() as f64) * self.cell_dimension,
                        self.cell_dimension)
     }
 
-    pub fn draw_board_decorations(self, cr: &mut cairo::Context) {
+    pub fn draw_board_decorations(&self, cr: &mut cairo::Context) {
         cr.set_source_rgb(0.0, 0.0, 0.0);
         cr.set_line_width(self.border_width);
 
@@ -137,7 +129,7 @@ impl BoardDisplayProperties {
         cr.stroke();
     }
 
-    fn draw_cell(self, cr: &mut cairo::Context, position: Coordinate, content: Content) {
+    fn draw_cell(&self, cr: &mut cairo::Context, position: board::Coordinate, content: board::Content) {
         cr.set_source_rgb(0.0, 0.0, 0.0);
         cr.set_line_width(self.border_width);
         let bounds = self.bounds_of(position);
@@ -146,8 +138,8 @@ impl BoardDisplayProperties {
                      bounds.length, bounds.length);
         cr.stroke();
         match content {
-            Content::Empty => (),
-            Content::Occupied(Token::Dwarf) => {
+            board::Content::Empty => (),
+            board::Content::Occupied(board::Token::Dwarf) => {
                 cr.set_source_rgb(1.0, 0.0, 0.0);
                 let padding = (self.cell_dimension - self.token_width) / 2.0;
                 cr.rectangle(bounds.top_left_x + padding,
@@ -156,7 +148,7 @@ impl BoardDisplayProperties {
                              bounds.length - padding * 2.0);
                 cr.fill();
             },
-            Content::Occupied(Token::Troll) => {
+            board::Content::Occupied(board::Token::Troll) => {
                 cr.set_source_rgb(0.0, 0.8, 0.8);
                 let padding = (self.cell_dimension - self.token_width) / 2.0;
                 cr.rectangle(bounds.top_left_x + padding,
@@ -165,8 +157,8 @@ impl BoardDisplayProperties {
                              bounds.length - padding * 2.0);
                 cr.fill();
             },
-            Content::Occupied(Token::Stone) => {
-                cr.set_source_rgb(1.0, 1.0, 1.0);
+            board::Content::Occupied(board::Token::Stone) => {
+                cr.set_source_rgb(0.61, 0.43, 0.31);
                 let padding = (self.cell_dimension - self.token_width) / 2.0;
                 cr.rectangle(bounds.top_left_x + padding,
                              bounds.top_left_y + padding,
@@ -177,7 +169,7 @@ impl BoardDisplayProperties {
         }
     }
 
-    fn draw_active_cell(self, cr: &mut cairo::Context, position: Coordinate, content: Content) {
+    fn draw_active_cell(&self, cr: &mut cairo::Context, position: board::Coordinate, content: board::Content) {
         cr.set_source_rgb(0f64, 0.5, 0.7);
         cr.set_line_width(self.border_width);
         let bounds = self.bounds_of(position);
@@ -185,8 +177,8 @@ impl BoardDisplayProperties {
                      bounds.length, bounds.length);
         cr.stroke();
         match content {
-            Content::Empty => (),
-            Content::Occupied(Token::Dwarf) => {
+            board::Content::Empty => (),
+            board::Content::Occupied(board::Token::Dwarf) => {
                 cr.set_source_rgb(1.0, 0.0, 0.0);
                 let padding = (self.cell_dimension - self.token_width) / 2.0;
                 cr.rectangle(bounds.top_left_x + padding,
@@ -195,7 +187,7 @@ impl BoardDisplayProperties {
                              bounds.length - padding * 2.0);
                 cr.fill();
             },
-            Content::Occupied(Token::Troll) => {
+            board::Content::Occupied(board::Token::Troll) => {
                 cr.set_source_rgb(0.0, 0.8, 0.8);
                 let padding = (self.cell_dimension - self.token_width) / 2.0;
                 cr.rectangle(bounds.top_left_x + padding,
@@ -204,8 +196,8 @@ impl BoardDisplayProperties {
                              bounds.length - padding * 2.0);
                 cr.fill();
             },
-            Content::Occupied(Token::Stone) => {
-                cr.set_source_rgb(0.0, 0.0, 0.0);
+            board::Content::Occupied(board::Token::Stone) => {
+                cr.set_source_rgb(0.61, 0.43, 0.31);
                 let padding = (self.cell_dimension - self.token_width) / 2.0;
                 cr.rectangle(bounds.top_left_x + padding,
                              bounds.top_left_y + padding,
@@ -216,7 +208,7 @@ impl BoardDisplayProperties {
         }
     }
 
-    fn draw_pressed_cell(self, cr: &mut cairo::Context, position: Coordinate, content: Content) {
+    fn draw_pressed_cell(&self, cr: &mut cairo::Context, position: board::Coordinate, content: board::Content) {
         cr.set_source_rgb(0.0, 0.7, 0.5);
         cr.set_line_width(self.border_width);
         let bounds = self.bounds_of(position);
@@ -224,8 +216,8 @@ impl BoardDisplayProperties {
                      bounds.length, bounds.length);
         cr.stroke();
         match content {
-            Content::Empty => (),
-            Content::Occupied(Token::Dwarf) => {
+            board::Content::Empty => (),
+            board::Content::Occupied(board::Token::Dwarf) => {
                 cr.set_source_rgb(1.0, 0.0, 0.0);
                 let padding = (self.cell_dimension - self.token_width) / 2.0;
                 cr.rectangle(bounds.top_left_x + padding,
@@ -234,7 +226,7 @@ impl BoardDisplayProperties {
                              bounds.length - padding * 2.0);
                 cr.fill();
             },
-            Content::Occupied(Token::Troll) => {
+            board::Content::Occupied(board::Token::Troll) => {
                 cr.set_source_rgb(0.0, 0.8, 0.8);
                 let padding = (self.cell_dimension - self.token_width) / 2.0;
                 cr.rectangle(bounds.top_left_x + padding,
@@ -243,7 +235,7 @@ impl BoardDisplayProperties {
                              bounds.length - padding * 2.0);
                 cr.fill();
             },
-            Content::Occupied(Token::Stone) => {
+            board::Content::Occupied(board::Token::Stone) => {
                 cr.set_source_rgb(0.0, 0.0, 0.0);
                 let padding = (self.cell_dimension - self.token_width) / 2.0;
                 cr.rectangle(bounds.top_left_x + padding,
@@ -255,82 +247,206 @@ impl BoardDisplayProperties {
         }
     }
 
-    fn draw_cells<'a>(self, cr: &mut cairo::Context, contents: board::ContentsIter<'a>) {
+    fn draw_cells<'a>(&self, cr: &mut cairo::Context, action_state: &ActionProgression, contents: board::ContentsIter<'a>) {
         let mut active_content = None;
         for (position, content) in contents {
-            match self.click_state {
-                ClickState::Active(p) if p == position => active_content = Some(content),
-                ClickState::Pressed(p) if p == position => active_content = Some(content),
+            match *action_state {
+                ActionProgression::Selected(p) if p == position => active_content = Some(content),
                 _ => self.draw_cell(cr, position, content),
             }
         }
-        match (self.click_state, active_content) {
-            (ClickState::Active(position), Some(content)) => self.draw_active_cell(cr, position, content),
-            (ClickState::Pressed(position), Some(content)) => self.draw_pressed_cell(cr, position, content),
+        match (*action_state, active_content) {
+            (ActionProgression::Selected(position), Some(content)) => self.draw_active_cell(cr, position, content),
             _ => (),
         }
     }
 }
 
 impl BoardDisplay {
-    pub fn new(board: Cells) -> Option<Self> {
+    pub fn new(board: board::Cells) -> Option<Self> {
         gtk::DrawingArea::new()
             .map(move |canvas| {
-                let mut d = BoardDisplay { canvas: canvas,
+                let mut d = BoardDisplay { canvas: Arc::new(Mutex::new(canvas)),
                                            board: Arc::new(Mutex::new(board)),
-                                           properties: BoardDisplayProperties::new(), };
+                                           properties: Arc::new(Mutex::new(BoardDisplayProperties::new())),
+                                           mouse_down: Arc::new(Mutex::new(None)),
+                                           action_progression: Arc::new(Mutex::new(ActionProgression::Inactive)), };
                 d.init();
                 d
             })
     }
 
-    pub fn widget<'s>(&'s self) -> &'s gtk::DrawingArea {
-        &self.canvas
+    pub fn with_widget<F, R>(&self, f: F) -> Option<R> where F: FnOnce(&gtk::DrawingArea) -> R {
+        match self.canvas.try_lock() {
+            Result::Ok(guard) => Some(f(guard.deref())),
+            _ => None,
+        }
     }
 
     fn init(&mut self) {
-        self.properties.click_state = ClickState::Inactive;
-        let board_arc = self.board.clone();
-        let props = self.properties;
-        unsafe {
-            gtk_widget_add_events(self.canvas.pointer,
-                                  (1 << 8)  // GDK_BUTTON_PRESS_MASK.
-                                  | (1 << 9)  // GDK_BUTTON_RELEASE MASK.
-                                  | (1 << 2)  // GDK_POINTER_MOTION_MASK.
-                                  );
+        let canvas = match self.canvas.try_lock() {
+            Result::Ok(guard) => guard,
+            _ => panic!("Unable to lock canvas for initialization"),
+        };
+        {
+            unsafe {
+                // TODO: fix these magic constants once the gtk-rs Widget trait
+                // gets add_events() and the EventMask type is brought up to
+                // snuff.
+                gtk_widget_add_events(canvas.pointer,
+                                      (1 << 8)      // GDK_BUTTON_PRESS_MASK.
+                                      | (1 << 9)    // GDK_BUTTON_RELEASE MASK.
+                                      | (1 << 2));  // GDK_POINTER_MOTION_MASK.
+            }
         }
-        // println!("events: {:?}", self.canvas.get_events());
-        self.canvas.connect_draw(move |_, mut cr| {
-            let board = match board_arc.try_lock() {
-                Result::Ok(guard) => guard,
-                _ => return Inhibit(false),
-            };
-            // props.draw_board_decorations(&mut cr);
-            props.draw_cells(&mut cr, board.cells_iter());
-            Inhibit(false)
-        });
-        self.canvas.connect_button_press_event(move |_, evt| {
-            println!("Button down: ({}, {})", evt.x, evt.y);
-            if evt.button != 0 {
-                return Inhibit(false)
-            }
-            if let Some(coordinate) = props.coordinate_of(evt.x, evt.y) {
-                println!("Button down: {:?}", coordinate);
-                // TODO update self.props.click_state.
-            }
-            Inhibit(true)
-        });
-        self.canvas.connect_button_release_event(move |_, evt| {
-            println!("Button up: ({}, {})", evt.x, evt.y);
-            if evt.button != 0 {
-                return Inhibit(false)
-            }
-            if let Some(coordinate) = props.coordinate_of(evt.x, evt.y) {
-                println!("Button up: {:?}", coordinate);
-                // TODO update self.props.click_state.
-            }
-            Inhibit(true)
-        });
+        {
+            let board_arc = self.board.clone();
+            let props_arc = self.properties.clone();
+            let action_progression_arc = self.action_progression.clone();
+            canvas.connect_draw(move |_, mut cr| {
+                let board = match board_arc.try_lock() {
+                    Result::Ok(guard) => guard,
+                    _ => return Inhibit(false),
+                };
+                let props_guard = match props_arc.try_lock() {
+                    Result::Ok(guard) => guard,
+                    _ => return Inhibit(false),
+                };
+                let action_progression_guard = match action_progression_arc.try_lock() {
+                    Result::Ok(guard) => guard,
+                    _ => return Inhibit(false),
+                };
+                // props_guard.draw_board_decorations(&mut cr);
+                props_guard.draw_cells(&mut cr, action_progression_guard.deref(), board.cells_iter());
+                Inhibit(false)
+            });
+        }
+        {
+            let props_arc = self.properties.clone();
+            let mouse_down_arc = self.mouse_down.clone();
+            let canvas_arc = self.canvas.clone();
+            canvas.connect_button_press_event(move |_, evt| {
+                if evt.button != 1 {
+                    return Inhibit(false)
+                }
+                let props_guard = match props_arc.try_lock() {
+                    Result::Ok(guard) => guard,
+                    _ => return Inhibit(false),
+                };
+                let props = props_guard.deref();
+                match mouse_down_arc.try_lock() {
+                    Result::Ok(mut guard) => {
+                        let mut mouse_down = guard.deref_mut();
+                        println!("press({:?}, ({}, {}))", mouse_down, evt.x, evt.y);
+                        *mouse_down = props.coordinate_of(evt.x, evt.y);
+                        Inhibit(true)
+                    },
+                    _ => Inhibit(false),
+                }
+            });
+        }
+        {
+            let props_arc = self.properties.clone();
+            let mouse_down_arc = self.mouse_down.clone();
+            let canvas_arc = self.canvas.clone();
+            let action_progression_arc = self.action_progression.clone();
+            canvas.connect_button_release_event(move |_, evt| {
+                if evt.button != 1 {
+                    return Inhibit(false)
+                }
+                let props_guard = match props_arc.try_lock() {
+                    Result::Ok(guard) => guard,
+                    _ => return Inhibit(false),
+                };
+                let props = props_guard.deref();
+                let up = match props.coordinate_of(evt.x, evt.y) {
+                    Some(c) => c,
+                    None => return Inhibit(false),
+                };
+                let mouse_down_guard = match mouse_down_arc.lock() {
+                    Result::Ok(guard) => guard,
+                    _ => return Inhibit(false),
+                };
+                let mut action_progression_guard = match action_progression_arc.lock() {
+                    Result::Ok(guard) => guard,
+                    _ => return Inhibit(false),
+                };
+                let canvas = match canvas_arc.try_lock() {
+                    Result::Ok(guard) => guard,
+                    _ => return Inhibit(false),
+                };
+                let mut action_progression = action_progression_guard.deref_mut();
+                println!("release({:?}, {:?})", *mouse_down_guard.deref(), *action_progression);
+                match (*mouse_down_guard.deref(), *action_progression) {
+                    (Some(down), ActionProgression::Inactive) if up == down => {
+                        *action_progression = ActionProgression::Selected(up);
+                        canvas.queue_draw();  // TODO: double-buffering.
+                    },
+                    (Some(down), ActionProgression::Selected(s)) if up == down && up == s => {
+                        *action_progression = ActionProgression::Inactive;
+                        canvas.queue_draw();  // TODO: double-buffering.
+                    },
+                    (Some(down), ActionProgression::Selected(s)) if up == down && up != s => {
+                        *action_progression = ActionProgression::Targeted(s, up);
+                        // TODO: Mark which move is being made.
+                        canvas.queue_draw();  // TODO: double-buffering.
+                    },
+                    _ => (),
+                }
+                Inhibit(true)
+            });
+        }
+        {
+            let props_arc = self.properties.clone();
+            let canvas_arc = self.canvas.clone();
+            let action_progression_arc = self.action_progression.clone();
+            canvas.connect_motion_notify_event(move |_, evt| {
+                let props_guard = match props_arc.try_lock() {
+                    Result::Ok(guard) => guard,
+                    _ => return Inhibit(false),
+                };
+                let props = props_guard.deref();
+                let over = match props.coordinate_of(evt.x, evt.y) {
+                    Some(c) => c,
+                    None => return Inhibit(false),
+                };
+                let canvas = match canvas_arc.try_lock() {
+                    Result::Ok(guard) => guard,
+                    _ => return Inhibit(false),
+                };
+                let mut action_progression_guard = match action_progression_arc.lock() {
+                    Result::Ok(guard) => guard,
+                    _ => return Inhibit(false),
+                };
+                let mut action_progression = action_progression_guard.deref_mut();
+                println!("motion({:?}, {:?})", *action_progression, over);
+                match *action_progression {
+                    ActionProgression::Selected(c) if c != over => {
+                        // TODO: Only if there is a valid move to here.
+                        *action_progression = ActionProgression::Targeted(c, over);
+                        canvas.queue_draw();  // TODO: double-buffering.
+                    },
+                    ActionProgression::Targeted(c, t) if t != over => {
+                        // TODO: only if there is a valid move to here.
+                        *action_progression = ActionProgression::Targeted(c, over);
+                        canvas.queue_draw();  // TODO: double-buffering.
+                    },
+                    _ => (),
+                }
+                Inhibit(true)
+            });
+        }
+    }
+
+    pub fn active_cell(&self) -> Option<board::Coordinate> {
+        match self.action_progression.try_lock() {
+            Result::Ok(guard) => match guard.deref() {
+                &ActionProgression::Selected(c) => Some(c),
+                &ActionProgression::Targeted(c, _) => Some(c),
+                _ => None,
+            },
+            _ => None,
+        }
     }
 }
 
