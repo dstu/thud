@@ -1,7 +1,11 @@
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 
+use ::actions;
 use ::board;
+use ::game;
 use ::mcts;
 use ::search_graph;
 
@@ -12,12 +16,13 @@ use gtk::signal::Inhibit;
 use gtk::traits::*;
 use ::gtk_sys::gtk_widget_add_events;
 
+#[derive(Clone)]
 pub struct BoardDisplay {
-    canvas: Arc<Mutex<gtk::DrawingArea>>,
-    board: Arc<Mutex<board::Cells>>,
-    properties: Arc<Mutex<BoardDisplayProperties>>,
+    pub state: Arc<Mutex<game::State>>,
+    pub properties: Arc<Mutex<BoardDisplayProperties>>,
+    pub canvas: Arc<Mutex<gtk::DrawingArea>>,
     mouse_down: Arc<Mutex<Option<board::Coordinate>>>,
-    action_progression: Arc<Mutex<ActionProgression>>,
+    action: Arc<Mutex<ActionState>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -32,11 +37,11 @@ pub struct BoardDisplayProperties {
     pub token_height: f64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum ActionProgression {
+#[derive(Clone, Debug, PartialEq)]
+enum ActionState {
     Inactive,
-    Selected(board::Coordinate),
-    Targeted(board::Coordinate, board::Coordinate),
+    Selected(board::Coordinate, HashMap<board::Coordinate, actions::Action>),
+    Targeted(board::Coordinate, board::Coordinate, actions::Action, HashMap<board::Coordinate, actions::Action>),
 }
 
 struct BoxBounds {
@@ -68,7 +73,7 @@ impl BoardDisplayProperties {
     fn coordinate_of(&self, mouse_x: f64, mouse_y: f64) -> Option<board::Coordinate> {
         let margin_adjusted_x = mouse_x - self.margin_left;
         let margin_adjusted_y = mouse_y - self.margin_top;
-        let cell_increment = self.cell_dimension + self.border_width;
+        let cell_increment = self.cell_dimension;
         let row = margin_adjusted_y / cell_increment;
         let col = margin_adjusted_x / cell_increment;
         if row >= 15.0 || col >= 15.0 {
@@ -169,8 +174,8 @@ impl BoardDisplayProperties {
         }
     }
 
-    fn draw_active_cell(&self, cr: &mut cairo::Context, position: board::Coordinate, content: board::Content) {
-        cr.set_source_rgb(0f64, 0.5, 0.7);
+    fn draw_selected_cell(&self, cr: &mut cairo::Context, position: board::Coordinate, content: board::Content) {
+        cr.set_source_rgb(0.0, 0.5, 0.7);
         cr.set_line_width(self.border_width);
         let bounds = self.bounds_of(position);
         cr.rectangle(bounds.top_left_x, bounds.top_left_y,
@@ -208,245 +213,231 @@ impl BoardDisplayProperties {
         }
     }
 
-    fn draw_pressed_cell(&self, cr: &mut cairo::Context, position: board::Coordinate, content: board::Content) {
-        cr.set_source_rgb(0.0, 0.7, 0.5);
+    fn draw_targeted_cell(&self, cr: &mut cairo::Context, action: &actions::Action, content: board::Content) {
+        cr.set_source_rgb(0.0, 0.5, 0.7);
         cr.set_line_width(self.border_width);
-        let bounds = self.bounds_of(position);
-        cr.rectangle(bounds.top_left_x, bounds.top_left_y,
-                     bounds.length, bounds.length);
-        cr.stroke();
-        match content {
-            board::Content::Empty => (),
-            board::Content::Occupied(board::Token::Dwarf) => {
-                cr.set_source_rgb(1.0, 0.0, 0.0);
-                let padding = (self.cell_dimension - self.token_width) / 2.0;
-                cr.rectangle(bounds.top_left_x + padding,
-                             bounds.top_left_y + padding,
-                             bounds.length - padding * 2.0,
-                             bounds.length - padding * 2.0);
-                cr.fill();
-            },
-            board::Content::Occupied(board::Token::Troll) => {
-                cr.set_source_rgb(0.0, 0.8, 0.8);
-                let padding = (self.cell_dimension - self.token_width) / 2.0;
-                cr.rectangle(bounds.top_left_x + padding,
-                             bounds.top_left_y + padding,
-                             bounds.length - padding * 2.0,
-                             bounds.length - padding * 2.0);
-                cr.fill();
-            },
-            board::Content::Occupied(board::Token::Stone) => {
-                cr.set_source_rgb(0.0, 0.0, 0.0);
-                let padding = (self.cell_dimension - self.token_width) / 2.0;
-                cr.rectangle(bounds.top_left_x + padding,
-                             bounds.top_left_y + padding,
-                             bounds.length - padding * 2.0,
-                             bounds.length - padding * 2.0);
-                cr.fill();
-            },
+        if let Some(position) = action.target() {
+            let bounds = self.bounds_of(position);
+            cr.rectangle(bounds.top_left_x, bounds.top_left_y,
+                         bounds.length, bounds.length);
+            cr.stroke();
+            match content {
+                board::Content::Occupied(board::Token::Dwarf) => {
+                    cr.set_source_rgba(1.0, 0.0, 0.0, 0.5);
+                    let padding = (self.cell_dimension - self.token_width) / 2.0;
+                    cr.rectangle(bounds.top_left_x + padding,
+                                 bounds.top_left_y + padding,
+                                 bounds.length - padding * 2.0,
+                                 bounds.length - padding * 2.0);
+                    cr.fill();
+                },
+                board::Content::Occupied(board::Token::Troll) => {
+                    cr.set_source_rgba(0.0, 0.8, 0.8, 0.5);
+                    let padding = (self.cell_dimension - self.token_width) / 2.0;
+                    cr.rectangle(bounds.top_left_x + padding,
+                                 bounds.top_left_y + padding,
+                                 bounds.length - padding * 2.0,
+                                 bounds.length - padding * 2.0);
+                    cr.fill();
+                },
+                _ => (),
+            }
         }
     }
 
-    fn draw_cells<'a>(&self, cr: &mut cairo::Context, action_state: &ActionProgression, contents: board::ContentsIter<'a>) {
-        let mut active_content = None;
+    fn draw_cells<'a>(&self, cr: &mut cairo::Context, action_state: &ActionState, contents: board::ContentsIter<'a>) {
+        let mut selected_content = None;
+        let mut targeted_content = None;
         for (position, content) in contents {
             match *action_state {
-                ActionProgression::Selected(p) if p == position => active_content = Some(content),
+                ActionState::Selected(p, _) if p == position =>
+                    selected_content = Some(content),
+                ActionState::Targeted(s, _, _, _) if s == position =>
+                    selected_content = Some(content),
+                ActionState::Targeted(_, t, _, _) if t == position =>
+                    targeted_content = Some(content),
                 _ => self.draw_cell(cr, position, content),
             }
         }
-        match (*action_state, active_content) {
-            (ActionProgression::Selected(position), Some(content)) => self.draw_active_cell(cr, position, content),
+        match (action_state, selected_content, targeted_content) {
+            (&ActionState::Selected(position, _), Some(selected), None) =>
+                self.draw_selected_cell(cr, position, selected),
+            (&ActionState::Targeted(position, _, ref action, _), Some(selected), Some(targeted)) => {
+                self.draw_selected_cell(cr, position, selected);
+                self.draw_targeted_cell(cr, action, targeted);
+            },
             _ => (),
         }
     }
 }
 
+macro_rules! try_lock {
+    ($x:expr) =>
+        (match $x.try_lock() {
+            ::std::result::Result::Ok(guard) => guard,
+            _ => return ::gtk::signal::Inhibit(false),
+        });
+}
+
 impl BoardDisplay {
-    pub fn new(board: board::Cells) -> Option<Self> {
+    pub fn new(state: game::State, properties: BoardDisplayProperties) -> Option<Self> {
         gtk::DrawingArea::new()
             .map(move |canvas| {
-                let mut d = BoardDisplay { canvas: Arc::new(Mutex::new(canvas)),
-                                           board: Arc::new(Mutex::new(board)),
-                                           properties: Arc::new(Mutex::new(BoardDisplayProperties::new())),
-                                           mouse_down: Arc::new(Mutex::new(None)),
-                                           action_progression: Arc::new(Mutex::new(ActionProgression::Inactive)), };
-                d.init();
+                let d = BoardDisplay { canvas: Arc::new(Mutex::new(canvas)),
+                                       state: Arc::new(Mutex::new(state)),
+                                       properties: Arc::new(Mutex::new(properties)),
+                                       mouse_down: Arc::new(Mutex::new(None)),
+                                       action: Arc::new(Mutex::new(ActionState::Inactive)), };
+                {
+                    let canvas = match d.canvas.try_lock() {
+                        Result::Ok(guard) => guard,
+                        _ => panic!("Unable to lock canvas for initialization"),
+                    };
+                    d.init_gtk_events(canvas.deref());
+                    d.clone().init_connect_draw(canvas.deref());
+                    d.clone().init_connect_button_press(canvas.deref());
+                    d.clone().init_connect_button_release(canvas.deref());
+                    d.clone().init_connect_motion_notify(canvas.deref());
+                }
                 d
             })
     }
 
-    pub fn with_widget<F, R>(&self, f: F) -> Option<R> where F: FnOnce(&gtk::DrawingArea) -> R {
-        match self.canvas.try_lock() {
-            Result::Ok(guard) => Some(f(guard.deref())),
-            _ => None,
+    fn init_gtk_events(&self, canvas: &gtk::DrawingArea) {
+        unsafe {
+            // TODO: fix these magic constants once the gtk-rs Widget trait gets
+            // add_events() and the EventMask type is brought up to snuff.
+            gtk_widget_add_events(canvas.pointer,
+                                  (1 << 8)      // GDK_BUTTON_PRESS_MASK.
+                                  | (1 << 9)    // GDK_BUTTON_RELEASE MASK.
+                                  | (1 << 2));  // GDK_POINTER_MOTION_MASK.
         }
     }
 
-    fn init(&mut self) {
-        let canvas = match self.canvas.try_lock() {
-            Result::Ok(guard) => guard,
-            _ => panic!("Unable to lock canvas for initialization"),
-        };
-        {
-            unsafe {
-                // TODO: fix these magic constants once the gtk-rs Widget trait
-                // gets add_events() and the EventMask type is brought up to
-                // snuff.
-                gtk_widget_add_events(canvas.pointer,
-                                      (1 << 8)      // GDK_BUTTON_PRESS_MASK.
-                                      | (1 << 9)    // GDK_BUTTON_RELEASE MASK.
-                                      | (1 << 2));  // GDK_POINTER_MOTION_MASK.
+    fn init_connect_draw(self, canvas: &gtk::DrawingArea) {
+        canvas.connect_draw(move |_, mut cr| {
+            let game = try_lock!(self.state);
+            let props = try_lock!(self.properties);
+            let action = try_lock!(self.action);
+            // props_guard.draw_board_decorations(&mut cr);
+            props.draw_cells(&mut cr, action.deref(), game.board().cells_iter());
+            Inhibit(false)
+        });
+    }
+
+    fn init_connect_button_press(self, canvas: &gtk::DrawingArea) {
+        canvas.connect_button_press_event(move |_, evt| {
+            if evt.button != 1 {
+                return Inhibit(false)
             }
-        }
-        {
-            let board_arc = self.board.clone();
-            let props_arc = self.properties.clone();
-            let action_progression_arc = self.action_progression.clone();
-            canvas.connect_draw(move |_, mut cr| {
-                let board = match board_arc.try_lock() {
-                    Result::Ok(guard) => guard,
-                    _ => return Inhibit(false),
-                };
-                let props_guard = match props_arc.try_lock() {
-                    Result::Ok(guard) => guard,
-                    _ => return Inhibit(false),
-                };
-                let action_progression_guard = match action_progression_arc.try_lock() {
-                    Result::Ok(guard) => guard,
-                    _ => return Inhibit(false),
-                };
-                // props_guard.draw_board_decorations(&mut cr);
-                props_guard.draw_cells(&mut cr, action_progression_guard.deref(), board.cells_iter());
-                Inhibit(false)
-            });
-        }
-        {
-            let props_arc = self.properties.clone();
-            let mouse_down_arc = self.mouse_down.clone();
-            let canvas_arc = self.canvas.clone();
-            canvas.connect_button_press_event(move |_, evt| {
-                if evt.button != 1 {
-                    return Inhibit(false)
-                }
-                let props_guard = match props_arc.try_lock() {
-                    Result::Ok(guard) => guard,
-                    _ => return Inhibit(false),
-                };
-                let props = props_guard.deref();
-                match mouse_down_arc.try_lock() {
-                    Result::Ok(mut guard) => {
-                        let mut mouse_down = guard.deref_mut();
-                        println!("press({:?}, ({}, {}))", mouse_down, evt.x, evt.y);
-                        *mouse_down = props.coordinate_of(evt.x, evt.y);
-                        Inhibit(true)
-                    },
-                    _ => Inhibit(false),
-                }
-            });
-        }
-        {
-            let props_arc = self.properties.clone();
-            let mouse_down_arc = self.mouse_down.clone();
-            let canvas_arc = self.canvas.clone();
-            let action_progression_arc = self.action_progression.clone();
-            canvas.connect_button_release_event(move |_, evt| {
-                if evt.button != 1 {
-                    return Inhibit(false)
-                }
-                let props_guard = match props_arc.try_lock() {
-                    Result::Ok(guard) => guard,
-                    _ => return Inhibit(false),
-                };
-                let props = props_guard.deref();
-                let up = match props.coordinate_of(evt.x, evt.y) {
-                    Some(c) => c,
-                    None => return Inhibit(false),
-                };
-                let mouse_down_guard = match mouse_down_arc.lock() {
-                    Result::Ok(guard) => guard,
-                    _ => return Inhibit(false),
-                };
-                let mut action_progression_guard = match action_progression_arc.lock() {
-                    Result::Ok(guard) => guard,
-                    _ => return Inhibit(false),
-                };
-                let canvas = match canvas_arc.try_lock() {
-                    Result::Ok(guard) => guard,
-                    _ => return Inhibit(false),
-                };
-                let mut action_progression = action_progression_guard.deref_mut();
-                println!("release({:?}, {:?})", *mouse_down_guard.deref(), *action_progression);
-                match (*mouse_down_guard.deref(), *action_progression) {
-                    (Some(down), ActionProgression::Inactive) if up == down => {
-                        *action_progression = ActionProgression::Selected(up);
-                        canvas.queue_draw();  // TODO: double-buffering.
-                    },
-                    (Some(down), ActionProgression::Selected(s)) if up == down && up == s => {
-                        *action_progression = ActionProgression::Inactive;
-                        canvas.queue_draw();  // TODO: double-buffering.
-                    },
-                    (Some(down), ActionProgression::Selected(s)) if up == down && up != s => {
-                        *action_progression = ActionProgression::Targeted(s, up);
-                        // TODO: Mark which move is being made.
-                        canvas.queue_draw();  // TODO: double-buffering.
-                    },
-                    _ => (),
-                }
-                Inhibit(true)
-            });
-        }
-        {
-            let props_arc = self.properties.clone();
-            let canvas_arc = self.canvas.clone();
-            let action_progression_arc = self.action_progression.clone();
-            canvas.connect_motion_notify_event(move |_, evt| {
-                let props_guard = match props_arc.try_lock() {
-                    Result::Ok(guard) => guard,
-                    _ => return Inhibit(false),
-                };
-                let props = props_guard.deref();
-                let over = match props.coordinate_of(evt.x, evt.y) {
-                    Some(c) => c,
-                    None => return Inhibit(false),
-                };
-                let canvas = match canvas_arc.try_lock() {
-                    Result::Ok(guard) => guard,
-                    _ => return Inhibit(false),
-                };
-                let mut action_progression_guard = match action_progression_arc.lock() {
-                    Result::Ok(guard) => guard,
-                    _ => return Inhibit(false),
-                };
-                let mut action_progression = action_progression_guard.deref_mut();
-                println!("motion({:?}, {:?})", *action_progression, over);
-                match *action_progression {
-                    ActionProgression::Selected(c) if c != over => {
-                        // TODO: Only if there is a valid move to here.
-                        *action_progression = ActionProgression::Targeted(c, over);
-                        canvas.queue_draw();  // TODO: double-buffering.
-                    },
-                    ActionProgression::Targeted(c, t) if t != over => {
-                        // TODO: only if there is a valid move to here.
-                        *action_progression = ActionProgression::Targeted(c, over);
-                        canvas.queue_draw();  // TODO: double-buffering.
-                    },
-                    _ => (),
-                }
-                Inhibit(true)
-            });
-        }
+            let props = try_lock!(self.properties);
+            if let Result::Ok(mut mouse_down) = self.mouse_down.try_lock() {
+                *mouse_down.deref_mut() = props.coordinate_of(evt.x, evt.y);
+            }
+            Inhibit(true)
+        });
     }
 
-    pub fn active_cell(&self) -> Option<board::Coordinate> {
-        match self.action_progression.try_lock() {
-            Result::Ok(guard) => match guard.deref() {
-                &ActionProgression::Selected(c) => Some(c),
-                &ActionProgression::Targeted(c, _) => Some(c),
+    fn init_connect_button_release(self, canvas: &gtk::DrawingArea) {
+        canvas.connect_button_release_event(move |_, evt| {
+            if evt.button != 1 {
+                return Inhibit(false)
+            }
+            let up = {
+                let props = try_lock!(self.properties);
+                match props.coordinate_of(evt.x, evt.y) {
+                    Some(c) => c,
+                    None => return Inhibit(false),
+                }
+            };
+            let mut mouse_down = try_lock!(self.mouse_down);
+            let mut action_state = try_lock!(self.action);
+            let new_action = match *mouse_down.deref() {
+                Some(down) if down == up => {
+                    // Clicked here.
+                    match action_state.deref_mut() {
+                        &mut ActionState::Targeted(_, _, ref a, _) => {
+                            // If targeting valid move: make move.
+                            let mut game = try_lock!(self.state);
+                            game.do_action(a);
+                            Some(ActionState::Inactive)
+                        },
+                        &mut ActionState::Inactive => {
+                            // If no selection and move available: select here.
+                            let game = try_lock!(self.state);
+                            if game.cells()[up].role() == Some(game.active_player().role()) {
+                                let mut actions = HashMap::new();
+                                for a in game.position_actions(up) {
+                                    if let Some(t) = a.target() {
+                                        match actions.entry(t) {
+                                            Entry::Occupied(ref mut e) if a.is_shove() && e.get().is_move() =>
+                                                *e.get_mut() = a,
+                                            Entry::Vacant(e) => {
+                                                e.insert(a);
+                                            },
+                                            _ => (),
+                                        }
+                                    }
+                                }
+                                Some(ActionState::Selected(up, actions))
+                            } else {
+                                None
+                            }
+                        },
+                        &mut ActionState::Selected(s, _) if s == up => {
+                            // If selection is here: unselect here.
+                            Some(ActionState::Inactive)
+                        },
+                        _ => None,  // Or do nothing.
+                    }
+                },
+                _ => None,  // Not a valid click.
+            };
+            *mouse_down.deref_mut() = None;
+            if let Some(s) = new_action {
+                *action_state.deref_mut() = s;
+                try_lock!(self.canvas).queue_draw();  // TODO double-buffering.
+            }
+            Inhibit(true)
+        });
+    }
+
+    fn init_connect_motion_notify(self, canvas: &gtk::DrawingArea) {
+        canvas.connect_motion_notify_event(move |_, evt| {
+            let moved = {
+                let props = try_lock!(self.properties);
+                match props.coordinate_of(evt.x, evt.y) {
+                    Some(c) => c,
+                    None => return Inhibit(false),
+                }
+            };
+            let mut action_state = try_lock!(self.action);
+            let new_state = match action_state.deref() {
+                &ActionState::Selected(s, ref actions) if s != moved => {
+                    // If not targeting here: target here if move available.
+                    match actions.get(&moved) {
+                        Some(new_action) =>
+                            Some(ActionState::Targeted(s, moved, *new_action, actions.clone())),
+                        None => None,
+                    }
+                },
+                &ActionState::Targeted(s, t, _, ref actions) if t != moved => {
+                    // If not targeting here: target here if move available.
+                    match actions.get(&moved) {
+                        Some(new_action) if s != moved =>
+                            Some(ActionState::Targeted(s, moved, *new_action, actions.clone())),
+                        _ =>
+                            Some(ActionState::Selected(s, actions.clone())),
+                    }
+                },
                 _ => None,
-            },
-            _ => None,
-        }
+            };
+            if let Some(s) = new_state {
+                *action_state.deref_mut() = s;
+                try_lock!(self.canvas).queue_draw();  // TODO double-buffering.
+            }
+            Inhibit(true)
+        });
     }
 }
 

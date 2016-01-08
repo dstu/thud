@@ -1,9 +1,13 @@
+use std::ops::Deref;
+use std::str::FromStr;
+
 extern crate gtk;
 use gtk::traits::*;
 use gtk::signal::Inhibit;
 
 extern crate thud;
 use thud::board;
+use thud::game;
 use thud::gtk_ui;
 
 fn main() {
@@ -20,10 +24,14 @@ fn main() {
         Inhibit(false)
     });
 
-    let display = gtk_ui::BoardDisplay::new(board::Cells::default()).unwrap();
-    match display.with_widget(|w| window.add(w)) {
-        Some(_) => (),
-        None => panic!("Unable to initialize display"),
+    let game_state = game::State::new(board::Cells::default(),
+                                      String::from_str("Player 1").ok().unwrap(),
+                                      String::from_str("Player 2").ok().unwrap());
+    let display_properties = gtk_ui::BoardDisplayProperties::new();
+    let display = gtk_ui::BoardDisplay::new(game_state, display_properties).unwrap();
+    match display.canvas.try_lock() {
+        Result::Ok(guard) => window.add(guard.deref()),
+        _ => panic!("Unable to intialize display"),
     }
 
     window.show_all();

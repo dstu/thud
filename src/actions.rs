@@ -3,12 +3,60 @@ use ::board;
 use std::iter::{Chain, FlatMap, Iterator, Take};
 use std::slice;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Action {
     Move(board::Coordinate, board::Coordinate),
     Hurl(board::Coordinate, board::Coordinate),
-    Shove(board::Coordinate, board::Coordinate, Vec<board::Coordinate>),
+    Shove(board::Coordinate, board::Coordinate, u8, [board::Coordinate; 7]),
     Concede,
+}
+
+impl Action {
+    pub fn is_move(&self) -> bool {
+        match self {
+            &Action::Move(_, _) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_hurl(&self) -> bool {
+        match self {
+            &Action::Hurl(_, _) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_shove(&self) -> bool {
+        match self {
+            &Action::Shove(_, _, _, _) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_concede(&self) -> bool {
+        match self {
+            &Action::Concede => true,
+            _ => false,
+        }
+    }
+
+    pub fn source(&self) -> Option<board::Coordinate> {
+        match self {
+            &Action::Move(s, _) => Some(s),
+            &Action::Hurl(s, _) => Some(s),
+            &Action::Shove(s, _, _, _) => Some(s),
+            &Action::Concede => None,
+        }
+    }
+
+    pub fn target(&self) -> Option<board::Coordinate> {
+        match self {
+            &Action::Move(_, t) => Some(t),
+            &Action::Hurl(_, t) => Some(t),
+            &Action::Shove(_, t, _, _) => Some(t),
+            &Action::Concede => None,
+        }
+    }
 }
 
 pub struct DwarfDirectionConsumer<'a> {
@@ -284,19 +332,21 @@ impl<'a> Iterator for ShoveIterator<'a> {
             match (self.forward.next(), self.backward.next()) {
                 (Some(end), Some(previous))
                     if self.board[end].is_empty() && self.board[previous].is_troll() => {
-                        let mut captured = Vec::with_capacity(8);
+                        let mut captured = [board::Coordinate::new(7, 7).unwrap(); 7];
+                        let mut i = 0u8;
                         for d in board::Direction::all() {
                             match end.to_direction(*d) {
                                 Some(adjacent) if self.board[adjacent].is_dwarf() => {
-                                    captured.push(adjacent)
+                                    captured[i as usize] = adjacent;
+                                    i += 1;
                                 },
                                 _ => (),
                             }
                         }
-                        if captured.is_empty() {
+                        if i == 0 {
                             continue
                         } else {
-                            return Some(Action::Shove(self.start, end, captured))
+                            return Some(Action::Shove(self.start, end, i, captured))
                         }
                     },
                 _ => return None,

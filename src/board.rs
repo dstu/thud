@@ -458,11 +458,11 @@ impl Cells {
                 self[end] = self[start];
                 self[start] = Content::Empty;
             },
-            &Action::Shove(start, end, ref captured) => {
+            &Action::Shove(start, end, len, ref captured) => {
                 self[end] = self[start];
                 self[start] = Content::Empty;
-                for c in captured {
-                    self[*c] = Content::Empty;
+                for i in 0..len {
+                    self[captured[i as usize]] = Content::Empty;
                 }
             },
             &Action::Concede => (),
