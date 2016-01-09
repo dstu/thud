@@ -64,9 +64,9 @@ impl BoardDisplayProperties {
             margin_top: 30.0,
             margin_bottom: 10.0,
             border_width: 2.0,
-            cell_dimension: 60.0,
-            token_height: 30.0,
-            token_width: 30.0,
+            cell_dimension: 40.0,
+            token_height: 20.0,
+            token_width: 20.0,
         }
     }
 
@@ -269,6 +269,14 @@ impl BoardDisplayProperties {
             _ => (),
         }
     }
+
+    pub fn board_width(&self) -> f64 {
+        self.margin_left + self.margin_right + 15.0 * self.cell_dimension
+    }
+
+    pub fn board_height(&self) -> f64 {
+        self.margin_top + self.margin_bottom + 15.0 * self.cell_dimension
+    }
 }
 
 macro_rules! try_lock {
@@ -280,12 +288,13 @@ macro_rules! try_lock {
 }
 
 impl BoardDisplay {
-    pub fn new(state: game::State, properties: BoardDisplayProperties) -> Option<Self> {
+    pub fn new(state: Arc<Mutex<game::State>>,
+               properties: Arc<Mutex<BoardDisplayProperties>>) -> Option<Self> {
         gtk::DrawingArea::new()
             .map(move |canvas| {
                 let d = BoardDisplay { canvas: Arc::new(Mutex::new(canvas)),
-                                       state: Arc::new(Mutex::new(state)),
-                                       properties: Arc::new(Mutex::new(properties)),
+                                       state: state,
+                                       properties: properties,
                                        mouse_down: Arc::new(Mutex::new(None)),
                                        action: Arc::new(Mutex::new(ActionState::Inactive)), };
                 {
@@ -293,6 +302,14 @@ impl BoardDisplay {
                         Result::Ok(guard) => guard,
                         _ => panic!("Unable to lock canvas for initialization"),
                     };
+                    {
+                        let props = match d.properties.try_lock() {
+                            Result::Ok(guard) => guard,
+                            _ => panic!("Unable to lock properties for initialization"),
+                        };
+                        canvas.set_size_request(props.board_width() as i32,
+                                                props.board_height() as i32);
+                    }
                     d.init_gtk_events(canvas.deref());
                     d.clone().init_connect_draw(canvas.deref());
                     d.clone().init_connect_button_press(canvas.deref());
