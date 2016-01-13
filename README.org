@@ -1,0 +1,28 @@
+* Overview
+
+This package provides an implementation of the game Thud (as described at
+http://discworld.wikia.com/wiki/Thud_(game)). It contains provisional code for
+console- and GTK-based UIs and an AI based on Monte Carlo tree search. (Note
+that naive Monte Carlo tree search is known not to be a very good algorithm for
+playing games like Thud. This codebase is intended as a platform for exploring
+why that is so.)
+
+** Data structures
+
+The =search_graph= module provides a general-purpose, rollout-based DAG-like
+data structure. It may be used to explore the state space of a game tree
+compactly (through the use of transposition tables), with support for cycle
+detection and edge- and vertex-specific data. It is a prime candidate for being
+factored out into its own data structure.
+
+** Algorithms
+
+The =mcts= module provides a preliminary implementation of Monte Carlo tree
+search for the game of Thud. It may eventually be factored out into a more
+generic library for rollout-based move planning.
+
+* Copyright
+
+Copyright 2015-2016, Google. All rights reserved.
+
+"Thud", "Discworld", and related terms are not my intellectual property.
