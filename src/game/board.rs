@@ -1,6 +1,6 @@
-use ::actions::{Action, ActionIterator,
-                DwarfCoordinateConsumer, DwarfDirectionConsumer,
-                TrollCoordinateConsumer, TrollDirectionConsumer};
+use ::game::actions::{Action, ActionIterator,
+                      DwarfCoordinateConsumer, DwarfDirectionConsumer,
+                      TrollCoordinateConsumer, TrollDirectionConsumer};
 use ::game;
 
 use std::clone::Clone;

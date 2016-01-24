@@ -7,8 +7,8 @@ use gtk::traits::*;
 use gtk::signal::Inhibit;
 
 extern crate thud;
-use thud::board;
 use thud::game;
+use thud::game::board;
 use thud::gtk_ui;
 
 fn main() {

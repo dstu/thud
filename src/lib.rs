@@ -9,13 +9,11 @@ extern crate glib;
 extern crate gtk;
 extern crate gtk_sys;
 extern crate rand;
+extern crate search_graph;
 
-pub mod actions;
-pub mod board;
 pub mod game;
 
 pub mod mcts;
-pub mod search_graph;
 
 pub mod console_ui;
 pub mod gtk_ui;

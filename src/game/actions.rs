@@ -1,4 +1,4 @@
-use ::board;
+use ::game::board;
 
 use std::iter::{Chain, FlatMap, Iterator, Take};
 use std::slice;

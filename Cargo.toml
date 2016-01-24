@@ -9,6 +9,7 @@ gtk = "0.0.6"
 gtk-sys = "0.2.1"
 cairo-rs = "0.0.7"
 rand = "0.3.12"
+search-graph = { git = "https://github.com/dstu/search-graph.git", branch = "master" }
 
 [[bin]]
 name = "console"

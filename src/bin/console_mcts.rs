@@ -1,19 +1,18 @@
 use std::str::FromStr;
 
 extern crate thud;
-use ::thud::actions;
-use ::thud::board;
 use ::thud::console_ui;
 use ::thud::game;
+use ::thud::game::board;
 use ::thud::mcts;
 
 extern crate rand;
 
 pub fn initialize_search(state: game::State, graph: &mut mcts::Graph) {
-    let actions: Vec<actions::Action> = state.role_actions(state.active_player().role()).collect();
-    let mut adder = graph.add_root(state, Default::default()).to_child_adder();
+    let actions: Vec<game::Action> = state.role_actions(state.active_player().role()).collect();
+    let mut children = graph.add_root(state, Default::default()).to_child_list();
     for a in actions.into_iter() {
-        adder.add(mcts::EdgeData::new(a));
+        children.add_child(mcts::EdgeData::new(a));
     }
 }
 

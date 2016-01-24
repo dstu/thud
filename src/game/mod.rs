@@ -1,7 +1,9 @@
-use ::actions;
-use ::board;
+mod actions;
+pub mod board;
 
 use std::hash::{Hash, Hasher, SipHasher};
+
+pub use self::actions::Action;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Role {

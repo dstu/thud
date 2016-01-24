@@ -3,9 +3,8 @@ use std::collections::hash_map::Entry;
 use std::ops::{Deref, DerefMut};
 use std::sync::{Arc, Mutex};
 
-use ::actions;
-use ::board;
 use ::game;
+use ::game::board;
 use ::mcts;
 use ::search_graph;
 
@@ -40,8 +39,8 @@ pub struct BoardDisplayProperties {
 #[derive(Clone, Debug, PartialEq)]
 enum ActionState {
     Inactive,
-    Selected(board::Coordinate, HashMap<board::Coordinate, actions::Action>),
-    Targeted(board::Coordinate, board::Coordinate, actions::Action, HashMap<board::Coordinate, actions::Action>),
+    Selected(board::Coordinate, HashMap<board::Coordinate, game::Action>),
+    Targeted(board::Coordinate, board::Coordinate, game::Action, HashMap<board::Coordinate, game::Action>),
 }
 
 struct BoxBounds {
@@ -213,7 +212,7 @@ impl BoardDisplayProperties {
         }
     }
 
-    fn draw_targeted_cell(&self, cr: &mut cairo::Context, action: &actions::Action, content: board::Content) {
+    fn draw_targeted_cell(&self, cr: &mut cairo::Context, action: &game::Action, content: board::Content) {
         cr.set_source_rgb(0.0, 0.5, 0.7);
         cr.set_line_width(self.border_width);
         if let Some(position) = action.target() {

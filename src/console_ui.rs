@@ -2,12 +2,12 @@ use std::collections::HashSet;
 use std::io;
 use std::io::Write;
 
-use ::board::Cells;
-use ::board::Content;
-use ::board::Coordinate;
-use ::board::Token;
-
 use ::game;
+use game::board::Cells;
+use game::board::Content;
+use game::board::Coordinate;
+use game::board::Token;
+
 use ::mcts;
 use ::search_graph;
 

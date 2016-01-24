@@ -1,7 +1,6 @@
-use ::actions;
-use ::board;
-use ::console_ui;
 use ::game;
+use ::game::board;
+use ::console_ui;
 use ::search_graph;
 
 use std::cmp;
@@ -77,14 +76,14 @@ impl Default for NodeData {
 
 #[derive(Clone, Debug)]
 pub struct EdgeData {
-    pub action: actions::Action,
+    pub action: game::Action,
     pub statistics: Statistics,
     cycle: bool,
     known_payoff: Option<Payoff>,
 }
 
 impl EdgeData {
-    pub fn new(action: actions::Action) -> Self {
+    pub fn new(action: game::Action) -> Self {
         EdgeData {
             action: action,
             cycle: false,
@@ -356,9 +355,9 @@ pub fn iterate_search<'a, R>(mut state: game::State, graph: &'a mut Graph, rng: 
                 match expander.expand(state.clone(), Default::default).to_target() {
                     search_graph::Target::Expanded(mut node) => {
                         {
-                            let mut adder = node.get_child_adder();
+                            let mut children = node.get_child_list_mut();
                             for a in state.role_actions(state.active_player().role()).into_iter() {
-                                adder.add(EdgeData::new(a));
+                                children.add_child(EdgeData::new(a));
                             }
                         }
                         let payoff = simulate(&mut state, rng);

@@ -1,7 +1,7 @@
 extern crate thud;
 
-use thud::board;
 use thud::game;
+use thud::game::board;
 use std::str::FromStr;
 
 fn main() {
