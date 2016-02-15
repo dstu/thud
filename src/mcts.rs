@@ -3,6 +3,7 @@ use ::game::board;
 use ::console_ui;
 use ::search_graph;
 
+use std::collections::HashSet;
 use std::cmp;
 use std::fmt;
 
@@ -111,12 +112,22 @@ pub enum Rollout<'a> {
 }
 
 pub fn rollout<'a>(mut node: MutNode<'a>, state: &mut game::State, bias: f64) -> Rollout<'a> {
+    let mut path = HashSet::new();
+    path.insert(node.get_id());
     loop {
         node = match best_child_edge(node.get_child_list(), state.active_player().marker(), bias) {
-            Some(i) => match node.to_child_list().to_edge(i).to_target() {
-                search_graph::Target::Expanded(n) => n,
-                search_graph::Target::Unexpanded(e) => return Rollout::Unexpanded(e),
-                search_graph::Target::Cycle(e) => return Rollout::Cycle(e),
+            Some(i) => {
+                let mut cycle = false;
+                if let search_graph::Target::Expanded(n) = node.get_child_list().get_edge(i).get_target() {
+                    cycle = !path.insert(n.get_id());
+                }
+                if cycle {
+                    return Rollout::Cycle(node)
+                }
+                match node.to_child_list().to_edge(i).to_target() {
+                    search_graph::Target::Unexpanded(e) => return Rollout::Unexpanded(e),
+                    search_graph::Target::Expanded(n) => n,
+                }
             },
             None => {
                 println!("rollout finds no children for (id {}):", node.get_id());
@@ -138,10 +149,6 @@ fn best_child_edge<'a>(children: ChildList<'a>, player: game::PlayerMarker, bias
             search_graph::Target::Unexpanded(_) => {
                 println!("best_child_edge: edge {} is unexpanded", i);
                 return Some(i)
-            },
-            search_graph::Target::Cycle(_) => {
-                println!("best_child_edge: ignoring edge {}, which is cycle", i);
-                ()
             },
             search_graph::Target::Expanded(e) => {
                 let edge_visits = e.get_data().statistics.visits as f64;
@@ -287,16 +294,6 @@ fn backprop_payoff<'a>(mut node: MutNode<'a>, payoff: Payoff, mut player: game::
     }
 }
 
-fn backprop_cycle<'a>(mut node: MutNode<'a>) {
-    // loop {
-        node.get_data_mut().cycle = true;
-        let mut parents = node.to_parent_list();
-        for i in 0..parents.len() {
-            set_cycle_from_children(parents.get_edge_mut(i).get_source_mut());
-        }
-    // }
-}
-
 fn set_cycle_from_children<'a>(mut node: MutNode<'a>) {
     {
         let mut children = node.get_child_list_mut();
@@ -340,7 +337,6 @@ fn set_known_payoff_from_children<'a>(mut node: MutNode<'a>) {
                                                               cmp::max(p.values[1], known.values[1])], }),
                         },
                     },
-                _ => (),
             }
         }
     }
@@ -351,8 +347,9 @@ pub fn iterate_search<'a, R>(mut state: game::State, graph: &'a mut Graph, rng: 
     if let Some(node) = graph.get_node_mut(&state) {
         match rollout(node, &mut state, bias) {
             Rollout::Unexpanded(expander) => {
-                state.do_action(&expander.get_edge().get_data().action);
-                match expander.expand(state.clone(), Default::default).to_target() {
+                let action = expander.get_edge().get_data().action;
+                state.do_action(&action);
+                match expander.expand(state.clone(), Default::default, || { EdgeData::new(action) }).to_target() {
                     search_graph::Target::Expanded(mut node) => {
                         {
                             let mut children = node.get_child_list_mut();
@@ -367,7 +364,6 @@ pub fn iterate_search<'a, R>(mut state: game::State, graph: &'a mut Graph, rng: 
                         // has moved.
                         backprop_payoff(node, payoff, payoff_player, bias);
                     },
-                    search_graph::Target::Cycle(node) => backprop_cycle(node),
                     search_graph::Target::Unexpanded(_) => panic!("Edge expansion failed"),
                 }
             },
