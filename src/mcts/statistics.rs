@@ -49,7 +49,6 @@ impl Default for NodeData {
 pub struct EdgeData {
     pub action: game::Action,
     pub statistics: Statistics,
-    pub cycle: bool,
     pub known_payoff: Option<Payoff>,
 }
 
@@ -57,9 +56,8 @@ impl EdgeData {
     pub fn new(action: game::Action) -> Self {
         EdgeData {
             action: action,
-            cycle: false,
-            known_payoff: None,
             statistics: Default::default(),
+            known_payoff: None,
         }
     }
 }
