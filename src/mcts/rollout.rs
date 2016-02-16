@@ -32,7 +32,7 @@ pub fn rollout<'a>(mut node: MutNode<'a>, state: &mut game::State, bias: f64) ->
                 }
             },
             None => {
-                println!("rollout: no children for (id {}) with board state:", node.get_id());
+                trace!("rollout: no children for (id {}) with board state:", node.get_id());
                 console_ui::write_board(state.board());
                 return Rollout::Terminal(node)
             },
@@ -44,18 +44,18 @@ fn best_child_edge<'a>(children: ChildList<'a>, player: game::PlayerMarker, bias
     let parent_visits = cmp::max(1, children.get_source_node().get_data().statistics.visits) as f64;
     let mut best_edge_index = None;
     let mut best_edge_uct = 0.0;
-    println!("best_child_edge: visiting {} children", children.len());
+    trace!("best_child_edge: visiting {} children", children.len());
     for i in 0..children.len() {
         let edge = children.get_edge(i);
         match edge.get_target() {
             search_graph::Target::Unexpanded(_) => {
-                println!("best_child_edge: edge {} is unexpanded", i);
+                trace!("best_child_edge: edge {} is unexpanded", i);
                 return Some(i)
             },
             search_graph::Target::Expanded(e) => {
                 let edge_visits = e.get_data().statistics.visits as f64;
                 if edge_visits == 0.0 {
-                    println!("best_child_edge: edge {} because it hasn't been visited yet", i);
+                    trace!("best_child_edge: edge {} because it hasn't been visited yet", i);
                     best_edge_index = Some(i);
                     best_edge_uct = 0.0;
                 } else {
@@ -63,14 +63,14 @@ fn best_child_edge<'a>(children: ChildList<'a>, player: game::PlayerMarker, bias
                     let uct = edge_payoff / edge_visits
                         + bias * f64::sqrt(f64::ln(parent_visits) / edge_visits);
                     if uct >= best_edge_uct {
-                        // println!("best_child_edge: edge {}, value {} is new best edge (old index {:?}, value {})",
-                        //          i, uct, best_edge_index, best_edge_uct);
+                        // trace!("best_child_edge: edge {}, value {} is new best edge (old index {:?}, value {})",
+                        //       i, uct, best_edge_index, best_edge_uct);
                         // TODO tie-breaking.
                         best_edge_index = Some(i);
                         best_edge_uct = uct;
                     } // else {
-                    //     println!("best_child_edge: edge {}, value {} skipped in favor of {:?}, value {}",
-                    //              i, uct, best_edge_index, best_edge_uct);
+                    //     trace!("best_child_edge: edge {}, value {} skipped in favor of {:?}, value {}",
+                    //           i, uct, best_edge_index, best_edge_uct);
                     // }
                 }
             },

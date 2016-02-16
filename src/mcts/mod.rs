@@ -36,13 +36,13 @@ fn iterate_search_helper<'a, R>(mut state: game::State, node: MutNode<'a>,
     match rollout(node, &mut state, bias) {
         Rollout::Unexpanded(expander) => {
             let action = expander.get_edge().get_data().action;
-            // println!("iterate_search: expanding from id {}", expander.get_edge().get_source().get_id());
+            // info!("iterate_search: expanding from id {}", expander.get_edge().get_source().get_id());
             // console_ui::write_board(state.cells());
             state.do_action(&action);
             let mut expanded_node =
                 expander.expand_to_target(
                     state.clone(), Default::default, || EdgeData::new(action));
-            // println!("iterate_search: expanding to id {}", expanded_node.get_id());
+            // info!("iterate_search: expanding to id {}", expanded_node.get_id());
             // console_ui::write_board(state.cells());
             {
                 let mut children = expanded_node.get_child_list_mut();
@@ -59,14 +59,14 @@ fn iterate_search_helper<'a, R>(mut state: game::State, node: MutNode<'a>,
         },
         Rollout::Terminal(node) => match payoff(&state) {
             None => {
-                println!("I am confused by this board state, which is terminal but has no payoff:");
+                error!("I am confused by this board state, which is terminal but has no payoff:");
                 console_ui::write_board(state.board());
                 panic!("Terminal node has no payoff")
             },
             Some(p) => backprop_known_payoff(node, p),
         },
         Rollout::Cycle(child_node) => {
-            println!("iterate_search: hit cycle in search");
+            trace!("iterate_search: hit cycle in search");
             if child_node.get_id() == node_id {
                 // Cycle wrapped back around to here.
                 panic!("cycle back to root");

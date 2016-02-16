@@ -42,7 +42,7 @@ pub fn read_coordinate() -> Coordinate {
         let row: u8 = match input.trim().parse() {
             Ok(r) if r <= 14 => r,
             _ => {
-                println!("bad row");
+                error!("bad row");
                 continue
             },
         };
@@ -53,13 +53,13 @@ pub fn read_coordinate() -> Coordinate {
         let col: u8 = match input.trim().parse() {
             Ok(c) if c <= 14 => c,
             _ => {
-                println!("bad col");
+                error!("bad col");
                 continue
             },
         };
         match Coordinate::new(row, col) {
             None => {
-                println!("coordinate out of playable range");
+                error!("coordinate out of playable range");
                 continue
             },
             Some(c) => return c,
@@ -69,7 +69,7 @@ pub fn read_coordinate() -> Coordinate {
 
 pub fn write_search_graph(graph: &mcts::Graph, state: &game::State) {
     println!("to play: {} [{:?}]",
-             state.active_player().name(), state.active_player().role());
+          state.active_player().name(), state.active_player().role());
     match graph.get_node(state) {
         None => println!("no matching node for game state"),
         Some(node) => {

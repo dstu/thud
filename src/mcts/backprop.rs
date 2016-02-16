@@ -18,7 +18,7 @@ fn best_parent_edge<'a>(parents: ParentList<'a>, player: game::PlayerMarker, bia
         let edge_payoff = edge.get_data().statistics.payoff.score(player) as f64;
         let edge_visits = edge.get_data().statistics.visits as f64;
         if edge_visits == 0.0 {
-            println!("best_parent_edge: choosing parent {} because this edge hasn't been visited", i);
+            trace!("best_parent_edge: choosing parent {} because this edge hasn't been visited", i);
             return Some(i)
         } else {
             let uct = edge_payoff / edge_visits
