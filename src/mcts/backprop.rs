@@ -23,7 +23,7 @@ fn best_parent_edge<'a>(parents: ParentList<'a>, player: game::PlayerMarker, bia
         } else {
             let uct = edge_payoff / edge_visits
                 + bias * f64::sqrt(f64::ln(parent_visits) / edge_visits);
-            if uct > best_edge_uct {
+            if uct >= best_edge_uct {
                 // TODO tie-breaking.
                 best_edge_index = Some(i);
                 best_edge_uct = uct;
