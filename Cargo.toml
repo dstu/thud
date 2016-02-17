@@ -17,11 +17,11 @@ search-graph = { git = "https://github.com/dstu/search-graph.git", branch = "mas
 [[bin]]
 name = "console"
 
-[[bin]]
-name = "gtk"
+# [[bin]]
+# name = "gtk"
 
-[[bin]]
-name = "board_to_image"
+# [[bin]]
+# name = "board_to_image"
 
 [[bin]]
 name = "console_mcts"

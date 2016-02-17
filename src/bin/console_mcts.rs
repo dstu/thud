@@ -3,6 +3,7 @@ use std::str::FromStr;
 extern crate chrono;
 extern crate fern;
 extern crate log;
+extern crate rand;
 extern crate thud;
 
 use ::thud::console_ui;
@@ -10,7 +11,6 @@ use ::thud::game;
 use ::thud::game::board;
 use ::thud::mcts;
 
-extern crate rand;
 
 pub fn initialize_search(state: game::State, graph: &mut mcts::Graph) {
     let actions: Vec<game::Action> = state.role_actions(state.active_player().role()).collect();

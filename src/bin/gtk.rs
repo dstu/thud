@@ -2,18 +2,23 @@ use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
+extern crate fern;
 extern crate gtk;
+#[macro_use]
+extern crate log;
+extern crate thud;
+
 use gtk::traits::*;
 use gtk::signal::Inhibit;
 
-extern crate thud;
 use thud::game;
 use thud::game::board;
 use thud::gtk_ui;
+use thud::gtk_ui::board_display;
 
 fn main() {
     if gtk::init().is_err() {
-        println!("Failed to initialize GTK");
+        panic!("Failed to initialize GTK");
         return
     }
 
@@ -23,26 +28,23 @@ fn main() {
         game::State::new(board::Cells::default(),
                          String::from_str("Player 1").ok().unwrap(),
                          String::from_str("Player 2").ok().unwrap())));
-    let display_properties = Arc::new(Mutex::new(
-        gtk_ui::BoardDisplayProperties::new()));
-    let display = gtk_ui::BoardDisplay::new(
-        game_state.clone(), display_properties).unwrap();
+    let display = gtk_ui::board_display::view::Interactive::new().unwrap();
 
     let button_panel = gtk::ButtonBox::new(gtk::Orientation::Vertical).unwrap();
     button_panel.set_layout(gtk::ButtonBoxStyle::Center);
 
     let iterate_button = gtk::Button::new_with_label("Iterate").unwrap();
     iterate_button.connect_clicked(move |_| {
-        println!("iterate move 1");
+        trace!("iterate move 1");
     });
     button_panel.add(&iterate_button);
 
-    let columns = [gtk_ui::SearchGraphColumn::Id,
-                   gtk_ui::SearchGraphColumn::Action,
-                   gtk_ui::SearchGraphColumn::Statistics,
-                   gtk_ui::SearchGraphColumn::EdgeStatus,
-                   gtk_ui::SearchGraphColumn::EdgeTarget];
-    let mut store = gtk_ui::SearchGraphStore::new(&columns);
+    let columns = [gtk_ui::search_table::Column::Id,
+                   gtk_ui::search_table::Column::Action,
+                   gtk_ui::search_table::Column::Statistics,
+                   gtk_ui::search_table::Column::EdgeStatus,
+                   gtk_ui::search_table::Column::EdgeTarget];
+    let mut store = gtk_ui::search_table::Store::new(&columns);
     let tree = gtk::TreeView::new_with_model(&store.model()).unwrap();
     for (i, c) in columns.iter().enumerate() {
         tree.append_column(&c.new_view_column(i as i32));
@@ -51,7 +53,7 @@ fn main() {
     graph_view.add(&tree);
 
     let move_display = {
-        let mut properties = gtk_ui::BoardDisplayProperties::new();
+        let mut properties = gtk_ui::board_display::view::Properties::new();
         properties.margin_left = 0.0;
         properties.margin_right = 0.0;
         properties.margin_top = 0.0;
@@ -60,7 +62,7 @@ fn main() {
         properties.cell_dimension = 10.0;
         properties.token_width = 5.0;
         properties.token_height = 5.0;
-        gtk_ui::BoardDisplay::new(game_state.clone(), Arc::new(Mutex::new(properties))).unwrap()
+        gtk_ui::board_display::Passive::new_with_properties(properties).unwrap();
     };
 
     match display.canvas.try_lock() {

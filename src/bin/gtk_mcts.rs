@@ -1,16 +1,20 @@
 use std::str::FromStr;
 
-extern crate thud;
-use ::thud::game;
-use ::thud::game::board;
-use ::thud::gtk_ui;
-use ::thud::mcts;
-
+extern crate chrono;
+extern crate fern;
 extern crate gtk;
+extern crate log;
+extern crate rand;
+extern crate thud;
+
+use thud::game;
+use thud::game::board;
+use thud::gtk_ui::board_display;
+use thud::mcts;
+use thud::gtk_ui;
+
 use gtk::traits::*;
 use gtk::signal::Inhibit;
-
-extern crate rand;
 
 pub fn initialize_search(state: game::State, graph: &mut mcts::Graph) {
     let actions: Vec<game::Action> = state.role_actions(state.active_player().role()).collect();
@@ -21,6 +25,16 @@ pub fn initialize_search(state: game::State, graph: &mut mcts::Graph) {
 }
 
 fn main() {
+    let logger_config = fern::DispatchConfig {
+        format: Box::new(|msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
+            format!("[{}][{}] {}", chrono::Local::now().to_rfc3339(), level, msg)
+        }),
+        output: vec![fern::OutputConfig::stdout()],
+        level: log::LogLevelFilter::Trace,
+    };
+    if let Err(e) = fern::init_global_logger(logger_config, log::LogLevelFilter::Trace) {
+        panic!("Failed to initialize global logger: {}", e);
+    }
     let mut rng = rand::thread_rng();
     let state = game::State::new(board::Cells::default(), String::from_str("Player 1").ok().unwrap(), String::from_str("Player 2").ok().unwrap());
     let mut graph = mcts::Graph::new();
@@ -30,8 +44,7 @@ fn main() {
     }
 
     if gtk::init().is_err() {
-        println!("Failed to initialize GTK");
-        return
+        panic!("Failed to initialize GTK");
     }
 
     let window = gtk::Window::new(gtk::WindowType::Toplevel).unwrap();
@@ -42,12 +55,12 @@ fn main() {
         Inhibit(false)
     });
 
-    let columns = [gtk_ui::SearchGraphColumn::Id,
-                   gtk_ui::SearchGraphColumn::Action,
-                   gtk_ui::SearchGraphColumn::Statistics,
-                   gtk_ui::SearchGraphColumn::EdgeStatus,
-                   gtk_ui::SearchGraphColumn::EdgeTarget];
-    let mut store = gtk_ui::SearchGraphStore::new(&columns);
+    let columns = [gtk_ui::search_table::Column::Id,
+                   gtk_ui::search_table::Column::Action,
+                   gtk_ui::search_table::Column::Statistics,
+                   gtk_ui::search_table::Column::EdgeStatus,
+                   gtk_ui::search_table::Column::EdgeTarget];
+    let mut store = gtk_ui::search_table::Store::new(&columns);
     store.update(graph.get_node(&state).unwrap());
     let tree = gtk::TreeView::new_with_model(&store.model()).unwrap();
     for (i, c) in columns.iter().enumerate() {
