@@ -334,52 +334,13 @@ impl<'a> Iterator for ShoveIterator<'a> {
                     if self.board[end].is_empty() && self.board[previous].is_troll() => {
                         let mut captured = [board::Coordinate::new(7, 7).unwrap(); 7];
                         let mut i = 0u8;
-                        if let Some(adjacent) = end.to_up() {
-                            if self.board[adjacent].is_dwarf() {
-                                captured[i as usize] = adjacent;
-                                i += 1;
-                            }
-                            if let Some(adjacent) = adjacent.to_left() {
-                                if self.board[adjacent].is_dwarf() {
+                        for d in board::Direction::all() {
+                            match end.to_direction(*d) {
+                                Some(adjacent) if self.board[adjacent].is_dwarf() => {
                                     captured[i as usize] = adjacent;
                                     i += 1;
-                                }
-                            }
-                            if let Some(adjacent) = adjacent.to_right() {
-                                if self.board[adjacent].is_dwarf() {
-                                    captured[i as usize] = adjacent;
-                                    i += 1;
-                                }
-                            }
-                        }
-                        if let Some(adjacent) = end.to_down() {
-                            if self.board[adjacent].is_dwarf() {
-                                captured[i as usize] = adjacent;
-                                i += 1;
-                            }
-                            if let Some(adjacent) = adjacent.to_left() {
-                                if self.board[adjacent].is_dwarf() {
-                                    captured[i as usize] = adjacent;
-                                    i += 1;
-                                }
-                            }
-                            if let Some(adjacent) = adjacent.to_right() {
-                                if self.board[adjacent].is_dwarf() {
-                                    captured[i as usize] = adjacent;
-                                    i += 1;
-                                }
-                            }
-                        }
-                        if let Some(adjacent) = end.to_left() {
-                            if self.board[adjacent].is_dwarf() {
-                                captured[i as usize] = adjacent;
-                                i += 1;
-                            }
-                        }
-                        if let Some(adjacent) = end.to_right() {
-                            if self.board[adjacent].is_dwarf() {
-                                captured[i as usize] = adjacent;
-                                i += 1;
+                                },
+                                _ => (),
                             }
                         }
                         if i == 0 {

@@ -178,6 +178,19 @@ impl Coordinate {
     }
 
    
+    pub fn to_direction(&self, d: Direction) -> Option<Coordinate> {
+        match d {
+            Direction::Up => self.to_up(),
+            Direction::UpLeft => self.to_up().and_then(|s| s.to_left()),
+            Direction::UpRight => self.to_up().and_then(|s| s.to_right()),
+            Direction::Down => self.to_down(),
+            Direction::DownLeft => self.to_down().and_then(|s| s.to_left()),
+            Direction::DownRight => self.to_down().and_then(|s| s.to_right()),
+            Direction::Left => self.to_left(),
+            Direction::Right => self.to_right(),
+        }
+    }
+
     fn index(&self) -> usize {
         let row_offset = offset_of_row(self.row());
         let (row_start, _) = bounds_of_row(self.row());
@@ -193,11 +206,13 @@ impl fmt::Debug for Coordinate {
 
 /// Returns the start and end columns of `row`, which must be in [0, 14].
 fn bounds_of_row(row: u8) -> (u8, u8) {
-    match row {
-        r @ 0...4 => (5 - r, 9 + r),
-        r @ 10...14 => (r - 9, 23 - r),
-        _ => (0, 14),
-    }
+    let row_start = match row {
+        r @ 0...4 => 5 - r,
+        r @ 10...14 => r - 9,
+        _ => 0,
+    };
+    let row_end = 14 - row_start;
+    (row_start, row_end)
 }
 
 /// Returns the offset in 1-d row-major order of `row`, which should be in [0, 14].
@@ -284,30 +299,15 @@ impl Direction {
 pub struct Ray {
     here: Option<Coordinate>,
     direction: Direction,
-    operation: Box<Fn(Coordinate) -> Option<Coordinate>>,
 }
 
 impl Ray {
-    fn box_operation(d: Direction) -> Box<Fn(Coordinate) -> Option<Coordinate>> {
-        match d {
-            Direction::Up => Box::new(|c| c.to_up()),
-            Direction::UpLeft => Box::new(|c| c.to_up().and_then(|s| s.to_left())),
-            Direction::UpRight => Box::new(|c| c.to_up().and_then(|s| s.to_right())),
-            Direction::Down => Box::new(|c| c.to_down()),
-            Direction::DownLeft => Box::new(|c| c.to_down().and_then(|s| s.to_left())),
-            Direction::DownRight => Box::new(|c| c.to_down().and_then(|s| s.to_right())),
-            Direction::Left => Box::new(|c| c.to_left()),
-            Direction::Right => Box::new(|c| c.to_right()),
-        }
-    }
-
     pub fn new(c: Coordinate, d: Direction, ) -> Self {
-        Ray { here: Some(c), direction: d, operation: Ray::box_operation(d), }
+        Ray { here: Some(c), direction: d, }
     }
 
     pub fn reverse(&self) -> Self {
-        let r = self.direction.reverse();
-        Ray { here: self.here, direction: r, operation: Ray::box_operation(r), }
+        Ray { here: self.here, direction: self.direction.reverse(), }
     }
 }
 
@@ -317,7 +317,7 @@ impl Iterator for Ray {
     fn next(&mut self) -> Option<Coordinate> {
         let old_here = self.here;
         if let Some(h) = self.here {
-            self.here = (self.operation)(h);
+            self.here = h.to_direction(self.direction);
         }
         old_here
     }
