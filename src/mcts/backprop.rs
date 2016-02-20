@@ -10,23 +10,22 @@ use std::collections::HashSet;
 use std::cmp;
 use std::iter::Iterator;
 
-struct ParentSelectionIter<'a, R> where R: Rng + 'a {
+struct ParentSelectionIter<'a> {
     parents: ::std::iter::Enumerate<ParentListIter<'a>>,
     player: game::PlayerMarker,
     explore_bias: f64,
-    rng: &'a mut R,
 }
 
-impl<'a, R> ParentSelectionIter<'a, R> where R: Rng + 'a {
-    pub fn new(parents: ParentList<'a>, mut player: game::PlayerMarker, explore_bias: f64, rng: &'a mut R) -> Self {
+impl<'a> ParentSelectionIter<'a> {
+    pub fn new(parents: ParentList<'a>, mut player: game::PlayerMarker, explore_bias: f64) -> Self {
         // player.toggle();
         ParentSelectionIter {
-            parents: parents.iter().enumerate(), player: player, explore_bias: explore_bias, rng: rng,
+            parents: parents.iter().enumerate(), player: player, explore_bias: explore_bias,
         }
     }
 }
 
-impl<'a, R> Iterator for ParentSelectionIter<'a, R> where R: Rng + 'a {
+impl<'a> Iterator for ParentSelectionIter<'a> {
     type Item = usize;
 
     fn next(&mut self) -> Option<usize> {
@@ -54,7 +53,7 @@ pub fn backprop_payoff<'a, R: Rng>(node: MutNode<'a>, payoff: Payoff, player: ga
 fn backprop_payoff_recursive<'a, R: Rng>(mut node: MutNode<'a>, payoff: Payoff, mut player: game::PlayerMarker, explore_bias: f64, rng: &mut R, visited_nodes: &mut HashSet<usize>) {
     trace!("backprop_payoff_recursive: looking at node {}", node.get_id());
     let parent_edge_indices: Vec<usize> =
-        ParentSelectionIter::new(node.get_parent_list(), player, explore_bias, rng).collect();
+        ParentSelectionIter::new(node.get_parent_list(), player, explore_bias).collect();
     trace!("backprop_payoff_recursive: found {} parents of {} (out of {} total); player = {:?}", parent_edge_indices.len(), node.get_id(), node.get_parent_list().len(), player);
     trace!("backprop_payoff_recursive: increment_visit(node {})", node.get_id());
     node.get_data_mut().statistics.increment_visit(payoff);
