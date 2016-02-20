@@ -225,11 +225,11 @@ fn draw_cells_interactive<'a>(cr: &mut cairo::Context, props: &Properties,
     let mut targeted_content = None;
     for (position, content) in contents {
         match action_state {
-            &model::ActionState::Selected { from: from, .. } if  from == position =>
+            &model::ActionState::Selected { from, .. } if  from == position =>
                 selected_content = Some(content),
-            &model::ActionState::Targeted { from: from, .. } if from == position =>
+            &model::ActionState::Targeted { from, .. } if from == position =>
                 selected_content = Some(content),
-            &model::ActionState::Targeted { to: to, .. } if to == position =>
+            &model::ActionState::Targeted { to, .. } if to == position =>
                 targeted_content = Some(content),
             _ => draw_cell(cr, props, position, content),
         }

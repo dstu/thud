@@ -3,6 +3,7 @@ use std::str::FromStr;
 extern crate chrono;
 extern crate fern;
 extern crate gtk;
+#[macro_use]
 extern crate log;
 extern crate rand;
 extern crate thud;
@@ -15,6 +16,8 @@ use thud::gtk_ui;
 
 use gtk::traits::*;
 use gtk::signal::Inhibit;
+
+use std::env::args;
 
 pub fn initialize_search(state: game::State, graph: &mut mcts::Graph) {
     let actions: Vec<game::Action> = state.role_actions(state.active_player().role()).collect();
@@ -38,8 +41,13 @@ fn main() {
     let mut rng = rand::thread_rng();
     let state = game::State::new(board::Cells::default(), String::from_str("Player 1").ok().unwrap(), String::from_str("Player 2").ok().unwrap());
     let mut graph = mcts::Graph::new();
+    let iteration_count = args().skip(1).next().unwrap().parse::<usize>().ok().unwrap();
     initialize_search(state.clone(), &mut graph);
-    for _ in 0..100 {
+    for iteration in 0..iteration_count {
+        if iteration % 1000 == 0 {
+            trace!("iteration: {} / {} = {}%", iteration, iteration_count,
+                   ((10000.0 * (iteration as f64) / (iteration_count as f64)) as usize as f64) / 100.0);
+        }
         mcts::iterate_search(state.clone(), &mut graph, &mut rng, 1.0);
     }
 
