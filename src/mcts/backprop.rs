@@ -10,6 +10,8 @@ use std::collections::HashSet;
 use std::cmp;
 use std::iter::Iterator;
 
+/// Iterable view over parents of a graph node, which selects for those parents
+/// for which this node is a best child.
 struct ParentSelectionIter<'a> {
     parents: ::std::iter::Enumerate<ParentListIter<'a>>,
     player: game::PlayerMarker,
@@ -37,36 +39,46 @@ impl<'a> Iterator for ParentSelectionIter<'a> {
                         trace!("ParentSelectionIter::next: edge {} is a best child", e.get_id());
                         return Some(i)
                     }
-                    trace!("ParentSelectionIter::next: edge {} is not a best child", e.get_id());
+                    trace!("ParentSelectionIter::next: edge {} (data {:?}) is not a best child", e.get_id(), e.get_data());
                 },
             }
         }
     }
 }
 
-pub fn backprop_payoff<'a, R: Rng>(node: MutNode<'a>, payoff: Payoff, player: game::PlayerMarker, explore_bias: f64, rng: &mut R) {
-    // trace!("backprop_payoff: payoff {:?}", payoff);
-    let mut visited_nodes = HashSet::new();
-    backprop_payoff_recursive(node, payoff, player, explore_bias, rng, &mut visited_nodes)
-}
-
-fn backprop_payoff_recursive<'a, R: Rng>(mut node: MutNode<'a>, payoff: Payoff, mut player: game::PlayerMarker, explore_bias: f64, rng: &mut R, visited_nodes: &mut HashSet<usize>) {
-    trace!("backprop_payoff_recursive: looking at node {}", node.get_id());
-    let parent_edge_indices: Vec<usize> =
-        ParentSelectionIter::new(node.get_parent_list(), player, explore_bias).collect();
-    trace!("backprop_payoff_recursive: found {} parents of {} (out of {} total); player = {:?}", parent_edge_indices.len(), node.get_id(), node.get_parent_list().len(), player);
-    trace!("backprop_payoff_recursive: increment_visit(node {})", node.get_id());
-    node.get_data_mut().statistics.increment_visit(payoff);
-    player.toggle();
-    let mut parent_list = node.to_parent_list();
-    for i in parent_edge_indices.into_iter() {
-        let mut e = parent_list.get_edge_mut(i);
-        trace!("backprop_payoff_recursive: increment_visit(edge {})", e.get_id());
-        e.get_data_mut().statistics.increment_visit(payoff);
-        let mut n = e.to_source();
-        if visited_nodes.insert(n.get_id()) {
-            // TODO fix potential stack exhaustion.
-            backprop_payoff_recursive(n, payoff, player, explore_bias, rng, visited_nodes);
+pub fn backprop_payoff<'a, R: Rng>(node: Node<'a>, epoch: usize, payoff: Payoff,
+                                   player: game::PlayerMarker, explore_bias: f64, rng: &mut R) {
+    let mut to_visit = vec![node];
+    while !to_visit.is_empty() {
+        let node = to_visit.pop().unwrap();
+        trace!("backprop_payoff: looking at node {}", node.get_id());
+        if node.get_data().visited_in_backprop_epoch(epoch) {
+            // NOTE: in the case that two child edges of a single node are both
+            // best children (e.g., when dealing with ties) and backprop would
+            // have us traverse both of them to the common ancestor, we
+            // currently choose to update only one of them. This effectively
+            // breaks symmetry between the two edges. Whether this is necessary
+            // or desirable remains to be seen.
+            trace!("backprop_payoff: node {} already visited in epoch {}", node.get_id(), epoch);
+        } else {
+            let parents = node.get_parent_list();
+            let mut parent_count = 0;
+            // TODO: laziness hurts here. Change to collect().
+            for i in ParentSelectionIter::new(node.get_parent_list(), player, explore_bias) {
+                let e = parents.get_edge(i);
+                trace!("backprop_payoff: increment_visit(edge {})", e.get_id());
+                let mut stats = e.get_data().statistics.get();
+                stats.increment_visit(payoff);
+                e.get_data().statistics.set(stats);
+                to_visit.push(e.get_source());
+                parent_count += 1;
+            }
+            trace!("backprop_payoff: found {} parents of {} (out of {} total); player = {:?}",
+                   parent_count, node.get_id(), parents.len(), player);
+            trace!("backprop_payoff: increment_visit(node {})", node.get_id());
+            let mut stats = node.get_data().statistics.get();
+            stats.increment_visit(payoff);
+            node.get_data().statistics.set(stats);
         }
     }
 }

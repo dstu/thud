@@ -8,7 +8,7 @@ mod ucb;
 
 use self::backprop::*;
 use self::payoff::*;
-use self::rollout::*;
+use self::rollout::rollout;
 use self::simulation::*;
 
 pub use self::base::*;
@@ -18,81 +18,154 @@ use ::rand::Rng;
 use ::console_ui;
 use ::game;
 
+use std::cell::Cell;
 use std::collections::HashSet;
+use std::error::Error;
+use std::fmt;
 
-pub fn iterate_search<'a, R>(state: game::State, graph: &'a mut Graph, rng: &mut R, bias: f64) where R: Rng {
-    if let Some(node) = graph.get_node_mut(&state) {
-        iterate_search_helper(state, node, rng, bias, HashSet::new());
-    } else {
-        console_ui::write_board(state.cells());
-        panic!("Unknown root state")
+#[derive(Debug)]
+pub enum SearchError {
+    NoRootState,
+    Cycle,
+    NoTerminalPayoff,
+    UnexpandedInCycle,
+    Ucb(ucb::UcbError),
+}
+
+pub type ActionStatistics = Vec<(game::Action, Statistics)>;
+
+pub type Result = ::std::result::Result<ActionStatistics, SearchError>;
+
+impl fmt::Display for SearchError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            SearchError::NoRootState => write!(f, "Root state not found"),
+            SearchError::Cycle => write!(f, "Cycle encountered during rollout"),
+            SearchError::NoTerminalPayoff => write!(f, "Found terminal game state with no payoff"),
+            SearchError::UnexpandedInCycle =>
+                write!(f, "Found cycle that included an unexpanded vertex"),
+            SearchError::Ucb(ref e) => write!(f, "Error computing UCB score: {}", e),
+        }
     }
 }
 
-fn iterate_search_helper<'a, R>(mut state: game::State, node: MutNode<'a>,
-                                rng: &mut R, bias: f64, bad_children: HashSet<usize>) where R: Rng {
-    let node_id = node.get_id();
-    if bad_children.len() == node.get_child_list().len() {
-        panic!("ran out of children to look at [node paths are all cycles]")
+impl Error for SearchError {
+    fn description(&self) -> &str {
+        match *self {
+            SearchError::NoRootState => "no root state",
+            SearchError::Cycle => "cycle in rollout",
+            SearchError::NoTerminalPayoff => "terminal state with no payoff",
+            SearchError::UnexpandedInCycle => "cycle with unexpanded vertex",
+            SearchError::Ucb(ref e) => e.description(),
+        }
     }
-    match rollout(node, &mut state, bias, rng) {
-        Rollout::Internal(expander) => {
-            let action = expander.get_edge().get_data().action;
-            // info!("iterate_search: expanding from id {}", expander.get_edge().get_source().get_id());
-            // console_ui::write_board(state.cells());
-            state.do_action(&action);
-            let mut expanded_node =
-                expander.expand_to_target(state.clone(), Default::default);
-            // trace!("iterate_search: after expansion, {} parents", expanded_node.get_parent_list().len());
-            // info!("iterate_search: expanding to id {}", expanded_node.get_id());
-            // console_ui::write_board(state.cells());
-            {
-                let mut children = expanded_node.get_child_list_mut();
-                for a in state.role_actions(state.active_player().role()).into_iter() {
-                    let mut child = children.add_child(EdgeData::new(a));
+
+    fn cause(&self) -> Option<&Error> {
+        match *self {
+            SearchError::Ucb(ref e) => Some(e),
+            _ => None,
+        }
+    }
+}
+
+pub struct SearchState<R> where R: Rng {
+    epoch: usize,
+    rng: R,
+    explore_bias: f64,
+}
+
+impl<R> SearchState<R> where R: Rng {
+    pub fn new(rng: R, explore_bias: f64) -> Self {
+        SearchState {
+            epoch: 1,
+            rng: rng,
+            explore_bias: explore_bias,
+        }
+    }
+
+    pub fn search(&mut self, graph: &mut Graph, root_state: game::State) -> Result {
+        match graph.get_node_mut(&root_state) {
+            Some(root) => {
+                trace!("SearchState::search: beginning epoch {}", self.epoch);
+                if let Err(e) = self.iterate_search(root_state.clone(), root) {
+                    return Err(e)
                 }
-            }
-            let mut backprop_player = state.active_player().marker();
-            backprop_player.toggle();
-            let payoff = simulate(&mut state, rng);
-            backprop_payoff(expanded_node, payoff, backprop_player, bias, rng);
-        },
-        Rollout::Terminal(node) => {
-            trace!("iterate_search: found terminal node");
-            match payoff(&state) {
-                None => {
-                    error!("I am confused by this board state, which is terminal but has no payoff:");
-                    console_ui::write_board(state.board());
-                    panic!("Terminal node has no payoff")
-                },
-                Some(p) => backprop_known_payoff(node, p),
-            }
-        },
-        Rollout::Cycle(mut cyclic_edge) => {
-            trace!("iterate_search: hit cycle in search");
-            match cyclic_edge.get_target() {
-                ::search_graph::Target::Expanded(child_node) =>
-                    if child_node.get_id() == node_id {
-                        // Cycle wrapped back around to here.
-                        trace!("cycle back to root");
-                    } else {
-                        // Cycle intersected with some child of original node.
-                        trace!("cycle to intermediate vertex: {}", child_node.get_id());
-                    },
-                ::search_graph::Target::Unexpanded(_) =>
-                    panic!("encountered an unexpanded node in a graph cycle"),
-            }
-            // We "punish" the last edge in the cycle and the vertex it comes
-            // from by pretending we've visited them without having any payoff,
-            // thereby diluting their statistics and discouraging a visit in the
-            // immediate future.
-            // TODO: This is a hack. Most problematically, it doesn't adequately
-            // handle the case of all paths looping back to root. In that case,
-            // we are stuck in a loop incrementing the visit count ad infinitum.
-            cyclic_edge.get_data_mut().statistics.visits += 1;
-            cyclic_edge.get_source_mut().get_data_mut().statistics.visits += 1;
-        },
-        Rollout::Err(e) =>
-            panic!("error in UCB computation {:?}", e),
+            },
+            None => return Err(SearchError::NoRootState),
+        }
+        self.epoch += 1;
+        let mut root_stats = Vec::new();
+        for child_edge in graph.get_node(&root_state).unwrap().get_child_list().iter() {
+            root_stats.push((child_edge.get_data().action,
+                             child_edge.get_data().statistics.get()));
+        }
+        Ok(root_stats)
     }
+
+    fn iterate_search<'a>(&mut self, mut state: game::State, node: MutNode<'a>)
+                          -> ::std::result::Result<(), SearchError> {
+        match rollout(node, &mut state, self.explore_bias, self.epoch, &mut self.rng) {
+            rollout::Result::Internal(expander) => {
+                let expanded_node = expand_children(expander, &mut state);
+                let mut backprop_player = state.active_player().marker();
+                backprop_player.toggle();
+                let payoff = simulate(&mut state, &mut self.rng);
+                backprop_payoff(expanded_node.to_node(), self.epoch, payoff, backprop_player,
+                                self.explore_bias, &mut self.rng);
+                return Ok(())
+            },
+            rollout::Result::Terminal(node) => {
+                match payoff(&state) {
+                    None => return Err(SearchError::NoTerminalPayoff),
+                    Some(p) => {
+                        backprop_known_payoff(node, p);
+                        return Ok(())
+                    },
+                }
+            },
+            rollout::Result::Cycle => Err(SearchError::Cycle),
+            // rollout::Result::Cycle(mut cyclic_edge) => {
+            
+            //     match cyclic_edge.get_target() {
+            //         ::search_graph::Target::Expanded(child_node) =>
+            //             if child_node.get_id() == node_id {
+            //                 trace!("cycle back to root");
+            //             } else {
+            //                 trace!("cycle to intermediate vertex: {}", child_node.get_id());
+            //             },
+            //         ::search_graph::Target::Unexpanded(_) =>
+            //             return Err(SearchError::UnexpandedInCycle),
+            //     }
+            //     // We "punish" the last edge in the cycle and the vertex it
+            //     // comes from by pretending we've visited them without
+            //     // having any payoff, thereby diluting their statistics and
+            //     // discouraging a visit in the immediate future.
+            //     // TODO: This is a hack. Most problematically, it doesn't
+            //     // adequately handle the case of all paths looping back to
+            //     // root. In that case, we are stuck in a loop incrementing
+            //     // the visit count ad infinitum.
+            //     self.punish(&cyclic_edge.get_data().statistics);
+            //     self.punish(&cyclic_edge.get_source().get_data().statistics);
+            // },
+            rollout::Result::Err(e) => Err(SearchError::Ucb(e)),
+        }
+    }
+}
+
+fn punish(stats_cell: &Cell<Statistics>) {
+    let mut stats = stats_cell.get();
+    stats.visits += 1;
+    stats_cell.set(stats);
+}
+
+fn expand_children<'a>(mut expander: EdgeExpander<'a>, state: &mut game::State) -> MutNode<'a> {
+    let mut expanded_node =
+        expander.expand_to_target(state.clone(), Default::default);
+    {
+        let mut children = expanded_node.get_child_list_mut();
+        for a in state.role_actions(state.active_player().role()).into_iter() {
+            let mut child = children.add_child(EdgeData::new(a));
+        }
+    }
+    expanded_node
 }

@@ -1,3 +1,4 @@
+extern crate fern;
 extern crate gtk;
 extern crate cairo;
 extern crate thud;
