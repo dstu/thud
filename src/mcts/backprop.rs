@@ -62,19 +62,21 @@ pub fn backprop_payoff<'a, R: Rng>(node: Node<'a>, epoch: usize, payoff: Payoff,
             trace!("backprop_payoff: node {} already visited in epoch {}", node.get_id(), epoch);
         } else {
             let parents = node.get_parent_list();
-            let mut parent_count = 0;
-            // TODO: laziness hurts here. Change to collect().
-            for i in ParentSelectionIter::new(node.get_parent_list(), player, explore_bias) {
+            // Collect parent nodes into a materialized collection because
+            // updating the statistics of parent edges whether they are best
+            // children, and ParentSelectionIter is lazy.
+            let best_parents: Vec<usize> =
+                ParentSelectionIter::new(node.get_parent_list(), player, explore_bias).collect();
+            trace!("backprop_payoff: found {} parents of {} (out of {} total); player = {:?}",
+                   best_parents.len(), node.get_id(), parents.len(), player);
+            for i in best_parents.into_iter() {
                 let e = parents.get_edge(i);
                 trace!("backprop_payoff: increment_visit(edge {})", e.get_id());
                 let mut stats = e.get_data().statistics.get();
                 stats.increment_visit(payoff);
                 e.get_data().statistics.set(stats);
                 to_visit.push(e.get_source());
-                parent_count += 1;
             }
-            trace!("backprop_payoff: found {} parents of {} (out of {} total); player = {:?}",
-                   parent_count, node.get_id(), parents.len(), player);
             trace!("backprop_payoff: increment_visit(node {})", node.get_id());
             let mut stats = node.get_data().statistics.get();
             stats.increment_visit(payoff);
@@ -127,7 +129,8 @@ fn set_known_payoff_from_children<'a>(node: &mut MutNode<'a>) -> bool {
                             // TODO: This is probably wrong; we likely want to
                             // do min/max bounds on payoff depending on whose
                             // turn it is.
-                            Some(p) => Some(Payoff { values: [cmp::max(p.values[0], known.values[0]),
+                            Some(p) => Some(Payoff { weight: 1,
+                                                     values: [cmp::max(p.values[0], known.values[0]),
                                                               cmp::max(p.values[1], known.values[1])], }),
                         },
                     },

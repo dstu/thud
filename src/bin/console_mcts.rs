@@ -76,7 +76,7 @@ fn main() {
                 }
             },
             Err(e) => {
-                error!("Error in seach iteration {}: {:?}", iteration, e);
+                error!("Error in seach iteration {}: {}", iteration, e);
                 break
             },
         }

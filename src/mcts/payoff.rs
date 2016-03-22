@@ -4,6 +4,7 @@ use std::fmt;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Payoff {
+    pub weight: usize,
     pub values: [usize; 2],
 }
 
@@ -15,13 +16,13 @@ impl Payoff {
 
 impl Default for Payoff {
     fn default() -> Self {
-        Payoff { values: [0; 2], }
+        Payoff { weight: 1, values: [0; 2], }
     }
 }
 
 impl fmt::Debug for Payoff {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "[{}, {}]", self.values[0], self.values[1])
+        write!(f, "[{}, {}]@{}", self.values[0], self.values[1], self.weight)
     }
 }
 

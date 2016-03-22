@@ -1,15 +1,14 @@
 mod base;
 mod backprop;
+mod expand;
 mod payoff;
 mod rollout;
 mod statistics;
-mod simulation;
 mod ucb;
 
 use self::backprop::*;
 use self::payoff::*;
 use self::rollout::{RolloutError, rollout};
-use self::simulation::*;
 
 pub use self::base::*;
 pub use self::statistics::*;
@@ -107,10 +106,10 @@ impl<R> SearchState<R> where R: Rng {
                           -> ::std::result::Result<(), SearchError> {
         match rollout(node, &mut state, self.explore_bias, self.epoch, &mut self.rng) {
             Ok(Target::Unexpanded(expander)) => {
-                let expanded_node = expand_children(expander, &mut state);
-                let mut backprop_player = state.active_player().marker();
-                backprop_player.toggle();
-                let payoff = simulate(&mut state, &mut self.rng);
+                let (expanded_node, payoff) = expand::expand(expander, state.clone(), &mut self.rng);
+                trace!("SearchState::iterate_search: expanded to node {} to get payoff {:?}",
+                       expanded_node.get_id(), payoff);
+                let backprop_player = state.active_player().marker();
                 backprop_payoff(expanded_node.to_node(), self.epoch, payoff, backprop_player,
                                 self.explore_bias, &mut self.rng);
                 return Ok(())
@@ -158,16 +157,4 @@ fn punish(stats_cell: &Cell<Statistics>) {
     let mut stats = stats_cell.get();
     stats.visits += 1;
     stats_cell.set(stats);
-}
-
-fn expand_children<'a>(mut expander: EdgeExpander<'a>, state: &mut game::State) -> MutNode<'a> {
-    let mut expanded_node =
-        expander.expand_to_target(state.clone(), Default::default);
-    {
-        let mut children = expanded_node.get_child_list_mut();
-        for a in state.role_actions(state.active_player().role()).into_iter() {
-            let mut child = children.add_child(EdgeData::new(a));
-        }
-    }
-    expanded_node
 }

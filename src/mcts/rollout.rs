@@ -61,11 +61,17 @@ pub fn rollout<'a, R: Rng>(mut node: MutNode<'a>, state: &mut game::State, bias:
     loop {
         if !path.is_head_expanded() {
             match path.to_head() {
-                Target::Unexpanded(edge) =>
+                Target::Unexpanded(edge) => {
+                    let edge_id = edge.get_id();
+                    let source_id = edge.get_source().get_id();
                     match edge.to_target() {
-                        Target::Unexpanded(expander) => return Ok(Target::Unexpanded(expander)),
+                        Target::Unexpanded(expander) => {
+                            trace!("rollout: ended on edge {} (from vertex {})", edge_id, source_id);
+                            return Ok(Target::Unexpanded(expander))
+                        },
                         _ => panic!("unexpanded search path head resolves to expanded edge"),
-                    },
+                    }
+                },
                 _ => panic!("search path head should not be expanded but resolves as such"),
             }
         }
@@ -80,7 +86,8 @@ pub fn rollout<'a, R: Rng>(mut node: MutNode<'a>, state: &mut game::State, bias:
         match path.push(|n| {
             let index = try!(ucb::find_best_child_edge(
                 &n.get_child_list(), state.active_player().marker(), epoch, bias, rng));
-            trace!("rollout: select child {}", index);
+            trace!("rollout: select child {} of node {} (edge {})",
+                   index, n.get_id(), n.get_child_list().get_edge(index).get_id());
             Ok(Some(Traversal::Child(index)))
         }) {
             Err(::search_graph::SearchError::SelectionError(e)) =>

@@ -8,13 +8,13 @@ use ::game;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Statistics {
-    pub visits: usize,
+    pub visits: usize,  // TODO: this is redundant with the "weight" field in payoff.
     pub payoff: Payoff,
 }
 
 impl Statistics {
     pub fn increment_visit(&mut self, p: Payoff) {
-        self.visits += 1;
+        self.visits += p.weight;
         self.payoff.values[0] += p.values[0];
         self.payoff.values[1] += p.values[1];
     }

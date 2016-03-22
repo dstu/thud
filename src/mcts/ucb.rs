@@ -64,22 +64,24 @@ pub fn score(log_parent_visits: f64, child_visits: f64, child_payoff: f64, explo
 /// Returns `true` iff `e` could be selected by the UCB policy during rollout
 /// from its parent vertex.
 pub fn is_best_child<'a>(e: &Edge<'a>, player: game::PlayerMarker, explore_bias: f64) -> bool {
-    // TODO: this is totally broken because it assumes we haven't yet altered
-    // the vertex statistics.
+    // TODO: assumes we haven't yet altered the parent vertex
+    // statistics. Callers should ensure that this is not called more than once
+    // for a given parent vertex.
     let stats = e.get_data().statistics.get();
+    trace!("is_best_child: edge {} has {} visits", e.get_id(), stats.visits);
     if stats.visits == 0 {
         // Edge has been visited, but statistics aren't yet updated.
-        trace!("edge {} is a best child because stats.visits == 0", e.get_id());
+        trace!("is_best_child: edge {} is a best child because stats.visits == 0", e.get_id());
         return true
     }
     let parent = e.get_source();
     let siblings = parent.get_child_list();
     if siblings.len() == 1 {
         // Only child of parent.
-        trace!("edge {} is a best child because it has no siblings", e.get_id());
+        trace!("is_best_child: edge {} is a best child because it has no siblings", e.get_id());
         return true
     }
-    trace!("edge {} (from node {}) has {} siblings", e.get_id(), parent.get_id(), siblings.len());
+    trace!("is_best_child: edge {} (from node {}) has {} siblings", e.get_id(), parent.get_id(), siblings.len());
     let parent_stats = parent.get_data().statistics.get();
     let log_parent_visits = {
         let parent_visits = parent_stats.visits;
@@ -88,7 +90,7 @@ pub fn is_best_child<'a>(e: &Edge<'a>, player: game::PlayerMarker, explore_bias:
             // parent vertex should never be less than the number of visits to a
             // child edge. But it's reasonable to fall back to a value of 0.0,
             // just in case.
-            error!("edge {} (from node {}) has {} visits, but node {} has {} visits",
+            error!("is_best_child: edge {} (from node {}) has {} visits, but node {} has {} visits",
                    e.get_id(), parent.get_id(), stats.visits, parent.get_id(), parent_stats.visits);
             0.0
         } else {
@@ -105,7 +107,8 @@ pub fn is_best_child<'a>(e: &Edge<'a>, player: game::PlayerMarker, explore_bias:
                 // This sibling has not yet been visited. We know that this edge
                 // has been visited, and we will always visit all siblings at
                 // least once before returning to this one.
-                trace!("edge {} is not a best child because it has an unexpanded sibling", e.get_id());
+                trace!("edge {} is not a best child because it has an unexpanded sibling and its own visit count is {}",
+                       e.get_id(), stats.visits);
                 return false
             },
             search_graph::Target::Expanded(_) => {
