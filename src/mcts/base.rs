@@ -14,3 +14,4 @@ pub type MutNode<'a> = search_graph::MutNode<'a, game::State, NodeData, EdgeData
 pub type MutChildList<'a> = search_graph::MutChildList<'a, game::State, NodeData, EdgeData>;
 pub type MutParentList<'a> = search_graph::MutParentList<'a, game::State, NodeData, EdgeData>;
 pub type EdgeExpander<'a> = search_graph::EdgeExpander<'a, game::State, NodeData, EdgeData>;
+pub type SearchPath<'a> = search_graph::SearchPath<'a, game::State, NodeData, EdgeData>;

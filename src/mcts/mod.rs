@@ -8,7 +8,7 @@ mod ucb;
 
 use self::backprop::*;
 use self::payoff::*;
-use self::rollout::rollout;
+use self::rollout::{RolloutError, rollout};
 use self::simulation::*;
 
 pub use self::base::*;
@@ -17,6 +17,7 @@ pub use self::statistics::*;
 use ::rand::Rng;
 use ::console_ui;
 use ::game;
+use ::search_graph::Target;
 
 use std::cell::Cell;
 use std::collections::HashSet;
@@ -105,7 +106,7 @@ impl<R> SearchState<R> where R: Rng {
     fn iterate_search<'a>(&mut self, mut state: game::State, node: MutNode<'a>)
                           -> ::std::result::Result<(), SearchError> {
         match rollout(node, &mut state, self.explore_bias, self.epoch, &mut self.rng) {
-            rollout::Result::Internal(expander) => {
+            Ok(Target::Unexpanded(expander)) => {
                 let expanded_node = expand_children(expander, &mut state);
                 let mut backprop_player = state.active_player().marker();
                 backprop_player.toggle();
@@ -114,16 +115,17 @@ impl<R> SearchState<R> where R: Rng {
                                 self.explore_bias, &mut self.rng);
                 return Ok(())
             },
-            rollout::Result::Terminal(node) => {
+            Ok(Target::Expanded(node)) =>
                 match payoff(&state) {
                     None => return Err(SearchError::NoTerminalPayoff),
                     Some(p) => {
                         backprop_known_payoff(node, p);
                         return Ok(())
                     },
-                }
-            },
-            rollout::Result::Cycle => Err(SearchError::Cycle),
+                },
+            Err(RolloutError::Cycle(_)) => panic!("cycle in rollout"),
+            Err(RolloutError::Ucb(e)) => Err(SearchError::Ucb(e)),
+            // Err(e) => panic!("{:?}", e),
             // rollout::Result::Cycle(mut cyclic_edge) => {
             
             //     match cyclic_edge.get_target() {
@@ -147,7 +149,7 @@ impl<R> SearchState<R> where R: Rng {
             //     self.punish(&cyclic_edge.get_data().statistics);
             //     self.punish(&cyclic_edge.get_source().get_data().statistics);
             // },
-            rollout::Result::Err(e) => Err(SearchError::Ucb(e)),
+            // Err(RolloutError::Ucb(e)) => Err(SearchError::Ucb(e)),
         }
     }
 }
