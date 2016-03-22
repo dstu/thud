@@ -78,11 +78,15 @@ pub fn rollout<'a, R: Rng>(mut node: MutNode<'a>, state: &mut game::State, bias:
         }
 
         match path.push(|n| {
-            Ok(Some(Traversal::Child(try!(ucb::find_best_child_edge(
-                &n.get_child_list(), state.active_player().marker(), epoch, bias, rng)))))
+            let index = try!(ucb::find_best_child_edge(
+                &n.get_child_list(), state.active_player().marker(), epoch, bias, rng));
+            trace!("rollout: select child {}", index);
+            Ok(Some(Traversal::Child(index)))
         }) {
-            Err(::search_graph::SearchError::SelectionError(e)) => return Err(RolloutError::Ucb(e)),
-            Err(e) => panic!("Internal error in rollout: {}", e),
+            Err(::search_graph::SearchError::SelectionError(e)) =>
+                return Err(RolloutError::Ucb(e)),
+            Err(e) =>
+                panic!("Internal error in rollout: {}", e),
             _ => (),
         }
     }
