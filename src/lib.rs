@@ -3,6 +3,7 @@
 #![feature(unboxed_closures)]
 
 extern crate cairo;
+extern crate clap;
 extern crate glib;
 extern crate gtk;
 extern crate gtk_sys;
@@ -17,3 +18,5 @@ pub mod mcts;
 
 pub mod console_ui;
 pub mod gtk_ui;
+
+pub mod util;

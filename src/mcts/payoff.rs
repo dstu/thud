@@ -1,6 +1,7 @@
 use ::game;
 use ::game::board;
 use std::fmt;
+use std::ops::{Add, AddAssign};
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Payoff {
@@ -9,8 +10,27 @@ pub struct Payoff {
 }
 
 impl Payoff {
-    pub fn score(&self, player: game::PlayerMarker) -> usize {
-        self.values[player.index()]
+    pub fn score(&self, player: game::PlayerMarker) -> isize {
+        let mut other_player = player.clone();
+        other_player.toggle();
+        (self.values[player.index()] as isize) - (self.values[other_player.index()] as isize)
+    }
+}
+
+impl Add for Payoff {
+    type Output = Payoff;
+
+    fn add(self, other: Payoff) -> Payoff {
+        Payoff { weight: self.weight + other.weight,
+                 values: [self.values[0] + other.values[0], self.values[1] + other.values[1]], }
+    }
+}
+
+impl AddAssign for Payoff {
+    fn add_assign(&mut self, other: Payoff) {
+        self.weight += other.weight;
+        self.values[0] += other.values[0];
+        self.values[1] += other.values[1];
     }
 }
 

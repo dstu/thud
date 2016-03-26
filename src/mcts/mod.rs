@@ -8,7 +8,6 @@ mod ucb;
 
 use self::backprop::*;
 use self::payoff::*;
-use self::rollout::{RolloutError, rollout};
 
 pub use self::base::*;
 pub use self::statistics::*;
@@ -68,6 +67,11 @@ impl Error for SearchError {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct SearchSettings {
+    pub simulation_count: usize,
+}
+
 pub struct SearchState<R> where R: Rng {
     epoch: usize,
     rng: R,
@@ -83,11 +87,13 @@ impl<R> SearchState<R> where R: Rng {
         }
     }
 
-    pub fn search(&mut self, graph: &mut Graph, root_state: game::State) -> Result {
+    pub fn search<F>(&mut self, graph: &mut Graph, root_state: game::State, mut settings_fn: F)
+                     -> Result where F: FnMut(usize)-> SearchSettings {
         match graph.get_node_mut(&root_state) {
             Some(root) => {
                 trace!("SearchState::search: beginning epoch {}", self.epoch);
-                if let Err(e) = self.iterate_search(root_state.clone(), root) {
+                let settings = settings_fn(self.epoch);
+                if let Err(e) = self.iterate_search(root_state.clone(), root, &settings) {
                     return Err(e)
                 }
             },
@@ -102,15 +108,19 @@ impl<R> SearchState<R> where R: Rng {
         Ok(root_stats)
     }
 
-    fn iterate_search<'a>(&mut self, mut state: game::State, node: MutNode<'a>)
+    fn iterate_search<'a>(&mut self, mut state: game::State, node: MutNode<'a>,
+                          settings: &SearchSettings)
                           -> ::std::result::Result<(), SearchError> {
-        match rollout(node, &mut state, self.explore_bias, self.epoch, &mut self.rng) {
+        match rollout::rollout(node, &mut state, self.explore_bias, self.epoch, &mut self.rng) {
             Ok(Target::Unexpanded(expander)) => {
-                let (expanded_node, payoff) = expand::expand(expander, state.clone(), &mut self.rng);
-                trace!("SearchState::iterate_search: expanded to node {} to get payoff {:?}",
-                       expanded_node.get_id(), payoff);
-                let backprop_player = state.active_player().marker();
-                backprop_payoff(expanded_node.to_node(), self.epoch, payoff, backprop_player,
+                let (expanded_node, mut player, payoff) = expand::expand(
+                    expander, state.clone(), &mut self.rng, settings.simulation_count);
+                // The player returned by expand::expand() is the player who is
+                // now active, so we toggle the player to see who made the move
+                // that got to the expanded node.
+                player.toggle();
+                trace!("SearchState::iterate_search: expanded node {} with incoming move by {:?} gets payoff {:?}", expanded_node.get_id(), player, payoff);
+                backprop_payoff(expanded_node.to_node(), self.epoch, payoff, player,
                                 self.explore_bias, &mut self.rng);
                 return Ok(())
             },
@@ -122,8 +132,8 @@ impl<R> SearchState<R> where R: Rng {
                         return Ok(())
                     },
                 },
-            Err(RolloutError::Cycle(_)) => panic!("cycle in rollout"),
-            Err(RolloutError::Ucb(e)) => Err(SearchError::Ucb(e)),
+            Err(rollout::RolloutError::Cycle(_)) => panic!("cycle in rollout"),
+            Err(rollout::RolloutError::Ucb(e)) => Err(SearchError::Ucb(e)),
             // Err(e) => panic!("{:?}", e),
             // rollout::Result::Cycle(mut cyclic_edge) => {
             
@@ -148,7 +158,7 @@ impl<R> SearchState<R> where R: Rng {
             //     self.punish(&cyclic_edge.get_data().statistics);
             //     self.punish(&cyclic_edge.get_source().get_data().statistics);
             // },
-            // Err(RolloutError::Ucb(e)) => Err(SearchError::Ucb(e)),
+            // Err(rollout::RolloutError::Ucb(e)) => Err(SearchError::Ucb(e)),
         }
     }
 }

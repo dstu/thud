@@ -48,7 +48,8 @@ fn main() {
             trace!("iteration: {} / {} = {}%", iteration, iteration_count,
                    ((10000.0 * (iteration as f64) / (iteration_count as f64)) as usize as f64) / 100.0);
         }
-        match search_state.search(&mut graph, state.clone()) {
+        match search_state.search(&mut graph, state.clone(),
+                                  |_: usize| mcts::SearchSettings { simulation_count: 200, }) {
             Ok(_) => (),
             Err(e) => {
                 error!("Error in seach iteration {}: {:?}", iteration, e);

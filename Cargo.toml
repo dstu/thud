@@ -5,6 +5,7 @@ authors = ["Stu Black"]
 
 [dependencies]
 chrono = "0.2.*"
+clap = "2.2.*"
 glib = "0.0.7"
 gtk = "0.0.6"
 gtk-sys = "0.2.1"

@@ -48,10 +48,10 @@ impl<'a> Iterator for ParentSelectionIter<'a> {
 
 pub fn backprop_payoff<'a, R: Rng>(node: Node<'a>, epoch: usize, payoff: Payoff,
                                    player: game::PlayerMarker, explore_bias: f64, rng: &mut R) {
-    let mut to_visit = vec![node];
+    let mut to_visit = vec![(player, node)];
     while !to_visit.is_empty() {
-        let node = to_visit.pop().unwrap();
-        trace!("backprop_payoff: looking at node {}", node.get_id());
+        let (player, node) = to_visit.pop().unwrap();
+        trace!("backprop_payoff: looking at moves by player {:?} incoming to node {}", player, node.get_id());
         if node.get_data().visited_in_backprop_epoch(epoch) {
             // NOTE: in the case that two child edges of a single node are both
             // best children (e.g., when dealing with ties) and backprop would
@@ -63,11 +63,11 @@ pub fn backprop_payoff<'a, R: Rng>(node: Node<'a>, epoch: usize, payoff: Payoff,
         } else {
             let parents = node.get_parent_list();
             // Collect parent nodes into a materialized collection because
-            // updating the statistics of parent edges whether they are best
-            // children, and ParentSelectionIter is lazy.
+            // updating the statistics of parent edges changes their best child
+            // status, and ParentSelectionIter is lazy.
             let best_parents: Vec<usize> =
                 ParentSelectionIter::new(node.get_parent_list(), player, explore_bias).collect();
-            trace!("backprop_payoff: found {} parents of {} (out of {} total); player = {:?}",
+            trace!("backprop_payoff: found {} parents of node {} (out of {} total); player = {:?}",
                    best_parents.len(), node.get_id(), parents.len(), player);
             for i in best_parents.into_iter() {
                 let e = parents.get_edge(i);
@@ -75,7 +75,9 @@ pub fn backprop_payoff<'a, R: Rng>(node: Node<'a>, epoch: usize, payoff: Payoff,
                 let mut stats = e.get_data().statistics.get();
                 stats.increment_visit(payoff);
                 e.get_data().statistics.set(stats);
-                to_visit.push(e.get_source());
+                let mut parent_player = player.clone();
+                parent_player.toggle();
+                to_visit.push((parent_player, e.get_source()));
             }
             trace!("backprop_payoff: increment_visit(node {})", node.get_id());
             let mut stats = node.get_data().statistics.get();

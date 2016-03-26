@@ -5,15 +5,19 @@ use ::mcts::payoff::{Payoff, payoff};
 use ::mcts::statistics::EdgeData;
 use ::rand::Rng;
 
-pub fn expand<'a, R>(expander: EdgeExpander<'a>, mut state: game::State, rng: &mut R)
-                     -> (MutNode<'a>, Payoff) where R: Rng{
-    state.do_action(&expander.get_edge().get_data().action);
+pub fn expand<'a, R: Rng>(expander: EdgeExpander<'a>, mut state: game::State, rng: &mut R,
+                          simulation_count: usize) -> (MutNode<'a>, game::PlayerMarker, Payoff) {
     match expander.expand_to_edge(state.clone(), Default::default) {
         ::search_graph::Expanded::New(mut e) => {
             let mut target = e.to_target();
-            trace!("expand: made new node {}", target.get_id());
+            trace!("expand: made new node {}; now to play: {:?}", target.get_id(), state.active_player());
             expand_children(&mut target, &state);
-            (target, simulate(&mut state, rng))
+            let mut payoff = Payoff { weight: 0, values: [0, 0], };
+            for _ in 0..simulation_count {
+                payoff += simulate(&mut state.clone(), rng);
+            }
+            trace!("expand: simulation of new node {} gives payoff {:?}", target.get_id(), payoff);
+            (target, state.active_player().marker(), payoff)
         },
         ::search_graph::Expanded::Extant(e) => {
             let payoff = {
@@ -28,7 +32,10 @@ pub fn expand<'a, R>(expander: EdgeExpander<'a>, mut state: game::State, rng: &m
                 edge_stats.increment_visit(payoff);
                 e.get_data().statistics.set(edge_stats);
             }
-            (e.to_source(), payoff)
+            trace!("expand: edge {} given payoff {:?} from extant node {}", e.get_id(), payoff, e.get_target().get_id());
+            let mut parent_player = state.active_player().marker();
+            parent_player.toggle();
+            (e.to_source(), parent_player, payoff)
         },
     }
 }
@@ -54,6 +61,7 @@ pub fn simulate<R>(state: &mut game::State, rng: &mut R) -> Payoff where R: Rng 
 }
 
 fn expand_children<'a>(node: &mut MutNode<'a>, state: &game::State) {
+    trace!("expanding moves at node {} for {:?}", node.get_id(), state.active_player());
     let mut children = node.get_child_list_mut();
     let mut i = 0;
     for a in state.role_actions(state.active_player().role()).into_iter() {

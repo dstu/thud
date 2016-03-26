@@ -55,8 +55,8 @@ impl<'a> Error for RolloutError<'a> {
     }
 }
 
-pub fn rollout<'a, R: Rng>(mut node: MutNode<'a>, state: &mut game::State, bias: f64, epoch: usize,
-                           rng: &mut R) -> Result<'a> {
+pub fn rollout<'a, R: Rng>(mut node: MutNode<'a>, state: &mut game::State, explore_bias: f64,
+                           epoch: usize, rng: &mut R) -> Result<'a> {
     let mut path = SearchPath::new(node);
     loop {
         if !path.is_head_expanded() {
@@ -66,7 +66,7 @@ pub fn rollout<'a, R: Rng>(mut node: MutNode<'a>, state: &mut game::State, bias:
                     let source_id = edge.get_source().get_id();
                     match edge.to_target() {
                         Target::Unexpanded(expander) => {
-                            trace!("rollout: ended on edge {} (from vertex {})", edge_id, source_id);
+                            trace!("rollout: ended on edge {} (from node {})", edge_id, source_id);
                             return Ok(Target::Unexpanded(expander))
                         },
                         _ => panic!("unexpanded search path head resolves to expanded edge"),
@@ -84,17 +84,23 @@ pub fn rollout<'a, R: Rng>(mut node: MutNode<'a>, state: &mut game::State, bias:
         }
 
         match path.push(|n| {
-            let index = try!(ucb::find_best_child_edge(
-                &n.get_child_list(), state.active_player().marker(), epoch, bias, rng));
-            trace!("rollout: select child {} of node {} (edge {})",
-                   index, n.get_id(), n.get_child_list().get_edge(index).get_id());
+            let index = try!(ucb::find_best_child_edge_index(
+                &n.get_child_list(), state.active_player().marker(), epoch, explore_bias, rng));
+            trace!("rollout: select child {} of node {} (edge {} with statistics {:?}), outgoing play {:?} by {:?}",
+                   index, n.get_id(), n.get_child_list().get_edge(index).get_id(), n.get_child_list().get_edge(index).get_data().statistics.get(),
+                   n.get_child_list().get_edge(index).get_data().action, state.active_player());
             Ok(Some(Traversal::Child(index)))
         }) {
+            Ok(Some(selected_edge)) => {
+                trace!("rollout: performing action {:?} by {:?}",
+                       selected_edge.get_data().action, state.active_player());
+                state.do_action(&selected_edge.get_data().action)
+            },
+            Ok(None) => panic!("rollout: failed to select a child"),
             Err(::search_graph::SearchError::SelectionError(e)) =>
                 return Err(RolloutError::Ucb(e)),
             Err(e) =>
                 panic!("Internal error in rollout: {}", e),
-            _ => (),
         }
     }
 }
