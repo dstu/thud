@@ -85,17 +85,20 @@ fn main() {
                     count
                 };
                 trace!("total visits at top level: {}", toplevel_visits);
-                if simulation_count == 1 && toplevel_visits != iteration + 1 {
-                    console_ui::write_board(state.board());
-                    for (action, stats) in stats.into_iter() {
-                        println!("{:?}: [{}, {}] = {:?} / {}", action,
-                                 (stats.payoff.values[0] as f64) / (stats.visits as f64),
-                                 (stats.payoff.values[1] as f64) / (stats.visits as f64),
-                                 stats.payoff, stats.visits);
-                    }
-                    panic!("total visits at top level is {}, but iteration count is {}",
-                           toplevel_visits, iteration)
-                }
+                // TODO: this commented-out block is only valid when we haven't
+                // propagated a multi-visit payoff upwards from conneting to an
+                // extant vertex.
+                // if simulation_count == 1 && toplevel_visits != iteration + 1 {
+                //     console_ui::write_board(state.board());
+                //     for (action, stats) in stats.into_iter() {
+                //         println!("{:?}: [{}, {}] = {:?} / {}", action,
+                //                  (stats.payoff.values[0] as f64) / (stats.visits as f64),
+                //                  (stats.payoff.values[1] as f64) / (stats.visits as f64),
+                //                  stats.payoff, stats.visits);
+                //     }
+                //     panic!("total visits at top level is {}, but iteration count is {}",
+                //            toplevel_visits, iteration)
+                // }
                 if iteration % 1000 == 0 || iteration + 1 == iteration_count {
                     println!("root stats:");
                     for (action, stats) in stats.into_iter() {

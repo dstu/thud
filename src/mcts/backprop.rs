@@ -71,7 +71,7 @@ pub fn backprop_payoff<'a, R: Rng>(node: Node<'a>, epoch: usize, payoff: Payoff,
                    best_parents.len(), node.get_id(), parents.len(), player);
             for i in best_parents.into_iter() {
                 let e = parents.get_edge(i);
-                trace!("backprop_payoff: increment_visit(edge {})", e.get_id());
+                trace!("backprop_payoff: increment_visit(edge {}, {:?})", e.get_id(), payoff);
                 let mut stats = e.get_data().statistics.get();
                 stats.increment_visit(payoff);
                 e.get_data().statistics.set(stats);
@@ -79,7 +79,7 @@ pub fn backprop_payoff<'a, R: Rng>(node: Node<'a>, epoch: usize, payoff: Payoff,
                 parent_player.toggle();
                 to_visit.push((parent_player, e.get_source()));
             }
-            trace!("backprop_payoff: increment_visit(node {})", node.get_id());
+            trace!("backprop_payoff: increment_visit(node {}, {:?})", node.get_id(), payoff);
             let mut stats = node.get_data().statistics.get();
             stats.increment_visit(payoff);
             node.get_data().statistics.set(stats);
