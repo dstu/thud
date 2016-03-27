@@ -93,9 +93,7 @@ impl<R> SearchState<R> where R: Rng {
             Some(root) => {
                 trace!("SearchState::search: beginning epoch {}", self.epoch);
                 let settings = settings_fn(self.epoch);
-                if let Err(e) = self.iterate_search(root_state.clone(), root, &settings) {
-                    return Err(e)
-                }
+                try!(self.iterate_search(root_state.clone(), root, &settings));
             },
             None => return Err(SearchError::NoRootState),
         }
