@@ -77,6 +77,7 @@ pub fn rollout<'a, R: Rng>(node: MutNode<'a>, state: &mut State, explore_bias: f
             return Err(RolloutError::Cycle(path))
         }
 
+        let mut no_children = false;
         match path.push(|n| {
             let index = try!(ucb::find_best_child_edge_index(
                 &n.get_child_list(), state.active_player().role(), epoch, explore_bias, rng));
@@ -91,10 +92,19 @@ pub fn rollout<'a, R: Rng>(node: MutNode<'a>, state: &mut State, explore_bias: f
                 state.do_action(&selected_edge.get_data().action)
             },
             Ok(None) => panic!("rollout: failed to select a child"),
+            Err(::search_graph::SearchError::SelectionError(ucb::UcbError::NoChildren)) =>
+                no_children = true,
             Err(::search_graph::SearchError::SelectionError(e)) =>
                 return Err(RolloutError::Ucb(e)),
             Err(e) =>
                 panic!("Internal error in rollout: {}", e),
+        }
+
+        if no_children {
+            match path.to_head() {
+                Target::Expanded(node) => return Ok(Target::Expanded(node)),
+                _ => panic!("Rollout found no children, but path is on an edge"),
+            }
         }
     }
 }

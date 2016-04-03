@@ -122,9 +122,13 @@ impl<R> SearchState<R> where R: Rng {
             },
             Ok(Target::Expanded(node)) =>
                 match payoff(&state) {
-                    None => return Err(SearchError::NoTerminalPayoff),
+                    None => {
+                        error!("SearchState:iterate_search: no terminal payoff for node {}", node.get_id());
+                        return Err(SearchError::NoTerminalPayoff)
+                    },
                     Some(p) => {
-                        backprop_known_payoff(node, p);
+                        trace!("SearchState::iterate_search: ended on expanded node {} with payoff {:?}", node.get_id(), p);
+                        backprop_payoff(node.to_node(), self.epoch, p, state.active_player().role().toggle(), self.explore_bias, &mut self.rng);
                         return Ok(())
                     },
                 },
