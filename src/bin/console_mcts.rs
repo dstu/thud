@@ -10,13 +10,10 @@ extern crate thud;
 
 use ::clap::App;
 
-use ::thud::console_ui;
 use ::thud::game;
-use ::thud::game::board;
 use ::thud::mcts;
-use ::thud::mcts::State;
 
-pub fn initialize_search(state: State, graph: &mut mcts::Graph) {
+pub fn initialize_search(state: mcts::State, graph: &mut mcts::Graph) {
     let actions: Vec<game::Action> = state.role_actions(state.active_player().role()).collect();
     let mut children = graph.add_root(state, Default::default()).to_child_list();
     for a in actions.into_iter() {
@@ -61,9 +58,23 @@ fn main() {
             Ok(x) => x,
             Err(e) => panic!("Bad exploration bias: {}", e),
         };
+    let initial_cells =
+        match matches.value_of(::thud::util::INITIAL_BOARD_FLAG).unwrap().parse::<::thud::util::InitialBoard>() {
+            Ok(x) => x.cells(),
+            Err(e) => panic!("Bad initial board configuration: {}", e),
+        };
+    let toggle_initial_player =
+        match matches.value_of(::thud::util::INITIAL_PLAYER_FLAG) {
+            None | Some("dwarf") => false,
+            Some("troll") => true,
+            Some(x) => panic!("Bad initial player: {}", x),
+        };
 
     // Play game.
-    let state = State::new(board::Cells::default(), String::from_str("Player 1").ok().unwrap(), String::from_str("Player 2").ok().unwrap());
+    let mut state = mcts::State::new(initial_cells, String::from_str("Player 1").ok().unwrap(), String::from_str("Player 2").ok().unwrap());
+    if toggle_initial_player {
+        state.toggle_active_player();
+    }
     let mut graph = mcts::Graph::new();
 
     initialize_search(state.clone(), &mut graph);

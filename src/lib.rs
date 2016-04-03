@@ -3,6 +3,7 @@
 #![feature(unboxed_closures)]
 
 extern crate cairo;
+#[macro_use]
 extern crate clap;
 extern crate glib;
 extern crate gtk;

@@ -53,7 +53,7 @@ pub fn backprop_payoff<'a, R: Rng>(node: Node<'a>, epoch: usize, payoff: Payoff,
         trace!("backprop_payoff: looking at moves by player {:?} incoming to node {}", player, node.get_id());
         if node.get_data().visited_in_backprop_epoch(epoch) {
             trace!("backprop_payoff: node {} already visited in epoch {}", node.get_id(), epoch);
-        } else {
+        } else {                
             let parents = node.get_parent_list();
             // Collect parent nodes into a materialized collection because
             // updating the statistics of parent edges changes their best child

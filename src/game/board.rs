@@ -661,3 +661,65 @@ impl CellEquivalence for TranspositionalEquivalence {
             || equivalences[4] || equivalences[5] || equivalences[6] || equivalences[7]
     }
 }
+
+
+
+pub fn decode_board(encoded: &str) -> Cells {
+    assert_eq!(encoded.len(), 241);
+    let mut chars = encoded.chars().skip(1);  // Skip leading newline.
+    let mut board = Cells::new();
+    for row in 0u8..15u8 {
+        for col in 0u8..15u8 {
+            let value = chars.next().unwrap();
+            if let Some(c) = Coordinate::new(row, col) {
+                board[c] = match value {
+                    'T' => Content::Occupied(Token::Troll),
+                    'd' => Content::Occupied(Token::Dwarf),
+                    'O' => Content::Occupied(Token::Stone),
+                    '_' => Content::Empty,
+                    x @ _ => panic!("Unrecognized character '{}' for coordinate {:?}", x, c),
+                }
+            } else {
+                assert!(value == '.', "expected '.' at ({}, {}) but got '{}'",
+                        row, col, value);
+            }
+        }
+        assert!(chars.next().unwrap() == '\n');
+    }
+    board
+}
+
+#[cfg(test)]
+mod test {
+    use super::{Cells, Coordinate, decode_board};
+
+    #[test]
+    fn decode_board_ok() {
+        let decoded = decode_board(
+r#"
+.....dd_dd.....
+....d_____d....
+...d_______d...
+..d_________d..
+.d___________d.
+d_____________d
+d_____TTT_____d
+______TOT______
+d_____TTT_____d
+d_____________d
+.d___________d.
+..d_________d..
+...d_______d...
+....d_____d....
+.....dd_dd.....
+"#);
+        let default = Cells::default();
+        for row in 0u8..15u8 {
+            for col in 0u8..15u8 {
+                if let Some(c) = Coordinate::new(row, col) {
+                    assert_eq!(decoded[c], default[c]);
+                }
+            }
+        }
+    }
+}

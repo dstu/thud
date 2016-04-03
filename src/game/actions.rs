@@ -337,6 +337,8 @@ impl<'a> Iterator for ShoveIterator<'a> {
                         for d in board::Direction::all() {
                             match end.to_direction(*d) {
                                 Some(adjacent) if self.board[adjacent].is_dwarf() => {
+                                    // trace!("ShoveIterator: found shove from {:?} to {:?} that captures {:?} at {:?}",
+                                    //        self.start, end, self.board[adjacent], adjacent);
                                     captured[i as usize] = adjacent;
                                     i += 1;
                                 },
