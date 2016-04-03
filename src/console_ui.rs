@@ -2,13 +2,13 @@ use std::collections::HashSet;
 use std::io;
 use std::io::Write;
 
-use ::game;
 use game::board::Cells;
 use game::board::Content;
 use game::board::Coordinate;
 use game::board::Token;
 
 use ::mcts;
+use ::mcts::State;
 use ::search_graph;
 
 pub fn glyph(b: Option<Content>) -> &'static str {
@@ -67,7 +67,7 @@ pub fn read_coordinate() -> Coordinate {
     }
 }
 
-pub fn write_search_graph(graph: &mcts::Graph, state: &game::State) {
+pub fn write_search_graph(graph: &mcts::Graph, state: &State) {
     println!("to play: {} [{:?}]",
           state.active_player().name(), state.active_player().role());
     match graph.get_node(state) {

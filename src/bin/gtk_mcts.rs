@@ -12,6 +12,7 @@ use thud::game;
 use thud::game::board;
 use thud::gtk_ui::board_display;
 use thud::mcts;
+use thud::mcts::State;
 use thud::gtk_ui;
 
 use gtk::traits::*;
@@ -19,7 +20,7 @@ use gtk::signal::Inhibit;
 
 use std::env::args;
 
-pub fn initialize_search(state: game::State, graph: &mut mcts::Graph) {
+pub fn initialize_search(state: State, graph: &mut mcts::Graph) {
     let actions: Vec<game::Action> = state.role_actions(state.active_player().role()).collect();
     let mut children = graph.add_root(state, Default::default()).to_child_list();
     for a in actions.into_iter() {
@@ -38,7 +39,7 @@ fn main() {
     if let Err(e) = fern::init_global_logger(logger_config, log::LogLevelFilter::Trace) {
         panic!("Failed to initialize global logger: {}", e);
     }
-    let state = game::State::new(board::Cells::default(), String::from_str("Player 1").ok().unwrap(), String::from_str("Player 2").ok().unwrap());
+    let state = State::new(board::Cells::default(), String::from_str("Player 1").ok().unwrap(), String::from_str("Player 2").ok().unwrap());
     let mut graph = mcts::Graph::new();
     let iteration_count = args().skip(1).next().unwrap().parse::<usize>().ok().unwrap();
     initialize_search(state.clone(), &mut graph);

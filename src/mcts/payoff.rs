@@ -1,5 +1,6 @@
 use ::game;
 use ::game::board;
+use ::mcts::base::State;
 use std::fmt;
 use std::ops::{Add, AddAssign};
 
@@ -10,10 +11,8 @@ pub struct Payoff {
 }
 
 impl Payoff {
-    pub fn score(&self, player: game::PlayerMarker) -> isize {
-        let mut other_player = player.clone();
-        other_player.toggle();
-        (self.values[player.index()] as isize) - (self.values[other_player.index()] as isize)
+    pub fn score(&self, role: game::Role) -> isize {
+        (self.values[role.index()] as isize) - (self.values[role.toggle().index()] as isize)
     }
 }
 
@@ -53,20 +52,16 @@ fn role_payoff(r: game::Role) -> usize {
     }
 }
 
-pub fn payoff(state: &game::State) -> Option<Payoff> {
+pub fn payoff(state: &State) -> Option<Payoff> {
     if state.terminated() {
-        let player_1_role = state.player(game::PlayerMarker::One).role();
-        let player_1_role_payoff = role_payoff(player_1_role);
-        let player_2_role = state.player(game::PlayerMarker::Two).role();
-        let player_2_role_payoff = role_payoff(player_2_role);
         let mut payoff: Payoff = Default::default();
         let mut i = state.board().cells_iter();
         loop {
             match i.next() {
-                Some((_, board::Content::Occupied(t))) if t.role() == Some(player_1_role) =>
-                    payoff.values[0] += player_1_role_payoff,
-                Some((_, board::Content::Occupied(t))) if t.role() == Some(player_2_role) =>
-                    payoff.values[1] += player_2_role_payoff,
+                Some((_, board::Content::Occupied(t))) =>
+                    if let Some(r) = t.role() {
+                        payoff.values[r.index()] += role_payoff(r)
+                    },
                 None => break,
                 _ => (),
             }

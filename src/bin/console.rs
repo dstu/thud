@@ -3,8 +3,8 @@ extern crate log;
 extern crate thud;
 extern crate chrono;
 
-use thud::game;
 use thud::game::board;
+use thud::mcts::State;
 use std::str::FromStr;
 
 fn main() {
@@ -27,7 +27,7 @@ fn main() {
     board[board::Coordinate::new(1, 7).unwrap()] = board::Content::Occupied(board::Token::Dwarf);
     board[board::Coordinate::new(0, 7).unwrap()] = board::Content::Occupied(board::Token::Dwarf);
     thud::console_ui::write_board(&board);
-    let mut state = game::State::new(
+    let mut state = State::new(
         board, String::from_str("Player 1").ok().expect(""), String::from_str("Player 2").ok().expect(""));
     let mut i = 0u8;
     while i < 2 {

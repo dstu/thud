@@ -13,12 +13,10 @@ pub use self::base::*;
 pub use self::statistics::*;
 
 use ::rand::Rng;
-use ::console_ui;
 use ::game;
 use ::search_graph::Target;
 
 use std::cell::Cell;
-use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
 
@@ -87,7 +85,7 @@ impl<R> SearchState<R> where R: Rng {
         }
     }
 
-    pub fn search<F>(&mut self, graph: &mut Graph, root_state: game::State, mut settings_fn: F)
+    pub fn search<F>(&mut self, graph: &mut Graph, root_state: State, mut settings_fn: F)
                      -> Result where F: FnMut(usize)-> SearchSettings {
         match graph.get_node_mut(&root_state) {
             Some(root) => {
@@ -106,19 +104,19 @@ impl<R> SearchState<R> where R: Rng {
         Ok(root_stats)
     }
 
-    fn iterate_search<'a>(&mut self, mut state: game::State, node: MutNode<'a>,
+    fn iterate_search<'a>(&mut self, mut state: State, node: MutNode<'a>,
                           settings: &SearchSettings)
                           -> ::std::result::Result<(), SearchError> {
         match rollout::rollout(node, &mut state, self.explore_bias, self.epoch, &mut self.rng) {
             Ok(Target::Unexpanded(expander)) => {
-                let (expanded_node, mut player, payoff) = expand::expand(
+                let (expanded_node, mut role, payoff) = expand::expand(
                     expander, state.clone(), &mut self.rng, settings.simulation_count);
-                // The player returned by expand::expand() is the player who is
-                // now active, so we toggle the player to see who made the move
+                // The role returned by expand::expand() is the role who is
+                // now active, so we toggle the role to see who made the move
                 // that got to the expanded node.
-                player.toggle();
-                trace!("SearchState::iterate_search: expanded node {} with incoming move by {:?} gets payoff {:?}", expanded_node.get_id(), player, payoff);
-                backprop_payoff(expanded_node.to_node(), self.epoch, payoff, player,
+                role = role.toggle();
+                trace!("SearchState::iterate_search: expanded node {} with incoming move by {:?} gets payoff {:?}", expanded_node.get_id(), role, payoff);
+                backprop_payoff(expanded_node.to_node(), self.epoch, payoff, role,
                                 self.explore_bias, &mut self.rng);
                 return Ok(())
             },

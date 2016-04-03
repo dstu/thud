@@ -14,15 +14,14 @@ use std::iter::Iterator;
 /// for which this node is a best child.
 struct ParentSelectionIter<'a> {
     parents: ::std::iter::Enumerate<ParentListIter<'a>>,
-    player: game::PlayerMarker,
+    role: game::Role,
     explore_bias: f64,
 }
 
 impl<'a> ParentSelectionIter<'a> {
-    pub fn new(parents: ParentList<'a>, mut player: game::PlayerMarker, explore_bias: f64) -> Self {
-        // player.toggle();
+    pub fn new(parents: ParentList<'a>, role: game::Role, explore_bias: f64) -> Self {
         ParentSelectionIter {
-            parents: parents.iter().enumerate(), player: player, explore_bias: explore_bias,
+            parents: parents.iter().enumerate(), role: role, explore_bias: explore_bias,
         }
     }
 }
@@ -35,7 +34,7 @@ impl<'a> Iterator for ParentSelectionIter<'a> {
             match self.parents.next() {
                 None => return None,
                 Some((i, ref e)) => {
-                    if ucb::is_best_child(e, self.player, self.explore_bias) {
+                    if ucb::is_best_child(e, self.role, self.explore_bias) {
                         trace!("ParentSelectionIter::next: edge {} is a best child", e.get_id());
                         return Some(i)
                     }
@@ -47,8 +46,8 @@ impl<'a> Iterator for ParentSelectionIter<'a> {
 }
 
 pub fn backprop_payoff<'a, R: Rng>(node: Node<'a>, epoch: usize, payoff: Payoff,
-                                   player: game::PlayerMarker, explore_bias: f64, rng: &mut R) {
-    let mut to_visit = vec![(player, node)];
+                                   role: game::Role, explore_bias: f64, rng: &mut R) {
+    let mut to_visit = vec![(role, node)];
     while !to_visit.is_empty() {
         let (player, node) = to_visit.pop().unwrap();
         trace!("backprop_payoff: looking at moves by player {:?} incoming to node {}", player, node.get_id());
@@ -75,9 +74,7 @@ pub fn backprop_payoff<'a, R: Rng>(node: Node<'a>, epoch: usize, payoff: Payoff,
                 let mut stats = e.get_data().statistics.get();
                 stats.increment_visit(payoff);
                 e.get_data().statistics.set(stats);
-                let mut parent_player = player.clone();
-                parent_player.toggle();
-                to_visit.push((parent_player, e.get_source()));
+                to_visit.push((player.toggle(), e.get_source()));
             }
             trace!("backprop_payoff: increment_visit(node {}, {:?})", node.get_id(), payoff);
             let mut stats = node.get_data().statistics.get();
@@ -93,7 +90,7 @@ pub fn backprop_known_payoff<'a>(mut node: MutNode<'a>, p: Payoff) {
     backprop_known_payoff_recursive(node, p, &mut visited_nodes)
 }
 
-fn backprop_known_payoff_recursive<'a>(mut node: MutNode<'a>, p: Payoff, visited_nodes: &mut HashSet<usize>) {
+fn backprop_known_payoff_recursive<'a>(node: MutNode<'a>, p: Payoff, visited_nodes: &mut HashSet<usize>) {
     let mut parents = node.to_parent_list();
     for i in 0..parents.len() {
         let mut parent = parents.get_edge_mut(i).to_source();

@@ -8,6 +8,7 @@ use gtk;
 use gtk::traits::*;
 use gtk::signal::Inhibit;
 use ::gtk_sys::gtk_widget_add_events;
+use ::mcts::State;
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -245,12 +246,12 @@ fn draw_cells_interactive<'a>(cr: &mut cairo::Context, props: &Properties,
     }
 }
 
-fn draw_canvas_interactive(cr: &mut cairo::Context, props: &Properties, state: &game::State, action_state: &model::ActionState) {
+fn draw_canvas_interactive(cr: &mut cairo::Context, props: &Properties, state: &State, action_state: &model::ActionState) {
     draw_board_decorations(cr, props);
     draw_cells_interactive(cr, props, state.cells().cells_iter(), action_state);
 }
 
-fn draw_canvas_passive(cr: &mut cairo::Context, props: &Properties, state: &game::State) {
+fn draw_canvas_passive(cr: &mut cairo::Context, props: &Properties, state: &State) {
     draw_board_decorations(cr, props);
     draw_cells_passive(cr, props, state.cells().cells_iter());
 }

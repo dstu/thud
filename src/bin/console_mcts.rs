@@ -14,8 +14,9 @@ use ::thud::console_ui;
 use ::thud::game;
 use ::thud::game::board;
 use ::thud::mcts;
+use ::thud::mcts::State;
 
-pub fn initialize_search(state: game::State, graph: &mut mcts::Graph) {
+pub fn initialize_search(state: State, graph: &mut mcts::Graph) {
     let actions: Vec<game::Action> = state.role_actions(state.active_player().role()).collect();
     let mut children = graph.add_root(state, Default::default()).to_child_list();
     for a in actions.into_iter() {
@@ -38,7 +39,7 @@ fn main() {
 
     // Set up arg handling.
     let matches = {
-        let mut app = ::thud::util::set_common_args(
+        let app = ::thud::util::set_common_args(
             App::new("console_mcts")
                 .version("0.1.0")
                 .author("Stu Black <trurl@freeshell.org>")
@@ -62,7 +63,7 @@ fn main() {
         };
 
     // Play game.
-    let state = game::State::new(board::Cells::default(), String::from_str("Player 1").ok().unwrap(), String::from_str("Player 2").ok().unwrap());
+    let state = State::new(board::Cells::default(), String::from_str("Player 1").ok().unwrap(), String::from_str("Player 2").ok().unwrap());
     let mut graph = mcts::Graph::new();
 
     initialize_search(state.clone(), &mut graph);

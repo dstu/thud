@@ -6,6 +6,7 @@ use ::game;
 use std::clone::Clone;
 use std::fmt;
 use std::ops::{Index, IndexMut};
+use std::hash::{Hash, Hasher, SipHasher};
 
 /// A physical token on the game board.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -546,5 +547,117 @@ impl<'a> Iterator for OccupiedCellsIter<'a> {
                 }
             }
         }
+    }
+}
+
+pub trait CellEquivalence {
+    fn hash_board<H>(board: &Cells, state: &mut H) where H: Hasher;
+    fn boards_equal(b1: &Cells, b2: &Cells) -> bool;
+}
+
+pub struct SimpleEquivalence;
+
+impl CellEquivalence for SimpleEquivalence {
+    fn hash_board<H>(board: &Cells, state: &mut H) where H: Hasher {
+        for row in 0u8..15u8 {
+            for col in 0u8..15u8 {
+                if let Some(c) = Coordinate::new(row, col) {
+                    board[c].hash(state)
+                }
+            }
+        }
+    }
+
+    fn boards_equal(b1: &Cells, b2: &Cells) -> bool {
+        for row in 0u8..15u8 {
+            for col in 0u8..15u8 {
+                if let Some(c) = Coordinate::new(row, col) {
+                    if b1[c] != b2[c] {
+                        return false
+                    }
+                }
+            }
+        }
+        true
+    }
+}
+
+pub struct TranspositionalEquivalence;
+
+impl CellEquivalence for TranspositionalEquivalence {
+    fn hash_board<H>(board: &Cells, state: &mut H) where H: Hasher {
+        let mut hashers = [SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),
+                           SipHasher::new(),];
+        for row in 0u8..15u8 {
+            for col in 0u8..15u8 {
+                let mut i = 0;
+                for &c in [Coordinate::new(row, col),
+                           Coordinate::new(14u8 - row, col),
+                           Coordinate::new(row, 14u8 - col),
+                           Coordinate::new(14u8 - row, 14u8 - col),
+                           Coordinate::new(col, row),
+                           Coordinate::new(14u8 - col, row),
+                           Coordinate::new(col, 14u8 - row),
+                           Coordinate::new(14u8 - col, 14u8 - row)].iter() {
+                    if let Some(c) = c {
+                        board[c].hash(&mut hashers[i]);
+                    }
+                    i += 1;
+                }
+            }
+        }
+        let mut hash_values = [hashers[0].finish(),
+                               hashers[1].finish(),
+                               hashers[2].finish(),
+                               hashers[3].finish(),
+                               hashers[4].finish(),
+                               hashers[5].finish(),
+                               hashers[6].finish(),
+                               hashers[7].finish(),];
+        hash_values.sort();
+        for v in hash_values.into_iter() {
+            state.write_u64(*v);
+        }
+    }
+
+    fn boards_equal(b1: &Cells, b2: &Cells) -> bool {
+        let mut equivalences = [true,
+                                true,
+                                true,
+                                true,
+                                true,
+                                true,
+                                true,
+                                true,];
+        for row in 0u8..15u8 {
+            for col in 0u8..15u8 {
+                if let Some(c1) = Coordinate::new(row, col) {
+                    let mut i = 0;
+                    for &c2 in [Coordinate::new(row, col),
+                                Coordinate::new(14u8 - row, col),
+                                Coordinate::new(row, 14u8 - col),
+                                Coordinate::new(14u8 - row, 14u8 - col),
+                                Coordinate::new(col, row),
+                                Coordinate::new(14u8 - col, row),
+                                Coordinate::new(col, 14u8 - row),
+                                Coordinate::new(14u8 - col, 14u8 - row)].iter() {
+                        if let Some(c2) = c2 {
+                            if b1[c1] != b2[c2] {
+                                equivalences[i] = false;
+                            }
+                        }
+                        i += 1;
+                    }
+                }
+            }
+        }
+        equivalences[0] || equivalences[1] || equivalences[2] || equivalences[3]
+            || equivalences[4] || equivalences[5] || equivalences[6] || equivalences[7]
     }
 }

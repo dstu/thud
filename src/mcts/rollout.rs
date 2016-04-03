@@ -1,15 +1,9 @@
 use ::mcts::base::*;
 use ::mcts::ucb;
 
-use ::console_ui;
-use ::game;
-
-use ::search_graph;
 use ::search_graph::{Target, Traversal};
 use ::rand::Rng;
 
-use std::collections::HashSet;
-use std::cmp::Ordering;
 use std::error::Error;
 use std::fmt;
 
@@ -24,7 +18,7 @@ pub type Result<'a> = ::std::result::Result<
 impl<'a> fmt::Debug for RolloutError<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            RolloutError::Cycle(ref path) => write!(f, "Cycle in path"),
+            RolloutError::Cycle(_) => write!(f, "Cycle in path"),
             RolloutError::Ucb(ref e) => write!(f, "UCB error ({:?})", e),
         }
     }
@@ -33,7 +27,7 @@ impl<'a> fmt::Debug for RolloutError<'a> {
 impl<'a> fmt::Display for RolloutError<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            RolloutError::Cycle(ref path) => write!(f, "Cycle in path"),
+            RolloutError::Cycle(_) => write!(f, "Cycle in path"),
             RolloutError::Ucb(ref e) => write!(f, "UCB error ({})", e),
         }
     }
@@ -55,7 +49,7 @@ impl<'a> Error for RolloutError<'a> {
     }
 }
 
-pub fn rollout<'a, R: Rng>(mut node: MutNode<'a>, state: &mut game::State, explore_bias: f64,
+pub fn rollout<'a, R: Rng>(node: MutNode<'a>, state: &mut State, explore_bias: f64,
                            epoch: usize, rng: &mut R) -> Result<'a> {
     let mut path = SearchPath::new(node);
     loop {
@@ -85,7 +79,7 @@ pub fn rollout<'a, R: Rng>(mut node: MutNode<'a>, state: &mut game::State, explo
 
         match path.push(|n| {
             let index = try!(ucb::find_best_child_edge_index(
-                &n.get_child_list(), state.active_player().marker(), epoch, explore_bias, rng));
+                &n.get_child_list(), state.active_player().role(), epoch, explore_bias, rng));
             trace!("rollout: select child {} of node {} (edge {} with statistics {:?}), outgoing play {:?} by {:?}",
                    index, n.get_id(), n.get_child_list().get_edge(index).get_id(), n.get_child_list().get_edge(index).get_data().statistics.get(),
                    n.get_child_list().get_edge(index).get_data().action, state.active_player());

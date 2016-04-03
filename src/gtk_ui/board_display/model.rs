@@ -1,23 +1,23 @@
-use ::game;
 use ::game::Action;
 use ::game::board::{Coordinate};
+use ::mcts::State;
 
 use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct Passive {
-    pub state: game::State,
+    pub state: State,
 }
 
 #[derive(Clone)]
 pub struct Interactive {
-    pub state: game::State,
+    pub state: State,
     pub mouse_down: Option<Coordinate>,
     pub action: ActionState,
 }
 
 impl Interactive {
-    pub fn new(state: game::State) -> Self {
+    pub fn new(state: State) -> Self {
         Interactive { state: state,
                       mouse_down: None,
                       action: ActionState::Inactive, }
