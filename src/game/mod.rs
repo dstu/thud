@@ -107,7 +107,7 @@ impl<E> State<E> where E: board::CellEquivalence {
 
     pub fn do_action(&mut self, a: &actions::Action) {
         match a {
-            &actions::Action::Concede => self.end_proposal.advance(self.active_player),
+            // &actions::Action::Concede => self.end_proposal.advance(self.active_player),
             _ => self.board.do_action(a),
         }
         self.toggle_active_player();
@@ -167,7 +167,7 @@ impl<E> Hash for State<E> where E: board::CellEquivalence {
 
 
 #[cfg(test)]
-mod tests {
+mod test {
     use std::str::FromStr;
     use std::collections::HashMap;
 

@@ -298,7 +298,7 @@ impl Interactive {
                                             draw_cell(&mut cr, &props, captures[i as usize], board::Content::Empty);
                                         }
                                     },
-                                    game::Action::Concede => (),
+                                    // game::Action::Concede => (),
                                 }
                             }
                         }

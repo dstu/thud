@@ -71,3 +71,120 @@ pub fn payoff(state: &State) -> Option<Payoff> {
         None
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::{Payoff, payoff};
+    use ::game;
+    use game::board;
+    use std::str::FromStr;
+
+    fn check_no_payoff(board: board::Cells) {
+        let state = game::State::<board::TranspositionalEquivalence>::new(
+            board, String::from_str("player1").ok().unwrap(),
+            String::from_str("player2").ok().unwrap());
+        assert_eq!(None, payoff(&state));
+    }
+
+    fn check_payoff(dwarf: usize, troll: usize, board: board::Cells) {
+        let state = game::State::<board::TranspositionalEquivalence>::new(
+            board, String::from_str("player1").ok().unwrap(),
+            String::from_str("player2").ok().unwrap());
+        assert_eq!(Some(Payoff { weight: 1, values: [dwarf, troll], }),
+                   payoff(&state));
+    }
+
+    #[test]
+    fn no_payoff_when_moves_remain() {
+        check_no_payoff(board::Cells::default());
+        check_no_payoff(board::decode_board(r#"
+....._d_d_.....
+...._d_____....
+...____d____...
+..___________..
+.__d__________.
+__d_________ddT
+d___d________dd
+d______O____d_d
+__dd___________
+__d__________d_
+.____________d.
+..___________..
+...___d_____...
+...._______....
+.....___d_.....
+"#));
+        check_no_payoff(board::decode_board(r#"
+.....d____.....
+...._d_____....
+...__d______...
+..___________..
+._____________.
+____d_d______dT
+d________d___dd
+_______O_______
+dd_dd_________d
+_d____d__dd___d
+._d__________d.
+..d__________..
+...________d...
+...._______....
+.....d___d.....
+"#));
+    }
+
+    #[test]
+    fn payoff_when_no_moves_remain() {
+        check_payoff(0, 16, board::decode_board(r#"
+....._____.....
+...._______....
+..._________...
+..___________..
+.____TT_______.
+_______________
+_____________T_
+_______O_______
+_______________
+_______________
+._____T_______.
+..___________..
+..._________...
+...._______....
+....._____.....
+"#));
+        check_payoff(0, 0, board::decode_board(r#"
+....._____.....
+...._______....
+..._________...
+..___________..
+._____________.
+_______________
+_______________
+_______O_______
+_______________
+_______________
+._____________.
+..___________..
+..._________...
+...._______....
+....._____.....
+"#));
+        check_payoff(4, 0, board::decode_board(r#"
+....._____.....
+...._______....
+..._________...
+..______d____..
+._____________.
+_______________
+_______________
+_______O_______
+_______________
+_______________
+._____________.
+..__dd___d___..
+..._________...
+...._______....
+....._____.....
+"#));
+    }
+}

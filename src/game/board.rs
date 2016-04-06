@@ -182,11 +182,19 @@ impl Coordinate {
     pub fn to_direction(&self, d: Direction) -> Option<Coordinate> {
         match d {
             Direction::Up => self.to_up(),
-            Direction::UpLeft => self.to_up().and_then(|s| s.to_left()),
-            Direction::UpRight => self.to_up().and_then(|s| s.to_right()),
+            Direction::UpLeft =>
+                self.to_up().and_then(|s| s.to_left()).or_else(
+                    || self.to_left().and_then(|s| s.to_up())),
+            Direction::UpRight =>
+                self.to_up().and_then(|s| s.to_right()).or_else(
+                    || self.to_right().and_then(|s| s.to_up())),
             Direction::Down => self.to_down(),
-            Direction::DownLeft => self.to_down().and_then(|s| s.to_left()),
-            Direction::DownRight => self.to_down().and_then(|s| s.to_right()),
+            Direction::DownLeft =>
+                self.to_down().and_then(|s| s.to_left()).or_else(
+                    || self.to_left().and_then(|s| s.to_down())),
+            Direction::DownRight =>
+                self.to_down().and_then(|s| s.to_right()).or_else(
+                    || self.to_right().and_then(|s| s.to_down())),
             Direction::Left => self.to_left(),
             Direction::Right => self.to_right(),
         }
@@ -466,7 +474,7 @@ impl Cells {
                     self[captured[i as usize]] = Content::Empty;
                 }
             },
-            &Action::Concede => (),
+            // &Action::Concede => (),
         }
     }
 
@@ -687,6 +695,28 @@ pub fn decode_board(encoded: &str) -> Cells {
         assert!(chars.next().unwrap() == '\n');
     }
     board
+}
+
+fn glyph(b: Option<Content>) -> char {
+    match b {
+        Some(Content::Occupied(Token::Stone)) => 'O',
+        Some(Content::Occupied(Token::Dwarf)) => 'd',
+        Some(Content::Occupied(Token::Troll)) => 'T',
+        Some(Content::Empty) => '_',
+        None => '.',
+    }
+}
+
+pub fn format_board(board: &Cells) -> String {
+    let mut s = String::with_capacity(241);
+    s.push('\n');
+    for row in 0u8..15u8 {
+        for col in 0u8..15u8 {
+            s.push(glyph(Coordinate::new(row, col).map(|c| board[c])));
+        }
+        s.push('\n');
+    }
+    s
 }
 
 #[cfg(test)]

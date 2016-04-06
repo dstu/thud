@@ -1,14 +1,15 @@
 use ::game::board;
 
+use std::fmt;
 use std::iter::{Chain, FlatMap, Iterator, Take};
 use std::slice;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub enum Action {
     Move(board::Coordinate, board::Coordinate),
     Hurl(board::Coordinate, board::Coordinate),
     Shove(board::Coordinate, board::Coordinate, u8, [board::Coordinate; 7]),
-    Concede,
+    // Concede,
 }
 
 impl Action {
@@ -33,19 +34,19 @@ impl Action {
         }
     }
 
-    pub fn is_concede(&self) -> bool {
-        match self {
-            &Action::Concede => true,
-            _ => false,
-        }
-    }
+    // pub fn is_concede(&self) -> bool {
+    //     match self {
+    //         &Action::Concede => true,
+    //         _ => false,
+    //     }
+    // }
 
     pub fn source(&self) -> Option<board::Coordinate> {
         match self {
             &Action::Move(s, _) => Some(s),
             &Action::Hurl(s, _) => Some(s),
             &Action::Shove(s, _, _, _) => Some(s),
-            &Action::Concede => None,
+            // &Action::Concede => None,
         }
     }
 
@@ -54,7 +55,24 @@ impl Action {
             &Action::Move(_, t) => Some(t),
             &Action::Hurl(_, t) => Some(t),
             &Action::Shove(_, t, _, _) => Some(t),
-            &Action::Concede => None,
+            // &Action::Concede => None,
+        }
+    }
+}
+
+impl fmt::Debug for Action {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            &Action::Move(start, end) => write!(f, "Move({:?}, {:?})", start, end),
+            &Action::Hurl(start, end) => write!(f, "Hurl({:?}, {:?})", start, end),
+            &Action::Shove(start, end, capture_count, captured) => {
+                try!(write!(f, "Shove({:?}, {:?}", start, end));
+                for i in 0..capture_count {
+                    try!(write!(f, ", {:?}", captured[i as usize]));
+                }
+                write!(f, ")")
+            },
+            // &Action::Concede => write!(f, "Concede"),
         }
     }
 }
@@ -410,5 +428,52 @@ impl<'a> Iterator for HurlIterator<'a> {
                 _ => return None,
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use ::game;
+    use game::{Role, board};
+    use game::board::Coordinate;
+    use std::str::FromStr;
+
+    #[test]
+    fn troll_can_move() {
+        let state = game::State::<board::TranspositionalEquivalence>::new(
+            board::decode_board(r#"
+....._____.....
+...._______....
+..._________...
+..___________..
+._____________.
+_____________dT
+_____________dd
+_______O_______
+_______________
+_______________
+._____________.
+..___________..
+..._________...
+...._______....
+....._____.....
+"#),
+            String::from_str("player1").ok().unwrap(),
+            String::from_str("player2").ok().unwrap());
+        let actions: Vec<game::Action> = state.role_actions(Role::Troll).collect();
+        assert!(!actions.is_empty());
+        assert_eq!(actions,
+                   vec![game::Action::Move(Coordinate::new(5, 14).unwrap(),
+                                           Coordinate::new(4, 13).unwrap()),
+                        game::Action::Shove(Coordinate::new(5, 14).unwrap(),
+                                            Coordinate::new(4, 13).unwrap(),
+                                            1,
+                                            [Coordinate::new(5, 13).unwrap(),
+                                             Coordinate::new(7, 7).unwrap(),
+                                             Coordinate::new(7, 7).unwrap(),
+                                             Coordinate::new(7, 7).unwrap(),
+                                             Coordinate::new(7, 7).unwrap(),
+                                             Coordinate::new(7, 7).unwrap(),
+                                             Coordinate::new(7, 7).unwrap()])]);
     }
 }

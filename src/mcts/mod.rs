@@ -29,7 +29,22 @@ pub enum SearchError {
     Ucb(ucb::UcbError),
 }
 
-pub type ActionStatistics = Vec<(game::Action, Statistics)>;
+#[derive(Debug)]
+pub enum UcbProxy {
+    Select,
+    Value(f64),
+}
+
+impl UcbProxy {
+    pub fn from_success<'a>(success: &ucb::UcbSuccess<'a>) -> Self {
+        match success {
+            &ucb::UcbSuccess::Select(_) => UcbProxy::Select,
+            &ucb::UcbSuccess::Value(_, v) => UcbProxy::Value(v),
+        }
+    }
+}
+
+pub type ActionStatistics = Vec<(game::Action, Statistics, ::std::result::Result<UcbProxy, ucb::UcbError>)>;
 
 pub type Result = ::std::result::Result<ActionStatistics, SearchError>;
 
@@ -85,24 +100,30 @@ impl<R> SearchState<R> where R: Rng {
         }
     }
 
-    pub fn search<F>(&mut self, graph: &mut Graph, root_state: State, mut settings_fn: F)
-                     -> Result where F: FnMut(usize)-> SearchSettings {
-        match graph.get_node_mut(&root_state) {
-            Some(root) => {
-                trace!("SearchState::search: beginning epoch {}", self.epoch);
-                let settings = settings_fn(self.epoch);
+    pub fn search<F>(&mut self, graph: &mut Graph, root_state: State, mut settings_fn: F) -> Result
+        where F: FnMut(usize)-> SearchSettings {
+            match graph.get_node_mut(&root_state) {
+                Some(root) => {
+                    trace!("SearchState::search: beginning epoch {}", self.epoch);
+                    let settings = settings_fn(self.epoch);
                 try!(self.iterate_search(root_state.clone(), root, &settings));
-            },
-            None => return Err(SearchError::NoRootState),
+                },
+                None => return Err(SearchError::NoRootState),
+            }
+            self.epoch += 1;
+            let children = graph.get_node(&root_state).unwrap().get_child_list();
+            let mut child_ucb_results = ucb::child_edge_ucb_scores(
+                &children, root_state.active_player().role(), self.epoch, self.explore_bias,
+                &mut self.rng).into_iter();
+            let mut root_stats = Vec::new();
+            for child_edge in children.iter() {
+                root_stats.push((child_edge.get_data().action,
+                                 child_edge.get_data().statistics.get(),
+                                 child_ucb_results.next().unwrap().map(|s| UcbProxy::from_success(&s))));
+            }
+            assert!(child_ucb_results.next().is_none());
+            Ok(root_stats)
         }
-        self.epoch += 1;
-        let mut root_stats = Vec::new();
-        for child_edge in graph.get_node(&root_state).unwrap().get_child_list().iter() {
-            root_stats.push((child_edge.get_data().action,
-                             child_edge.get_data().statistics.get()));
-        }
-        Ok(root_stats)
-    }
 
     fn iterate_search<'a>(&mut self, mut state: State, node: MutNode<'a>,
                           settings: &SearchSettings)

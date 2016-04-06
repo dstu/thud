@@ -6,28 +6,14 @@ use game::board::Cells;
 use game::board::Content;
 use game::board::Coordinate;
 use game::board::Token;
+use game::board::format_board;
 
 use ::mcts;
 use ::mcts::State;
 use ::search_graph;
 
-pub fn glyph(b: Option<Content>) -> &'static str {
-    match b {
-        Some(Content::Occupied(Token::Stone)) => "O",
-        Some(Content::Occupied(Token::Dwarf)) => "d",
-        Some(Content::Occupied(Token::Troll)) => "T",
-        Some(Content::Empty) => "_",
-        None => ".",
-    }
-}
-
 pub fn write_board(board: &Cells) {
-    for row in 0u8..15u8 {
-        for col in 0u8..15u8 {
-            print!("{}", glyph(Coordinate::new(row, col).map(|c| board[c])))
-        }
-        println!("");
-    }
+    print!("{}", format_board(board));
 }
 
 pub fn read_coordinate() -> Coordinate {

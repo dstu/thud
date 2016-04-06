@@ -326,3 +326,15 @@ pub fn find_best_child_edge_index<'a, R>(c: &ChildList<'a>, role: game::Role, ep
         return Ok(best_index)
     }
 
+pub fn child_edge_ucb_scores<'a, R>(c: &ChildList<'a>, role: game::Role, epoch: usize,
+                                    explore_bias: f64, rng: &mut R) -> Vec<Result<UcbSuccess<'a>, UcbError>>
+    where R: Rng {
+        let log_parent_visits =
+            match c.get_source_node().get_data().statistics.get().visits {
+                // When we visit a vertex for the first time, it will have zero visits.
+                0 => 0.0,
+                // Otherwise, it should be positive.
+                parent_visits => f64::ln(parent_visits as f64),
+            };
+        EdgeUcbIter::new(log_parent_visits, explore_bias, role, c.iter()).collect()
+    }

@@ -6,13 +6,15 @@ pub const SIMULATION_COUNT_FLAG: &'static str = "simulations";
 pub const EXPLORATION_BIAS_FLAG: &'static str = "explore_bias";
 pub const INITIAL_BOARD_FLAG: &'static str = "initial_board";
 pub const INITIAL_PLAYER_FLAG: &'static str = "initial_player";
+pub const LOG_LEVEL_FLAG: &'static str = "log_level";
 
 arg_enum! {
     #[derive(Debug)]
     pub enum InitialBoard {
         Default,
         TrollEndgame,
-        DwarfEndgame
+        DwarfEndgame,
+        DwarfBoxed
     }
 }
 
@@ -22,6 +24,7 @@ impl InitialBoard {
             InitialBoard::Default => board::decode_board(DEFAULT_CELLS),
             InitialBoard::TrollEndgame => board::decode_board(TROLL_ENDGAME),
             InitialBoard::DwarfEndgame => board::decode_board(DWARF_ENDGAME),
+            InitialBoard::DwarfBoxed => board::decode_board(DWARF_BOXED),
         }
     }
 }
@@ -80,6 +83,24 @@ _______________
 ....._____.....
 "#;
 
+const DWARF_BOXED: &'static str = r#"
+.....d___d.....
+...._______....
+..._________...
+..___________..
+._d_________d_.
+_dd_________dd_
+dddd__TTT__dddd
+______TOT______
+dddd__TTT__dddd
+_dd_________dd_
+._d_________d_.
+..d_________d..
+..._________...
+...._______....
+.....d___d.....
+"#;
+
 pub fn set_common_args<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> where 'a: 'b {
     app.args(&[
         Arg::with_name(ITERATION_COUNT_FLAG)
@@ -112,5 +133,9 @@ pub fn set_common_args<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> where 'a: 'b {
             .long("player")
             .value_name("dwarf|troll")
             .help("Player to play"),
+        Arg::with_name(LOG_LEVEL_FLAG)
+            .long("log_level")
+            .value_name("info|trace|error|debug|off")
+            .help("Logging level"),
         ])
 }

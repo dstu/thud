@@ -1,8 +1,8 @@
-use ::console_ui;
 use ::game;
 use ::mcts::base::*;
 use ::mcts::payoff::{Payoff, payoff};
 use ::mcts::statistics::EdgeData;
+use ::game::board::format_board;
 use ::rand::Rng;
 
 pub fn expand<'a, R: Rng>(expander: EdgeExpander<'a>, state: State, rng: &mut R,
@@ -10,8 +10,8 @@ pub fn expand<'a, R: Rng>(expander: EdgeExpander<'a>, state: State, rng: &mut R,
     match expander.expand_to_edge(state.clone(), Default::default) {
         ::search_graph::Expanded::New(e) => {
             let mut target = e.to_target();
-            trace!("expand: made new node {}; now to play: {:?}", target.get_id(), state.active_player());
-            console_ui::write_board(state.board());
+            trace!("expand: made new node {}; now to play: {:?}; board: {}",
+                   target.get_id(), state.active_player(), format_board(state.board()));
             expand_children(&mut target, &state);
             let mut payoff = Payoff { weight: 0, values: [0, 0], };
             for _ in 0..simulation_count {
@@ -47,10 +47,8 @@ pub fn simulate<R>(state: &mut State, rng: &mut R) -> Payoff where R: Rng {
                     state.role_actions(state.active_player().role()).collect();
                 match rng.choose(&actions) {
                     Some(a) => *a,
-                    None => {
-                        console_ui::write_board(state.board());
-                        panic!("terminal state has no payoff")
-                    },
+                    None => panic!("terminal state has no payoff (role: {:?}, actions: {:?}); board: {}",
+                                   state.active_player().role(), actions, format_board(state.board())),
                 }
             },
             Some(p) => return p,

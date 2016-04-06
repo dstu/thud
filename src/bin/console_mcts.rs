@@ -22,18 +22,6 @@ pub fn initialize_search(state: mcts::State, graph: &mut mcts::Graph) {
 }
 
 fn main() {
-    // Set up logging.
-    let logger_config = fern::DispatchConfig {
-        format: Box::new(|msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
-            format!("[{}][{}] {}", chrono::Local::now().to_rfc3339(), level, msg)
-        }),
-        output: vec![fern::OutputConfig::stdout()],
-        level: log::LogLevelFilter::Trace,
-    };
-    if let Err(e) = fern::init_global_logger(logger_config, log::LogLevelFilter::Trace) {
-        panic!("Failed to initialize global logger: {}", e);
-    }
-
     // Set up arg handling.
     let matches = {
         let app = ::thud::util::set_common_args(
@@ -69,6 +57,24 @@ fn main() {
             Some("troll") => true,
             Some(x) => panic!("Bad initial player: {}", x),
         };
+    let logging_level =
+        match matches.value_of(::thud::util::LOG_LEVEL_FLAG).map(|x| x.parse::<log::LogLevelFilter>()) {
+            Some(Ok(x)) => x,
+            Some(Err(_)) => panic!("Bad logging level '{}'", matches.value_of(::thud::util::LOG_LEVEL_FLAG).unwrap()),
+            None => log::LogLevelFilter::Info,
+        };
+
+    // Set up logging.
+    let logger_config = fern::DispatchConfig {
+        format: Box::new(|msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
+            format!("[{}][{}] {}", chrono::Local::now().to_rfc3339(), level, msg)
+        }),
+        output: vec![fern::OutputConfig::stdout()],
+        level: logging_level,
+    };
+    if let Err(e) = fern::init_global_logger(logger_config, log::LogLevelFilter::Trace) {
+        panic!("Failed to initialize global logger: {}", e);
+    }
 
     // Play game.
     let mut state = mcts::State::new(initial_cells, String::from_str("Player 1").ok().unwrap(), String::from_str("Player 2").ok().unwrap());
@@ -79,52 +85,81 @@ fn main() {
 
     initialize_search(state.clone(), &mut graph);
     let mut search_state = mcts::SearchState::new(rand::thread_rng(), exploration_bias);
-    for iteration in 0..iteration_count {
-        if iteration % 100 == 0 {
-            info!("iteration: {} / {} = {}%", iteration, iteration_count,
-                  ((10000.0 * (iteration as f64) / (iteration_count as f64)) as usize as f64) / 100.0);
+    let mut turn_number = 0;
+    loop {
+        info!("begin turn {}; board: {}", turn_number, ::thud::game::board::format_board(state.board()));
+        let mut best_action = None;
+        for iteration in 0..iteration_count {
+            if iteration % 100 == 0 {
+                info!("iteration: {} / {} = {}%", iteration, iteration_count,
+                      ((10000.0 * (iteration as f64) / (iteration_count as f64)) as usize as f64) / 100.0);
+            }
+            match search_state.search(&mut graph, state.clone(),
+                                      |_: usize| mcts::SearchSettings {
+                                          simulation_count: simulation_count,
+                                      }) {
+                Ok(stats) => {
+                    let toplevel_visits = {
+                        let mut count = 0;
+                        for &(_, stats, _) in stats.iter() {
+                            count += stats.visits;
+                        }
+                        count
+                    };
+                    trace!("total visits at top level: {}", toplevel_visits);
+                    // TODO: this commented-out block is only valid when we haven't
+                    // propagated a multi-visit payoff upwards from conneting to an
+                    // extant vertex.
+                    // if simulation_count == 1 && toplevel_visits != iteration + 1 {
+                    //     console_ui::write_board(state.board());
+                    //     for (action, stats) in stats.into_iter() {
+                    //         println!("{:?}: [{}, {}] = {:?} / {}", action,
+                    //                  (stats.payoff.values[0] as f64) / (stats.visits as f64),
+                    //                  (stats.payoff.values[1] as f64) / (stats.visits as f64),
+                    //                  stats.payoff, stats.visits);
+                    //     }
+                    //     panic!("total visits at top level is {}, but iteration count is {}",
+                    //            toplevel_visits, iteration)
+                    // }
+                    if iteration % 1000 == 0 || iteration + 1 == iteration_count {
+                        println!("root stats:");
+                        let mut best_visits = ::std::usize::MIN;
+                        for (action, stats, ucb) in stats.into_iter() {
+                            println!("{:?}: [{}, {}] = {:?} / {}; UCB = {:?}", action,
+                                     (stats.payoff.values[0] as f64) / (stats.visits as f64),
+                                     (stats.payoff.values[1] as f64) / (stats.visits as f64),
+                                     stats.payoff, stats.visits, ucb);
+                            best_action = match best_action {
+                                None => Some(action),
+                                Some(_) if best_visits < stats.visits => {
+                                    best_visits = stats.visits;
+                                    Some(action)
+                                },
+                                _ => best_action,
+                            }
+                        }
+                    }
+                },
+                Err(e) => {
+                    error!("Error in seach iteration {}: {}", iteration, e);
+                    break
+                },
+            }
         }
-        match search_state.search(&mut graph, state.clone(),
-                                  |_: usize| mcts::SearchSettings {
-                                      simulation_count: simulation_count,
-                                  }) {
-            Ok(stats) => {
-                let toplevel_visits = {
-                    let mut count = 0;
-                    for &(_, stats) in stats.iter() {
-                        count += stats.visits;
-                    }
-                    count
-                };
-                trace!("total visits at top level: {}", toplevel_visits);
-                // TODO: this commented-out block is only valid when we haven't
-                // propagated a multi-visit payoff upwards from conneting to an
-                // extant vertex.
-                // if simulation_count == 1 && toplevel_visits != iteration + 1 {
-                //     console_ui::write_board(state.board());
-                //     for (action, stats) in stats.into_iter() {
-                //         println!("{:?}: [{}, {}] = {:?} / {}", action,
-                //                  (stats.payoff.values[0] as f64) / (stats.visits as f64),
-                //                  (stats.payoff.values[1] as f64) / (stats.visits as f64),
-                //                  stats.payoff, stats.visits);
-                //     }
-                //     panic!("total visits at top level is {}, but iteration count is {}",
-                //            toplevel_visits, iteration)
-                // }
-                if iteration % 1000 == 0 || iteration + 1 == iteration_count {
-                    println!("root stats:");
-                    for (action, stats) in stats.into_iter() {
-                        println!("{:?}: [{}, {}] = {:?} / {}", action,
-                                 (stats.payoff.values[0] as f64) / (stats.visits as f64),
-                                 (stats.payoff.values[1] as f64) / (stats.visits as f64),
-                                 stats.payoff, stats.visits);
-                    }
-                }
+
+        // Finish turn.
+        match best_action {
+            Some(action) => {
+                info!("turn {}: performing best action {:?}", turn_number, action);
+                state.do_action(&action);
+                graph = mcts::Graph::new();
+                initialize_search(state.clone(), &mut graph);
+                turn_number += 1;
             },
-            Err(e) => {
-                error!("Error in seach iteration {}: {}", iteration, e);
+            None => {
+                info!("turn {}: no best action. exiting.", turn_number);
                 break
-            },
+            }
         }
     }
     // console_ui::write_search_graph(&graph, &state);
