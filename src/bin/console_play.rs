@@ -11,14 +11,6 @@ use thud::mcts;
 use thud::console_ui;
 use thud::util;
 
-pub fn initialize_search(state: mcts::State, graph: &mut mcts::Graph) {
-    let actions: Vec<game::Action> = state.role_actions(state.active_role()).collect();
-    let mut children = graph.add_root(state, Default::default()).to_child_list();
-    for a in actions.into_iter() {
-        children.add_child(mcts::EdgeData::new(a));
-    }
-}
-
 fn main() {
     // Set up arg handling.
     let matches = {
@@ -81,7 +73,7 @@ fn main() {
         if state.active_role() == ai_role {
             let mut best_action = None;
             let mut graph = mcts::Graph::new();
-            initialize_search(state.clone(), &mut graph);
+            util::initialize_search(state.clone(), &mut graph);
             let mut search_state = mcts::SearchState::new(rand::thread_rng(), exploration_bias);
             for iteration in 0..iteration_count {
                 if iteration % 100 == 0 {

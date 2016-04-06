@@ -436,7 +436,6 @@ mod test {
     use ::game;
     use game::{Role, board};
     use game::board::Coordinate;
-    use std::str::FromStr;
 
     #[test]
     fn troll_can_move() {
@@ -457,9 +456,7 @@ _______________
 ..._________...
 ...._______....
 ....._____.....
-"#),
-            String::from_str("player1").ok().unwrap(),
-            String::from_str("player2").ok().unwrap());
+"#));
         let actions: Vec<game::Action> = state.role_actions(Role::Troll).collect();
         assert!(!actions.is_empty());
         assert_eq!(actions,
@@ -496,9 +493,7 @@ Td__________dd_
 ..._____d___...
 ...._______....
 ....._____.....
-"#),
-            String::from_str("player1").ok().unwrap(),
-            String::from_str("player2").ok().unwrap());
+"#));
         let actions: Vec<game::Action> = state.role_actions(Role::Troll).collect();
         assert!(actions.is_empty());
     }

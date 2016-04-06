@@ -1,5 +1,7 @@
+use ::game;
 use ::game::board;
 use ::clap::{App, Arg};
+use ::mcts;
 
 pub const ITERATION_COUNT_FLAG: &'static str = "iterations";
 pub const SIMULATION_COUNT_FLAG: &'static str = "simulations";
@@ -138,4 +140,12 @@ pub fn set_common_args<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> where 'a: 'b {
             .value_name("info|trace|error|debug|off")
             .help("Logging level"),
         ])
+}
+
+pub fn initialize_search(state: mcts::State, graph: &mut mcts::Graph) {
+    let actions: Vec<game::Action> = state.role_actions(state.active_role()).collect();
+    let mut children = graph.add_root(state, Default::default()).to_child_list();
+    for a in actions.into_iter() {
+        children.add_child(mcts::EdgeData::new(a));
+    }
 }

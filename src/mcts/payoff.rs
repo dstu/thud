@@ -80,16 +80,12 @@ mod test {
     use std::str::FromStr;
 
     fn check_no_payoff(board: board::Cells) {
-        let state = game::State::<board::TranspositionalEquivalence>::new(
-            board, String::from_str("player1").ok().unwrap(),
-            String::from_str("player2").ok().unwrap());
+        let state = game::State::<board::TranspositionalEquivalence>::new(board);
         assert_eq!(None, payoff(&state));
     }
 
     fn check_payoff(dwarf: usize, troll: usize, board: board::Cells) {
-        let state = game::State::<board::TranspositionalEquivalence>::new(
-            board, String::from_str("player1").ok().unwrap(),
-            String::from_str("player2").ok().unwrap());
+        let state = game::State::<board::TranspositionalEquivalence>::new(board);
         assert_eq!(Some(Payoff { weight: 1, values: [dwarf, troll], }), payoff(&state));
     }
 

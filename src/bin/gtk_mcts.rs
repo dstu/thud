@@ -14,19 +14,12 @@ use thud::gtk_ui::board_display;
 use thud::mcts;
 use thud::mcts::State;
 use thud::gtk_ui;
+use thud::util;
 
 use gtk::traits::*;
 use gtk::signal::Inhibit;
 
 use std::env::args;
-
-pub fn initialize_search(state: State, graph: &mut mcts::Graph) {
-    let actions: Vec<game::Action> = state.role_actions(state.active_role()).collect();
-    let mut children = graph.add_root(state, Default::default()).to_child_list();
-    for a in actions.into_iter() {
-        children.add_child(mcts::EdgeData::new(a));
-    }
-}
 
 fn main() {
     let logger_config = fern::DispatchConfig {
@@ -42,7 +35,7 @@ fn main() {
     let state = State::new(board::Cells::default());
     let mut graph = mcts::Graph::new();
     let iteration_count = args().skip(1).next().unwrap().parse::<usize>().ok().unwrap();
-    initialize_search(state.clone(), &mut graph);
+    util::initialize_search(state.clone(), &mut graph);
     let mut search_state = mcts::SearchState::new(rand::thread_rng(), 0.1);
     for iteration in 0..iteration_count {
         if iteration % 1000 == 0 {
