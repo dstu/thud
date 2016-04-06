@@ -11,14 +11,14 @@ pub fn expand<'a, R: Rng>(expander: EdgeExpander<'a>, state: State, rng: &mut R,
         ::search_graph::Expanded::New(e) => {
             let mut target = e.to_target();
             trace!("expand: made new node {}; now to play: {:?}; board: {}",
-                   target.get_id(), state.active_player(), format_board(state.board()));
+                   target.get_id(), state.active_role(), format_board(state.board()));
             expand_children(&mut target, &state);
             let mut payoff = Payoff { weight: 0, values: [0, 0], };
             for _ in 0..simulation_count {
                 payoff += simulate(&mut state.clone(), rng);
             }
             trace!("expand: simulation of new node {} gives payoff {:?}", target.get_id(), payoff);
-            (target, state.active_player().role(), payoff)
+            (target, state.active_role(), payoff)
         },
         ::search_graph::Expanded::Extant(e) => {
             let payoff = {
@@ -34,7 +34,7 @@ pub fn expand<'a, R: Rng>(expander: EdgeExpander<'a>, state: State, rng: &mut R,
                 e.get_data().statistics.set(edge_stats);
             }
             trace!("expand: edge {} given payoff {:?} from extant node {}", e.get_id(), payoff, e.get_target().get_id());
-            (e.to_source(), state.active_player().role().toggle(), payoff)
+            (e.to_source(), state.active_role().toggle(), payoff)
         },
     }
 }
@@ -44,11 +44,11 @@ pub fn simulate<R>(state: &mut State, rng: &mut R) -> Payoff where R: Rng {
         let action = match payoff(&state) {
             None => {
                 let actions: Vec<game::Action> =
-                    state.role_actions(state.active_player().role()).collect();
+                    state.role_actions(state.active_role()).collect();
                 match rng.choose(&actions) {
                     Some(a) => *a,
                     None => panic!("terminal state has no payoff (role: {:?}, actions: {:?}); board: {}",
-                                   state.active_player().role(), actions, format_board(state.board())),
+                                   state.active_role(), actions, format_board(state.board())),
                 }
             },
             Some(p) => return p,
@@ -58,10 +58,10 @@ pub fn simulate<R>(state: &mut State, rng: &mut R) -> Payoff where R: Rng {
 }
 
 fn expand_children<'a>(node: &mut MutNode<'a>, state: &State) {
-    trace!("expanding moves at node {} for {:?}", node.get_id(), state.active_player());
+    trace!("expanding moves at node {} for {:?}", node.get_id(), state.active_role());
     let mut children = node.get_child_list_mut();
     let mut i = 0;
-    for a in state.role_actions(state.active_player().role()).into_iter() {
+    for a in state.role_actions(state.active_role()).into_iter() {
         let _ = children.add_child(EdgeData::new(a));
         i += 1;
     }

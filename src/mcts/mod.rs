@@ -113,7 +113,7 @@ impl<R> SearchState<R> where R: Rng {
             self.epoch += 1;
             let children = graph.get_node(&root_state).unwrap().get_child_list();
             let mut child_ucb_results = ucb::child_edge_ucb_scores(
-                &children, root_state.active_player().role(), self.epoch, self.explore_bias,
+                &children, root_state.active_role(), self.epoch, self.explore_bias,
                 &mut self.rng).into_iter();
             let mut root_stats = Vec::new();
             for child_edge in children.iter() {
@@ -149,7 +149,7 @@ impl<R> SearchState<R> where R: Rng {
                     },
                     Some(p) => {
                         trace!("SearchState::iterate_search: ended on expanded node {} with payoff {:?}", node.get_id(), p);
-                        backprop_payoff(node.to_node(), self.epoch, p, state.active_player().role().toggle(), self.explore_bias, &mut self.rng);
+                        backprop_payoff(node.to_node(), self.epoch, p, state.active_role().toggle(), self.explore_bias, &mut self.rng);
                         return Ok(())
                     },
                 },

@@ -14,7 +14,7 @@ use ::thud::game;
 use ::thud::mcts;
 
 pub fn initialize_search(state: mcts::State, graph: &mut mcts::Graph) {
-    let actions: Vec<game::Action> = state.role_actions(state.active_player().role()).collect();
+    let actions: Vec<game::Action> = state.role_actions(state.active_role()).collect();
     let mut children = graph.add_root(state, Default::default()).to_child_list();
     for a in actions.into_iter() {
         children.add_child(mcts::EdgeData::new(a));
@@ -79,7 +79,7 @@ fn main() {
     // Play game.
     let mut state = mcts::State::new(initial_cells, String::from_str("Player 1").ok().unwrap(), String::from_str("Player 2").ok().unwrap());
     if toggle_initial_player {
-        state.toggle_active_player();
+        state.toggle_active_role();
     }
     let mut graph = mcts::Graph::new();
 

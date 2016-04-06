@@ -54,8 +54,7 @@ pub fn read_coordinate() -> Coordinate {
 }
 
 pub fn write_search_graph(graph: &mcts::Graph, state: &State) {
-    println!("to play: {} [{:?}]",
-          state.active_player().name(), state.active_player().role());
+    println!("to play: {:?}", state.active_role());
     match graph.get_node(state) {
         None => println!("no matching node for game state"),
         Some(node) => {

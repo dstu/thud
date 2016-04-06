@@ -21,7 +21,7 @@ use gtk::signal::Inhibit;
 use std::env::args;
 
 pub fn initialize_search(state: State, graph: &mut mcts::Graph) {
-    let actions: Vec<game::Action> = state.role_actions(state.active_player().role()).collect();
+    let actions: Vec<game::Action> = state.role_actions(state.active_role()).collect();
     let mut children = graph.add_root(state, Default::default()).to_child_list();
     for a in actions.into_iter() {
         children.add_child(mcts::EdgeData::new(a));

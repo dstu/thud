@@ -80,15 +80,15 @@ pub fn rollout<'a, R: Rng>(node: MutNode<'a>, state: &mut State, explore_bias: f
         let mut no_children = false;
         match path.push(|n| {
             let index = try!(ucb::find_best_child_edge_index(
-                &n.get_child_list(), state.active_player().role(), epoch, explore_bias, rng));
+                &n.get_child_list(), state.active_role(), epoch, explore_bias, rng));
             trace!("rollout: select child {} of node {} (edge {} with statistics {:?}), outgoing play {:?} by {:?}",
                    index, n.get_id(), n.get_child_list().get_edge(index).get_id(), n.get_child_list().get_edge(index).get_data().statistics.get(),
-                   n.get_child_list().get_edge(index).get_data().action, state.active_player());
+                   n.get_child_list().get_edge(index).get_data().action, state.active_role());
             Ok(Some(Traversal::Child(index)))
         }) {
             Ok(Some(selected_edge)) => {
                 trace!("rollout: performing action {:?} by {:?}",
-                       selected_edge.get_data().action, state.active_player());
+                       selected_edge.get_data().action, state.active_role());
                 state.do_action(&selected_edge.get_data().action)
             },
             Ok(None) => panic!("rollout: failed to select a child"),

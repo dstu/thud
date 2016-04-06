@@ -32,13 +32,12 @@ fn main() {
     let mut i = 0u8;
     while i < 2 {
         {
-            let active = state.active_player();
-            println!("Moves for {} ({:?}):", active.name(), active.role());
-            for a in state.role_actions(active.role()) {
+            println!("Moves for {:?}:", state.active_role());
+            for a in state.role_actions(state.active_role()) {
                 println!("  {:?}", a);
             }
         }
-        state.toggle_active_player();
+        state.toggle_active_role();
         i += 1;
     }
 }

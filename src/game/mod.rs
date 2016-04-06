@@ -28,22 +28,6 @@ impl Role {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Player {
-    role: Role,
-    name: String,
-}
-
-impl Player {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn role(&self) -> Role {
-        self.role
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum EndProposal {
     Neither,
@@ -63,8 +47,7 @@ impl EndProposal {
 
 pub struct State<E> where E: board::CellEquivalence {
     board: board::Cells,
-    players: [Player; 2],
-    active_player: Role,
+    active_role: Role,
     end_proposal: EndProposal,
     equivalence_marker: PhantomData<E>,
 }
@@ -73,9 +56,7 @@ impl<E> State<E> where E: board::CellEquivalence {
     pub fn new(board: board::Cells, player1_name: String, player2_name: String) -> Self {
         State {
             board: board,
-            players: [Player { role: Role::Dwarf, name: player1_name, },
-                      Player { role: Role::Troll, name: player2_name, },],
-            active_player: Role::Dwarf,
+            active_role: Role::Dwarf,
             end_proposal: EndProposal::Neither,
             equivalence_marker: PhantomData,
         }
@@ -89,8 +70,8 @@ impl<E> State<E> where E: board::CellEquivalence {
         State::new(board::Cells::default(), player1_name, player2_name)
     }
 
-    pub fn active_player(&self) -> &Player {
-        &self.players[self.active_player.index()]
+    pub fn active_role(&self) -> Role {
+        self.active_role
     }
 
     pub fn role_actions<'s>(&'s self, r: Role) -> actions::ActionIterator<'s> {
@@ -101,16 +82,16 @@ impl<E> State<E> where E: board::CellEquivalence {
         self.board.position_actions(position)
     }
 
-    pub fn toggle_active_player(&mut self) {
-        self.active_player = self.active_player.toggle()
+    pub fn toggle_active_role(&mut self) {
+        self.active_role = self.active_role.toggle()
     }
 
     pub fn do_action(&mut self, a: &actions::Action) {
         match a {
-            // &actions::Action::Concede => self.end_proposal.advance(self.active_player),
+            // &actions::Action::Concede => self.end_proposal.advance(self.active_role),
             _ => self.board.do_action(a),
         }
-        self.toggle_active_player();
+        self.toggle_active_role();
     }
 
     pub fn terminated(&self) -> bool {
@@ -132,9 +113,7 @@ impl<E> Clone for State<E> where E: board::CellEquivalence {
     fn clone(&self) -> Self {
         State {
             board: self.board.clone(),
-            players: [self.players[0].clone(),
-                      self.players[1].clone()],
-            active_player: self.active_player,
+            active_role: self.active_role,
             end_proposal: self.end_proposal,
             equivalence_marker: PhantomData,
         }
@@ -143,9 +122,8 @@ impl<E> Clone for State<E> where E: board::CellEquivalence {
 
 impl<E> PartialEq<State<E>> for State<E> where E: board::CellEquivalence {
     fn eq(&self, other: &State<E>) -> bool {
-        if self.active_player != other.active_player
-            || self.end_proposal != other.end_proposal
-            || self.players[0].role() != other.players[0].role() {
+        if self.active_role != other.active_role
+            || self.end_proposal != other.end_proposal {
                 return false
             }
         <E as board::CellEquivalence>::boards_equal(&self.board, &other.board)
@@ -156,9 +134,7 @@ impl<E> Eq for State<E> where E: board::CellEquivalence { }
 
 impl<E> Hash for State<E> where E: board::CellEquivalence {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.active_player.hash(state);
-        self.players[0].role().hash(state);
-        self.players[1].role().hash(state);
+        self.active_role.hash(state);
         self.end_proposal.hash(state);
         <E as board::CellEquivalence>::hash_board(&self.board, state);
     }
@@ -174,15 +150,11 @@ mod test {
     use super::*;
 
     fn new_simple_state() -> State<board::SimpleEquivalence> {
-        State::new(board::Cells::default(),
-                   String::from_str("Player 1").ok().unwrap(),
-                   String::from_str("Player 2").ok().unwrap())
+        State::new(board::Cells::default())
     }
 
     fn new_untransposing_state() -> State<board::TranspositionalEquivalence> {
-        State::new(board::Cells::default(),
-                   String::from_str("Player 1").ok().unwrap(),
-                   String::from_str("Player 2").ok().unwrap())
+        State::new(board::Cells::default())
     }
 
     #[test]
