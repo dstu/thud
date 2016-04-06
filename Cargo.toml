@@ -32,3 +32,6 @@ name = "gtk_mcts"
 
 [[bin]]
 name = "console_play"
+
+[[bin]]
+name = "console_mc"

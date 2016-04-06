@@ -1,10 +1,10 @@
 mod base;
-mod backprop;
-mod expand;
-mod payoff;
-mod rollout;
+pub mod backprop;
+pub mod expand;
+pub mod payoff;
+pub mod rollout;
 mod statistics;
-mod ucb;
+pub mod ucb;
 
 use self::backprop::*;
 use self::payoff::*;

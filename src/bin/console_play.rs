@@ -64,7 +64,8 @@ fn main() {
     // Set up logging.
     let logger_config = fern::DispatchConfig {
         format: Box::new(|msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
-            format!("[{}][{}] {}", chrono::Local::now().to_rfc3339(), level, msg)
+            format!("[{}][{}] {}",
+                    chrono::Local::now().format("%Y-%m-%d %T%.3f%z").to_string(), level, msg)
         }),
         output: vec![fern::OutputConfig::stdout()],
         level: logging_level,

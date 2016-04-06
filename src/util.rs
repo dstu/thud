@@ -104,52 +104,56 @@ _dd_________dd_
 .....d___d.....
 "#;
 
-pub fn set_common_args<'a, 'b>(mut app: App<'a, 'b>, flags: &[&str]) -> App<'a, 'b> where 'a: 'b {
+pub fn set_common_args<'a, 'b>(app: App<'a, 'b>, flags: &[&str]) -> App<'a, 'b> where 'a: 'b {
     let populated_flags: Vec<Arg<'static, 'static>> = flags.iter().map(|f| match *f {
         x if x == ITERATION_COUNT_FLAG =>
             Arg::with_name(ITERATION_COUNT_FLAG)
             .short("i")
             .long("iterations")
+            .takes_value(true)
             .value_name("ITERATIONS")
             .help("Number of Monte Carlo iterations to run per epoch")
-            .takes_value(true)
             .required(true),
         x if x == SIMULATION_COUNT_FLAG =>
             Arg::with_name(SIMULATION_COUNT_FLAG)
             .short("s")
             .long("simulations")
+            .takes_value(true)
             .value_name("SIMULATIONS")
             .help("Number of simulations to run at each expansion step")
-            .takes_value(true)
             .required(true),
         x if x == EXPLORATION_BIAS_FLAG =>
             Arg::with_name(EXPLORATION_BIAS_FLAG)
             .short("b")
             .long("exploration_bias")
+            .takes_value(true)
             .value_name("BIAS")
             .help("Exploration bias for UCB computation")
-            .takes_value(true)
             .required(true),
         x if x == INITIAL_BOARD_FLAG =>
             Arg::with_name(INITIAL_BOARD_FLAG)
             .long("board")
+            .takes_value(true)
             .possible_values(&["default", "trollendgame", "dwarfendgame"])
             .help("Initial board configuration"),
         x if x == INITIAL_PLAYER_FLAG =>
             Arg::with_name(INITIAL_PLAYER_FLAG)
             .short("p")
             .long("player")
+            .takes_value(true)
             .possible_values(&["dwarf", "troll"])
             .help("Initial player to play"),
         x if x == AI_PLAYER_FLAG =>
             Arg::with_name(AI_PLAYER_FLAG)
             .short("p")
             .long("player")
+            .takes_value(true)
             .possible_values(&["dwarf", "troll"])
             .help("Side that the AI will play"),
         x if x == LOG_LEVEL_FLAG =>
             Arg::with_name(LOG_LEVEL_FLAG)
             .long("log_level")
+            .takes_value(true)
             .possible_values(&["info", "trace", "error", "debug", "off"])
             .help("Logging level"),
         x => panic!("Unrecognized flag identifier '{}'", x),
