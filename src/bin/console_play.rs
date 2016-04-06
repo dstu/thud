@@ -18,7 +18,13 @@ fn main() {
             App::new("console_play")
                 .version("0.1.0")
                 .author("Stu Black <trurl@freeshell.org>")
-                .about("Play against Thud AI"));
+                .about("Play against Thud AI"),
+            &[util::ITERATION_COUNT_FLAG,
+              util::SIMULATION_COUNT_FLAG,
+              util::EXPLORATION_BIAS_FLAG,
+              util::INITIAL_BOARD_FLAG,
+              util::AI_PLAYER_FLAG,
+              util::LOG_LEVEL_FLAG]);
         app.get_matches()
     };
     let iteration_count =

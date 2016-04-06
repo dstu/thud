@@ -8,6 +8,7 @@ pub const SIMULATION_COUNT_FLAG: &'static str = "simulations";
 pub const EXPLORATION_BIAS_FLAG: &'static str = "explore_bias";
 pub const INITIAL_BOARD_FLAG: &'static str = "initial_board";
 pub const INITIAL_PLAYER_FLAG: &'static str = "initial_player";
+pub const AI_PLAYER_FLAG: &'static str = "ai_player";
 pub const LOG_LEVEL_FLAG: &'static str = "log_level";
 
 arg_enum! {
@@ -103,43 +104,57 @@ _dd_________dd_
 .....d___d.....
 "#;
 
-pub fn set_common_args<'a, 'b>(app: App<'a, 'b>) -> App<'a, 'b> where 'a: 'b {
-    app.args(&[
-        Arg::with_name(ITERATION_COUNT_FLAG)
+pub fn set_common_args<'a, 'b>(mut app: App<'a, 'b>, flags: &[&str]) -> App<'a, 'b> where 'a: 'b {
+    let populated_flags: Vec<Arg<'static, 'static>> = flags.iter().map(|f| match *f {
+        x if x == ITERATION_COUNT_FLAG =>
+            Arg::with_name(ITERATION_COUNT_FLAG)
             .short("i")
             .long("iterations")
             .value_name("ITERATIONS")
-            .help("Number of MCTS iterations to run")
+            .help("Number of Monte Carlo iterations to run per epoch")
             .takes_value(true)
             .required(true),
-        Arg::with_name(SIMULATION_COUNT_FLAG)
+        x if x == SIMULATION_COUNT_FLAG =>
+            Arg::with_name(SIMULATION_COUNT_FLAG)
             .short("s")
             .long("simulations")
             .value_name("SIMULATIONS")
             .help("Number of simulations to run at each expansion step")
             .takes_value(true)
             .required(true),
-        Arg::with_name(EXPLORATION_BIAS_FLAG)
+        x if x == EXPLORATION_BIAS_FLAG =>
+            Arg::with_name(EXPLORATION_BIAS_FLAG)
             .short("b")
             .long("exploration_bias")
             .value_name("BIAS")
             .help("Exploration bias for UCB computation")
             .takes_value(true)
             .required(true),
-        Arg::with_name(INITIAL_BOARD_FLAG)
+        x if x == INITIAL_BOARD_FLAG =>
+            Arg::with_name(INITIAL_BOARD_FLAG)
             .long("board")
-            .value_name("default|trollendgame|dwarfendgame")
+            .possible_values(&["default", "trollendgame", "dwarfendgame"])
             .help("Initial board configuration"),
-        Arg::with_name(INITIAL_PLAYER_FLAG)
+        x if x == INITIAL_PLAYER_FLAG =>
+            Arg::with_name(INITIAL_PLAYER_FLAG)
             .short("p")
             .long("player")
-            .value_name("dwarf|troll")
-            .help("Player to play"),
-        Arg::with_name(LOG_LEVEL_FLAG)
+            .possible_values(&["dwarf", "troll"])
+            .help("Initial player to play"),
+        x if x == AI_PLAYER_FLAG =>
+            Arg::with_name(AI_PLAYER_FLAG)
+            .short("p")
+            .long("player")
+            .possible_values(&["dwarf", "troll"])
+            .help("Side that the AI will play"),
+        x if x == LOG_LEVEL_FLAG =>
+            Arg::with_name(LOG_LEVEL_FLAG)
             .long("log_level")
-            .value_name("info|trace|error|debug|off")
+            .possible_values(&["info", "trace", "error", "debug", "off"])
             .help("Logging level"),
-        ])
+        x => panic!("Unrecognized flag identifier '{}'", x),
+    }).collect();
+    app.args(&populated_flags)
 }
 
 pub fn initialize_search(state: mcts::State, graph: &mut mcts::Graph) {

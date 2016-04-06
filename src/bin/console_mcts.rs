@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 extern crate chrono;
 extern crate clap;
 extern crate fern;
@@ -21,7 +19,13 @@ fn main() {
             App::new("console_mcts")
                 .version("0.1.0")
                 .author("Stu Black <trurl@freeshell.org>")
-                .about("Plays out Thud MCTS iterations"));
+                .about("Plays out Thud MCTS iterations"),
+            &[util::ITERATION_COUNT_FLAG,
+              util::SIMULATION_COUNT_FLAG,
+              util::EXPLORATION_BIAS_FLAG,
+              util::INITIAL_BOARD_FLAG,
+              util::INITIAL_PLAYER_FLAG,
+              util::LOG_LEVEL_FLAG]);
         app.get_matches()
     };
     let iteration_count =

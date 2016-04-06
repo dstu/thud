@@ -5,7 +5,6 @@ extern crate chrono;
 
 use thud::game::board;
 use thud::mcts::State;
-use std::str::FromStr;
 
 fn main() {
     let logger_config = fern::DispatchConfig {
