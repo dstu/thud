@@ -90,8 +90,7 @@ mod test {
         let state = game::State::<board::TranspositionalEquivalence>::new(
             board, String::from_str("player1").ok().unwrap(),
             String::from_str("player2").ok().unwrap());
-        assert_eq!(Some(Payoff { weight: 1, values: [dwarf, troll], }),
-                   payoff(&state));
+        assert_eq!(Some(Payoff { weight: 1, values: [dwarf, troll], }), payoff(&state));
     }
 
     #[test]
@@ -183,6 +182,23 @@ _______________
 ._____________.
 ..__dd___d___..
 ..._________...
+...._______....
+....._____.....
+"#));
+        check_payoff(29, 4, board::decode_board(r#"
+.....____d.....
+...._____d_....
+..._________...
+..___________..
+.____d______d_.
+___d_d_d____dd_
+_d__d_____d_ddd
+__d____O_______
+ddd_____d______
+Td__________dd_
+.d__________d_.
+..d_d_d______..
+..._____d___...
 ...._______....
 ....._____.....
 "#));

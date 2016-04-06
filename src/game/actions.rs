@@ -476,4 +476,30 @@ _______________
                                              Coordinate::new(7, 7).unwrap(),
                                              Coordinate::new(7, 7).unwrap()])]);
     }
+
+    #[test]
+    fn troll_cant_move() {
+        let state = game::State::<board::TranspositionalEquivalence>::new(
+            board::decode_board(r#"
+.....____d.....
+...._____d_....
+..._________...
+..___________..
+.____d______d_.
+___d_d_d____dd_
+_d__d_____d_ddd
+__d____O_______
+ddd_____d______
+Td__________dd_
+.d__________d_.
+..d_d_d______..
+..._____d___...
+...._______....
+....._____.....
+"#),
+            String::from_str("player1").ok().unwrap(),
+            String::from_str("player2").ok().unwrap());
+        let actions: Vec<game::Action> = state.role_actions(Role::Troll).collect();
+        assert!(actions.is_empty());
+    }
 }

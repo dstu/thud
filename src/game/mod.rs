@@ -115,8 +115,8 @@ impl<E> State<E> where E: board::CellEquivalence {
 
     pub fn terminated(&self) -> bool {
         self.end_proposal == EndProposal::Both
-            || self.board.occupied_iter(Role::Dwarf).count() == 0
-            || self.board.occupied_iter(Role::Troll).count() == 0
+            || self.board.role_actions(Role::Dwarf).count() == 0
+            || self.board.role_actions(Role::Troll).count() == 0
     }
 
     pub fn board(&self) -> &board::Cells {
