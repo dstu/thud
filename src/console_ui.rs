@@ -1,7 +1,9 @@
 use std::collections::HashSet;
+use std::fmt;
 use std::io;
 use std::io::Write;
 
+use game::Role;
 use game::board::Cells;
 use game::board::Content;
 use game::board::Coordinate;
@@ -14,6 +16,16 @@ use ::search_graph;
 
 pub fn write_board(board: &Cells) {
     print!("{}", format_board(board));
+}
+
+pub fn prompt_for_piece(board: &Cells, role: Role) -> Coordinate {
+    loop {
+        let c = read_coordinate();
+        match board[c] {
+            Content::Occupied(x) if x.role() == Some(role) => return c,
+            x => println!("{:?} doesn't match desired role ({:?})", x, role),
+        }
+    }
 }
 
 pub fn read_coordinate() -> Coordinate {
@@ -91,4 +103,17 @@ fn write_node_tree<'a>(n: &mcts::Node<'a>, indentation_level: usize, visited_nod
         }
         println!("Printed ({})", n.get_id());
     }
+}
+
+pub fn select_one<'a, T>(items: &'a [T]) -> Option<&'a T> where T: fmt::Debug {
+    let stdin = io::stdin();
+    let mut stdout = io::stdout();
+    let mut input = String::new();
+    for (i, item) in items.iter().enumerate() {
+        println!("{}) {:?}", i, item);
+    }
+    print!("select? ");
+    stdout.flush().ok().expect("could not flush stdout");
+    stdin.read_line(&mut input).ok().expect("could not read from stdin");
+    input.trim().parse::<usize>().ok().and_then(|i| items.get(i))
 }

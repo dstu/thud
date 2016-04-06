@@ -52,10 +52,10 @@ fn main() {
             Err(e) => panic!("Bad initial board configuration: {}", e),
         };
     let toggle_initial_player =
-        match matches.value_of(::thud::util::INITIAL_PLAYER_FLAG) {
-            None | Some("dwarf") => false,
-            Some("troll") => true,
-            Some(x) => panic!("Bad initial player: {}", x),
+        match matches.value_of(::thud::util::INITIAL_PLAYER_FLAG).map(|x| x.parse::<game::Role>()) {
+            None | Some(Ok(game::Role::Dwarf)) => false,
+            Some(Ok(game::Role::Troll)) => true,
+            Some(Err(x)) => panic!("{}", x),
         };
     let logging_level =
         match matches.value_of(::thud::util::LOG_LEVEL_FLAG).map(|x| x.parse::<log::LogLevelFilter>()) {
@@ -77,7 +77,7 @@ fn main() {
     }
 
     // Play game.
-    let mut state = mcts::State::new(initial_cells, String::from_str("Player 1").ok().unwrap(), String::from_str("Player 2").ok().unwrap());
+    let mut state = mcts::State::new(initial_cells);
     if toggle_initial_player {
         state.toggle_active_role();
     }
