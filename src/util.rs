@@ -10,6 +10,7 @@ pub const INITIAL_BOARD_FLAG: &'static str = "initial_board";
 pub const INITIAL_PLAYER_FLAG: &'static str = "initial_player";
 pub const AI_PLAYER_FLAG: &'static str = "ai_player";
 pub const LOG_LEVEL_FLAG: &'static str = "log_level";
+pub const MOVE_SELECTION_CRITERION_FLAG: &'static str = "move_selection_criterion";
 
 arg_enum! {
     #[derive(Debug)]
@@ -29,6 +30,14 @@ impl InitialBoard {
             InitialBoard::DwarfEndgame => board::decode_board(DWARF_ENDGAME),
             InitialBoard::DwarfBoxed => board::decode_board(DWARF_BOXED),
         }
+    }
+}
+
+arg_enum! {
+    #[derive(Debug, Clone, Copy)]
+    pub enum MoveSelectionCriterion {
+        VisitCount,
+        Ucb
     }
 }
 
@@ -156,6 +165,12 @@ pub fn set_common_args<'a, 'b>(app: App<'a, 'b>, flags: &[&str]) -> App<'a, 'b> 
             .takes_value(true)
             .possible_values(&["info", "trace", "error", "debug", "off"])
             .help("Logging level"),
+        x if x == MOVE_SELECTION_CRITERION_FLAG =>
+            Arg::with_name(MOVE_SELECTION_CRITERION_FLAG)
+            .long("move_selection")
+            .takes_value(true)
+            .possible_values(&["visitcount", "ucb"])
+            .help("Criteria for selecting the best move to make"),
         x => panic!("Unrecognized flag identifier '{}'", x),
     }).collect();
     app.args(&populated_flags)

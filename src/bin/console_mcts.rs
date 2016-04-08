@@ -25,7 +25,8 @@ fn main() {
               util::EXPLORATION_BIAS_FLAG,
               util::INITIAL_BOARD_FLAG,
               util::INITIAL_PLAYER_FLAG,
-              util::LOG_LEVEL_FLAG]);
+              util::LOG_LEVEL_FLAG,
+              util::MOVE_SELECTION_CRITERION_FLAG]);
         app.get_matches()
     };
     let iteration_count =
@@ -59,6 +60,12 @@ fn main() {
             Some(Ok(x)) => x,
             Some(Err(_)) => panic!("Bad logging level '{}'", matches.value_of(util::LOG_LEVEL_FLAG).unwrap()),
             None => log::LogLevelFilter::Info,
+        };
+    let move_selection_criterion =
+        match matches.value_of(util::MOVE_SELECTION_CRITERION_FLAG).map(|x| x.parse::<util::MoveSelectionCriterion>()) {
+            Some(Ok(x)) => x,
+            Some(Err(e)) => panic!("Bad move selection criterion: {}", e),
+            None => util::MoveSelectionCriterion::VisitCount,
         };
 
     // Set up logging.
@@ -122,17 +129,26 @@ fn main() {
                     if iteration % 1000 == 0 || iteration + 1 == iteration_count {
                         println!("root stats:");
                         let mut best_visits = ::std::usize::MIN;
+                        let mut best_ucb = ::std::f64::MIN;
                         for (action, stats, ucb) in stats.into_iter() {
                             println!("{:?}: [{}, {}] = {:?} / {}; UCB = {:?}", action,
                                      (stats.payoff.values[0] as f64) / (stats.visits as f64),
                                      (stats.payoff.values[1] as f64) / (stats.visits as f64),
                                      stats.payoff, stats.visits, ucb);
-                            best_action = match best_action {
-                                None => Some(action),
-                                Some(_) if best_visits < stats.visits => {
+                            best_action = match (best_action, move_selection_criterion) {
+                                (None, _) => Some(action),
+                                (Some(_), util::MoveSelectionCriterion::VisitCount) if best_visits < stats.visits => {
                                     best_visits = stats.visits;
                                     Some(action)
                                 },
+                                (Some(_), util::MoveSelectionCriterion::Ucb) =>
+                                    match ucb {
+                                        Ok(mcts::UcbProxy::Value(x)) if best_ucb < x => {
+                                            best_ucb = x;
+                                            Some(action)
+                                        },
+                                        _ => best_action,
+                                    },
                                 _ => best_action,
                             }
                         }
