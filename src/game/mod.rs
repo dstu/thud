@@ -1,6 +1,6 @@
 #[macro_use] pub mod board;
 
-mod actions;
+#[macro_use] mod actions;
 
 use std::error::Error;
 use std::fmt;
@@ -211,11 +211,9 @@ mod test {
     #[test]
     fn simple_move_equivalence() {
         let mut s1 = new_simple_state();
-        s1.do_action(&Action::Move(coordinate_literal!(2, 3),
-                                   coordinate_literal!(10, 3)));
+        s1.do_action(&move_literal!((2, 3), (10, 3)));
         let mut s2 = new_simple_state();
-        s2.do_action(&Action::Move(coordinate_literal!(2, 3),
-                                   coordinate_literal!(10, 3)));
+        s2.do_action(&move_literal!((2, 3), (10, 3)));
         assert!(s1 == s2);
     }
 
@@ -230,93 +228,75 @@ mod test {
     #[test]
     fn simple_move_hash_collision() {
         let mut s1 = new_simple_state();
-        s1.do_action(&Action::Move(coordinate_literal!(2, 3),
-                                   coordinate_literal!(10, 3)));
+        s1.do_action(&move_literal!((2, 3), (10, 3)));
         let mut s2 = new_simple_state();
-        s2.do_action(&Action::Move(coordinate_literal!(2, 3),
-                                   coordinate_literal!(10, 3)));
+        s2.do_action(&move_literal!((2, 3), (10, 3)));
         check_hash_collision(s1, s2);
     }
 
     #[test]
     fn transposed_move_equivalence() {
         let mut s1 = new_untransposing_state();
-        s1.do_action(&Action::Move(coordinate_literal!(5, 0),
-                                   coordinate_literal!(1, 5)));
+        s1.do_action(&move_literal!((5, 0), (1, 5)));
         let mut s2 = new_untransposing_state();
-        s2.do_action(&Action::Move(coordinate_literal!(5, 0),
-                                   coordinate_literal!(1, 5)));
+        s2.do_action(&move_literal!((5, 0), (1, 5)));
         assert!(s1 == s2);
 
         s1 = new_untransposing_state();
-        s1.do_action(&Action::Move(coordinate_literal!(5, 0),
-                                   coordinate_literal!(1, 5)));
+        s1.do_action(&move_literal!((5, 0), (1, 5)));
         s2 = new_untransposing_state();
-        s2.do_action(&Action::Move(coordinate_literal!(0, 5),
-                                   coordinate_literal!(5, 1)));
+        s2.do_action(&move_literal!((0, 5), (5, 1)));
         assert!(s1 == s2);
     }
 
     #[test]
     fn transposed_move_hash_collision() {
         let mut s1 = new_untransposing_state();
-        s1.do_action(&Action::Move(coordinate_literal!(5, 0),
-                                   coordinate_literal!(1, 5)));
+        s1.do_action(&move_literal!((5, 0), (1, 5)));
         let mut s2 = new_untransposing_state();
-        s2.do_action(&Action::Move(coordinate_literal!(5, 0),
-                                   coordinate_literal!(1, 5)));
+        s2.do_action(&move_literal!((5, 0), (1, 5)));
         check_hash_collision(s1, s2);
 
         s1 = new_untransposing_state();
-        s1.do_action(&Action::Move(coordinate_literal!(5, 0),
-                                   coordinate_literal!(1, 5)));
+        s1.do_action(&move_literal!((5, 0), (1, 5)));
         s2 = new_untransposing_state();
-        s2.do_action(&Action::Move(coordinate_literal!(0, 5),
-                                   coordinate_literal!(5, 1)));
+        s2.do_action(&move_literal!((0, 5), (5, 1)));
         check_hash_collision(s1, s2);
     }
 
     #[test]
     fn simple_move_nonequivalence_1() {
         let mut s1 = new_simple_state();
-        s1.do_action(&Action::Move(coordinate_literal!(2, 3),
-                                   coordinate_literal!(10, 3)));
+        s1.do_action(&move_literal!((2, 3), (10, 3)));
         let mut s2 = new_simple_state();
-        s2.do_action(&Action::Move(coordinate_literal!(14, 9),
-                                   coordinate_literal!(6, 1)));
+        s2.do_action(&move_literal!((14, 9), (6, 1)));
         assert!(s1 != s2);
     }
 
     #[test]
     fn simple_move_nonequivalence_2() {
         let mut s1 = new_simple_state();
-        s1.do_action(&Action::Move(coordinate_literal!(0, 5),
-                                   coordinate_literal!(8, 5)));
+        s1.do_action(&move_literal!((0, 5), (8, 5)));
         let mut s2 = new_simple_state();
-        s2.do_action(&Action::Move(coordinate_literal!(0, 5),
-                                   coordinate_literal!(9, 5)));
+        s2.do_action(&move_literal!((0, 5), (9, 5)));
         assert!(s1 != s2);
     }
 
     #[test]
     fn transposed_move_nonequivalence_1() {
         let mut s1 = new_untransposing_state();
-        s1.do_action(&Action::Move(coordinate_literal!(2, 3),
-                                   coordinate_literal!(10, 3)));
+        s1.do_action(&move_literal!((2, 3), (10, 3)));
         let mut s2 = new_untransposing_state();
-        s2.do_action(&Action::Move(coordinate_literal!(14, 9),
-                                   coordinate_literal!(6, 1)));
+        s2.do_action(&move_literal!((14, 9), (6, 1)));
         assert!(s1 != s2);
     }
 
     #[test]
     fn transposed_move_nonequivalence_2() {
         let mut s1 = new_untransposing_state();
-        s1.do_action(&Action::Move(coordinate_literal!(0, 5),
-                                   coordinate_literal!(8, 5)));
+        s1.do_action(&move_literal!((0, 5), (8, 5)));
         let mut s2 = new_untransposing_state();
-        s2.do_action(&Action::Move(coordinate_literal!(0, 5),
-                                   coordinate_literal!(9, 5)));
+        s2.do_action(&move_literal!((0, 5), (9, 5)));
         assert!(s1 != s2);
     }
 }
