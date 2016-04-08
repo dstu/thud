@@ -168,8 +168,8 @@ pub fn is_best_child<'a>(e: &Edge<'a>, role: game::Role, explore_bias: f64) -> b
                 // trace!("is_best_child: edge {} is best child by fiat of score computation", e.get_id());
                 return true
             },
-            Ok(UcbSuccess::Select(sibling)) => {
-                if let Some(u) = edge_ucb {
+            Ok(UcbSuccess::Select(_)) => {
+                if let Some(_) = edge_ucb {
                     // trace!("is_best_child: edge {} has a ucb of {}, but sibling edge {} is best child by fiat of score computation", e.get_id(), u, sibling.get_id());
                     return false
                 }
@@ -287,7 +287,7 @@ pub fn find_best_child_edge_index<'a, R>(c: &ChildList<'a>, role: game::Role, ep
         let mut best_index = 0;
         let mut best_ucb = ::std::f64::MIN;
         let mut sampling_count = 0u32;
-        let mut ucb_iter = EdgeUcbIter::new(log_parent_visits, explore_bias, role, c.iter());
+        let ucb_iter = EdgeUcbIter::new(log_parent_visits, explore_bias, role, c.iter());
         for (index, ucb) in ucb_iter.enumerate() {
             match ucb {
                 Ok(UcbSuccess::Select(_)) => {

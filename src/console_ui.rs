@@ -7,7 +7,6 @@ use game::Role;
 use game::board::Cells;
 use game::board::Content;
 use game::board::Coordinate;
-use game::board::Token;
 use game::board::format_board;
 
 use ::mcts;

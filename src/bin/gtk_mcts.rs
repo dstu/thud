@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 extern crate chrono;
 extern crate fern;
 extern crate gtk;
@@ -8,9 +6,7 @@ extern crate log;
 extern crate rand;
 extern crate thud;
 
-use thud::game;
 use thud::game::board;
-use thud::gtk_ui::board_display;
 use thud::mcts;
 use thud::mcts::State;
 use thud::gtk_ui;

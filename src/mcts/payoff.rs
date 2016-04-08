@@ -77,7 +77,6 @@ mod test {
     use super::{Payoff, payoff};
     use ::game;
     use game::board;
-    use std::str::FromStr;
 
     fn check_no_payoff(board: board::Cells) {
         let state = game::State::<board::TranspositionalEquivalence>::new(board);

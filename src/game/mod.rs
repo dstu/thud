@@ -171,7 +171,6 @@ impl<E> Hash for State<E> where E: board::CellEquivalence {
 
 #[cfg(test)]
 mod test {
-    use std::str::FromStr;
     use std::collections::HashMap;
 
     use super::*;
