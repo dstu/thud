@@ -45,9 +45,10 @@ fn main() {
             Err(e) => panic!("Bad exploration bias: {}", e),
         };
     let initial_cells =
-        match matches.value_of(util::INITIAL_BOARD_FLAG).unwrap().parse::<util::InitialBoard>() {
-            Ok(x) => x.cells(),
-            Err(e) => panic!("Bad initial board configuration: {}", e),
+        match matches.value_of(util::INITIAL_BOARD_FLAG).map(|x| x.parse::<util::InitialBoard>()) {
+            Some(Ok(x)) => x.cells(),
+            Some(Err(e)) => panic!("Bad initial board configuration: {}", e),
+            None => game::board::Cells::default(),
         };
     let toggle_initial_player =
         match matches.value_of(util::INITIAL_PLAYER_FLAG).map(|x| x.parse::<game::Role>()) {
@@ -127,14 +128,14 @@ fn main() {
                     //            toplevel_visits, iteration)
                     // }
                     if iteration % 1000 == 0 || iteration + 1 == iteration_count {
-                        println!("root stats:");
+                        info!("root stats:");
                         let mut best_visits = ::std::usize::MIN;
                         let mut best_ucb = ::std::f64::MIN;
                         for (action, stats, ucb) in stats.into_iter() {
-                            println!("{:?}: [{}, {}] = {:?} / {}; UCB = {:?}", action,
-                                     (stats.payoff.values[0] as f64) / (stats.visits as f64),
-                                     (stats.payoff.values[1] as f64) / (stats.visits as f64),
-                                     stats.payoff, stats.visits, ucb);
+                            info!("{:?}: [{}, {}] = {:?} / {}; UCB = {:?}", action,
+                                  (stats.payoff.values[0] as f64) / (stats.visits as f64),
+                                  (stats.payoff.values[1] as f64) / (stats.visits as f64),
+                                  stats.payoff, stats.visits, ucb);
                             best_action = match (best_action, move_selection_criterion) {
                                 (None, _) => Some(action),
                                 (Some(_), util::MoveSelectionCriterion::VisitCount) if best_visits < stats.visits => {
