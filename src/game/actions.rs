@@ -433,7 +433,7 @@ impl<'a> Iterator for HurlIterator<'a> {
 
 #[cfg(test)]
 mod test {
-    #[macro_use(coordinate_literal)] use ::game;
+    use ::game;
 
     #[test]
     fn troll_can_move() {
