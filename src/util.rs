@@ -134,7 +134,7 @@ pub fn set_common_args<'a, 'b>(app: App<'a, 'b>, flags: &[&str]) -> App<'a, 'b> 
             Arg::with_name(INITIAL_BOARD_FLAG)
             .long("board")
             .takes_value(true)
-            .possible_values(&["default", "trollendgame", "dwarfendgame"])
+            .possible_values(&["default", "trollendgame", "dwarfendgame", "dwarfboxed"])
             .help("Initial board configuration"),
         x if x == INITIAL_PLAYER_FLAG =>
             Arg::with_name(INITIAL_PLAYER_FLAG)
