@@ -67,11 +67,12 @@ impl fmt::Debug for Action {
             &Action::Move(start, end) => write!(f, "Move({:?}, {:?})", start, end),
             &Action::Hurl(start, end) => write!(f, "Hurl({:?}, {:?})", start, end),
             &Action::Shove(start, end, capture_count, captured) => {
-                try!(write!(f, "Shove({:?}, {:?}", start, end));
-                for i in 0..capture_count {
+                try!(write!(f, "Shove({:?}, {:?}, [", start, end));
+                try!(write!(f, "{:?}", captured[0]));
+                for i in 1..capture_count {
                     try!(write!(f, ", {:?}", captured[i as usize]));
                 }
-                write!(f, ")")
+                write!(f, "])")
             },
             // &Action::Concede => write!(f, "Concede"),
         }
