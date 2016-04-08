@@ -1,10 +1,11 @@
 use ::game::board;
 
+use std::cmp::{Eq, PartialEq};
 use std::fmt;
 use std::iter::{Chain, FlatMap, Iterator, Take};
 use std::slice;
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Hash)]
 pub enum Action {
     Move(board::Coordinate, board::Coordinate),
     Hurl(board::Coordinate, board::Coordinate),
@@ -75,6 +76,151 @@ impl fmt::Debug for Action {
             // &Action::Concede => write!(f, "Concede"),
         }
     }
+}
+
+impl PartialEq<Action> for Action {
+    fn eq(&self, rhs: &Action) -> bool {
+        match (*self, *rhs) {
+            (Action::Move(a_start, a_end), Action::Move(b_start, b_end)) =>
+                a_start == b_start && a_end == b_end,
+            (Action::Hurl(a_start, a_end), Action::Hurl(b_start, b_end)) =>
+                a_start == b_start && a_end == b_end,
+            (Action::Shove(a_start, a_end, a_capture_count, a_captures),
+             Action::Shove(b_start, b_end, b_capture_count, b_captures))
+                if a_start == b_start && a_end == b_end && a_capture_count == b_capture_count => {
+                    let mut a_captures_sorted = a_captures.clone();
+                    a_captures_sorted.sort();
+                    let mut b_captures_sorted = b_captures.clone();
+                    b_captures_sorted.sort();
+                    a_captures_sorted == b_captures_sorted
+                },
+            _ => false,
+        }
+    }
+}
+
+impl Eq for Action { }
+
+#[macro_export] macro_rules! move_literal {
+    (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr)) =>
+        ($crate::game::Action::Move(
+            $crate::game::board::Coordinate::new_unchecked($start_row, $start_col),
+            $crate::game::board::Coordinate::new_unchecked($end_row, $end_col)));
+}
+
+#[macro_export] macro_rules! shove_literal {
+    (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
+     [($capture_1_row: expr, $capture_1_col: expr)]) =>
+        ($crate::game::Action::Shove(
+            $crate::game::board::Coordinate::new_unchecked($start_row, $start_col),
+            $crate::game::board::Coordinate::new_unchecked($end_row, $end_col),
+            1,
+            [$crate::game::board::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),]));
+    (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
+     [($capture_1_row: expr, $capture_1_col: expr),
+      ($capture_2_row: expr, $capture_2_col: expr)]) =>
+        ($crate::game::Action::Shove(
+            $crate::game::board::Coordinate::new_unchecked($start_row, $start_col),
+            $crate::game::board::Coordinate::new_unchecked($end_row, $end_col),
+            2,
+            [$crate::game::board::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),]));
+    (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
+     [($capture_1_row: expr, $capture_1_col: expr),
+      ($capture_2_row: expr, $capture_2_col: expr),
+      ($capture_3_row: expr, $capture_3_col: expr)]) =>
+        ($crate::game::Action::Shove(
+            $crate::game::board::Coordinate::new_unchecked($start_row, $start_col),
+            $crate::game::board::Coordinate::new_unchecked($end_row, $end_col),
+            3,
+            [$crate::game::board::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_3_row, $capture_3_col),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),]));
+    (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
+     [($capture_1_row: expr, $capture_1_col: expr),
+      ($capture_2_row: expr, $capture_2_col: expr),
+      ($capture_3_row: expr, $capture_3_col: expr),
+      ($capture_4_row: expr, $capture_4_col: expr)]) =>
+        ($crate::game::Action::Shove(
+            $crate::game::board::Coordinate::new_unchecked($start_row, $start_col),
+            $crate::game::board::Coordinate::new_unchecked($end_row, $end_col),
+            4,
+            [$crate::game::board::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_3_row, $capture_3_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_4_row, $capture_4_col),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),]));
+    (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
+     [($capture_1_row: expr, $capture_1_col: expr),
+      ($capture_2_row: expr, $capture_2_col: expr),
+      ($capture_3_row: expr, $capture_3_col: expr),
+      ($capture_4_row: expr, $capture_4_col: expr),
+      ($capture_5_row: expr, $capture_5_col: expr)]) =>
+        ($crate::game::Action::Shove(
+            $crate::game::board::Coordinate::new_unchecked($start_row, $start_col),
+            $crate::game::board::Coordinate::new_unchecked($end_row, $end_col),
+            5,
+            [$crate::game::board::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_3_row, $capture_3_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_4_row, $capture_4_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_5_row, $capture_5_col),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),]));
+    (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
+     [($capture_1_row: expr, $capture_1_col: expr),
+      ($capture_2_row: expr, $capture_2_col: expr),
+      ($capture_3_row: expr, $capture_3_col: expr),
+      ($capture_4_row: expr, $capture_4_col: expr),
+      ($capture_5_row: expr, $capture_5_col: expr),
+      ($capture_6_row: expr, $capture_6_col: expr)]) =>
+        ($crate::game::Action::Shove(
+            $crate::game::board::Coordinate::new_unchecked($start_row, $start_col),
+            $crate::game::board::Coordinate::new_unchecked($end_row, $end_col),
+            6,
+            [$crate::game::board::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_3_row, $capture_3_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_4_row, $capture_4_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_5_row, $capture_5_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_6_row, $capture_6_col),
+             $crate::game::board::Coordinate::new_unchecked(7, 7),]));
+    (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
+     [($capture_1_row: expr, $capture_1_col: expr),
+      ($capture_2_row: expr, $capture_2_col: expr),
+      ($capture_3_row: expr, $capture_3_col: expr),
+      ($capture_4_row: expr, $capture_4_col: expr),
+      ($capture_5_row: expr, $capture_5_col: expr),
+      ($capture_6_row: expr, $capture_6_col: expr),
+      ($capture_7_row: expr, $capture_7_col: expr)]) =>
+        ($crate::game::Action::Shove(
+            $crate::game::board::Coordinate::new_unchecked($start_row, $start_col),
+            $crate::game::board::Coordinate::new_unchecked($end_row, $end_col),
+            7,
+            [$crate::game::board::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_3_row, $capture_3_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_4_row, $capture_4_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_5_row, $capture_5_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_6_row, $capture_6_col),
+             $crate::game::board::Coordinate::new_unchecked($capture_7_row, $capture_7_col),,]));
 }
 
 pub struct DwarfDirectionConsumer<'a> {
