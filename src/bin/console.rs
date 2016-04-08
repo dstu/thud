@@ -1,6 +1,6 @@
 extern crate fern;
 extern crate log;
-extern crate thud;
+#[macro_use(coordinate_literal)] extern crate thud;
 extern crate chrono;
 
 use thud::game::board;
@@ -18,13 +18,13 @@ fn main() {
         panic!("Failed to initialize global logger: {}", e);
     }
     let mut board = board::Cells::new();
-    board[board::Coordinate::new(7, 6).unwrap()] = board::Content::Occupied(board::Token::Troll);
-    board[board::Coordinate::new(8, 6).unwrap()] = board::Content::Occupied(board::Token::Troll);
-    board[board::Coordinate::new(9, 6).unwrap()] = board::Content::Occupied(board::Token::Troll);
-    board[board::Coordinate::new(3, 7).unwrap()] = board::Content::Occupied(board::Token::Dwarf);
-    board[board::Coordinate::new(2, 7).unwrap()] = board::Content::Occupied(board::Token::Dwarf);
-    board[board::Coordinate::new(1, 7).unwrap()] = board::Content::Occupied(board::Token::Dwarf);
-    board[board::Coordinate::new(0, 7).unwrap()] = board::Content::Occupied(board::Token::Dwarf);
+    board[coordinate_literal!(7, 6)] = board::Content::Occupied(board::Token::Troll);
+    board[coordinate_literal!(8, 6)] = board::Content::Occupied(board::Token::Troll);
+    board[coordinate_literal!(9, 6)] = board::Content::Occupied(board::Token::Troll);
+    board[coordinate_literal!(3, 7)] = board::Content::Occupied(board::Token::Dwarf);
+    board[coordinate_literal!(2, 7)] = board::Content::Occupied(board::Token::Dwarf);
+    board[coordinate_literal!(1, 7)] = board::Content::Occupied(board::Token::Dwarf);
+    board[coordinate_literal!(0, 7)] = board::Content::Occupied(board::Token::Dwarf);
     thud::console_ui::write_board(&board);
     let mut state = State::new(board);
     let mut i = 0u8;

@@ -350,7 +350,7 @@ impl<'a> Iterator for ShoveIterator<'a> {
             match (self.forward.next(), self.backward.next()) {
                 (Some(end), Some(previous))
                     if self.board[end].is_empty() && self.board[previous].is_troll() => {
-                        let mut captured = [board::Coordinate::new(7, 7).unwrap(); 7];
+                        let mut captured = [coordinate_literal!(7, 7); 7];
                         let mut i = 0u8;
                         for d in board::Direction::all() {
                             match end.to_direction(*d) {
@@ -433,14 +433,12 @@ impl<'a> Iterator for HurlIterator<'a> {
 
 #[cfg(test)]
 mod test {
-    use ::game;
-    use game::{Role, board};
-    use game::board::Coordinate;
+    #[macro_use(coordinate_literal)] use ::game;
 
     #[test]
     fn troll_can_move() {
-        let state = game::State::<board::TranspositionalEquivalence>::new(
-            board::decode_board(r#"
+        let state = game::State::<game::board::TranspositionalEquivalence>::new(
+            game::board::decode_board(r#"
 ....._____.....
 ...._______....
 ..._________...
@@ -457,27 +455,27 @@ _______________
 ...._______....
 ....._____.....
 "#));
-        let actions: Vec<game::Action> = state.role_actions(Role::Troll).collect();
+        let actions: Vec<game::Action> = state.role_actions(game::Role::Troll).collect();
         assert!(!actions.is_empty());
         assert_eq!(actions,
-                   vec![game::Action::Move(Coordinate::new(5, 14).unwrap(),
-                                           Coordinate::new(4, 13).unwrap()),
-                        game::Action::Shove(Coordinate::new(5, 14).unwrap(),
-                                            Coordinate::new(4, 13).unwrap(),
+                   vec![game::Action::Move(coordinate_literal!(5, 14),
+                                           coordinate_literal!(4, 13)),
+                        game::Action::Shove(coordinate_literal!(5, 14),
+                                            coordinate_literal!(4, 13),
                                             1,
-                                            [Coordinate::new(5, 13).unwrap(),
-                                             Coordinate::new(7, 7).unwrap(),
-                                             Coordinate::new(7, 7).unwrap(),
-                                             Coordinate::new(7, 7).unwrap(),
-                                             Coordinate::new(7, 7).unwrap(),
-                                             Coordinate::new(7, 7).unwrap(),
-                                             Coordinate::new(7, 7).unwrap()])]);
+                                            [coordinate_literal!(5, 13),
+                                             coordinate_literal!(7, 7),
+                                             coordinate_literal!(7, 7),
+                                             coordinate_literal!(7, 7),
+                                             coordinate_literal!(7, 7),
+                                             coordinate_literal!(7, 7),
+                                             coordinate_literal!(7, 7)])]);
     }
 
     #[test]
     fn troll_cant_move() {
-        let state = game::State::<board::TranspositionalEquivalence>::new(
-            board::decode_board(r#"
+        let state = game::State::<game::board::TranspositionalEquivalence>::new(
+            game::board::decode_board(r#"
 .....____d.....
 ...._____d_....
 ..._________...
@@ -494,7 +492,7 @@ Td__________dd_
 ...._______....
 ....._____.....
 "#));
-        let actions: Vec<game::Action> = state.role_actions(Role::Troll).collect();
+        let actions: Vec<game::Action> = state.role_actions(game::Role::Troll).collect();
         assert!(actions.is_empty());
     }
 }

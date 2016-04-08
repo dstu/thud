@@ -16,7 +16,7 @@ fn main() {
     // Set up arg handling.
     let matches = {
         let app = util::set_common_args(
-            App::new("console_mcs")
+            App::new("console_mc")
                 .version("0.1.0")
                 .author("Stu Black <trurl@freeshell.org>")
                 .about("Play out Thud Monte Carlo iterations"),
@@ -28,7 +28,7 @@ fn main() {
               util::LOG_LEVEL_FLAG]);
         app.get_matches()
     };
-    
+
     let iteration_count =
         match matches.value_of(util::ITERATION_COUNT_FLAG).unwrap().parse::<usize>() {
             Ok(x) => x,
