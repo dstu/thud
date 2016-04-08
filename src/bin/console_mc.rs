@@ -45,9 +45,10 @@ fn main() {
             Err(e) => panic!("Bad exploration bias: {}", e),
         };
     let initial_cells =
-        match matches.value_of(util::INITIAL_BOARD_FLAG).unwrap().parse::<util::InitialBoard>() {
-            Ok(x) => x.cells(),
-            Err(e) => panic!("Bad initial board configuration: {}", e),
+        match matches.value_of(util::INITIAL_BOARD_FLAG).map(|x| x.parse::<util::InitialBoard>()) {
+            None => game::board::Cells::default(),
+            Some(Ok(x)) => x.cells(),
+            Some(Err(e)) => panic!("Bad initial board configuration: {}", e),
         };
     let toggle_initial_player =
         match matches.value_of(util::INITIAL_PLAYER_FLAG).map(|x| x.parse::<game::Role>()) {
@@ -133,14 +134,14 @@ fn main() {
         let mut most_visited_index = std::usize::MIN;
         let mut most_visits = 0;
         for (i, stats) in action_statistics.iter().enumerate() {
-            info!("Action {:?} gets statistics {:?}", actions[i], stats);
+            info!("Action {:?} gets {:?}", actions[i], stats);
             // TODO tie-breaking.
             if stats.visits > most_visits {
                 most_visited_index = i;
                 most_visits = stats.visits;
             }
         }
-        info!("Performing move {:?} with statistics {:?}",
+        info!("Performing move {:?} with {:?}",
               actions[most_visited_index], action_statistics[most_visited_index]);
         state.do_action(&actions[most_visited_index]);
         turn_number += 1;
