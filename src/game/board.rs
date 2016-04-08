@@ -71,10 +71,15 @@ const ROW_MASK: u8 = 0x0Fu8;
 /// A space on the game board where a piece may be placed.
 ///
 /// Coordinates are created by providing a pair of values: `Coordinate::new(row,
-/// column)`. The row and column should be in `[0, 15]`.
+/// column)`. The row and column should be in `[0, 15)`.
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct Coordinate {
     packed: u8,
+    index: u8,
+}
+
+const fn compute_index(row: u8, col: u8) -> u8 {
+    ROW_OFFSET[row as usize] + col - ROW_BOUNDS[row as usize].0
 }
 
 impl Coordinate {
@@ -84,7 +89,7 @@ impl Coordinate {
         if row >= 15 || col >= 15 {
             return None
         }
-        let (row_start, row_end) = bounds_of_row(row);
+        let (row_start, row_end) = ROW_BOUNDS[row as usize];
         if row_start <= col && col <= row_end {
             Some(Coordinate::new_unchecked(row, col))
         } else {
@@ -93,16 +98,8 @@ impl Coordinate {
     }
 
     pub const fn new_unchecked(row: u8, col: u8) -> Self {
-        Coordinate { packed: col * COL_MULTIPLIER + row * ROW_MULTIPLIER, }
-    }
-
-    fn from_index(index: usize) -> Self {
-        assert!(index < 165);
-        let row = row_of_index(index);
-        let row_offset = offset_of_row(row);
-        let (row_start, _) = bounds_of_row(row);
-        let col = (index - (row_offset as usize) + (row_start as usize)) as u8;
-        Coordinate { packed: col * COL_MULTIPLIER + row * ROW_MULTIPLIER, }
+        Coordinate { packed: col * COL_MULTIPLIER + row * ROW_MULTIPLIER,
+                     index: compute_index(row, col), }
     }
 
     pub fn row(&self) -> u8 {
@@ -114,35 +111,35 @@ impl Coordinate {
     }
 
     pub fn to_left(&self) -> Option<Self> {
-        LEFT_NEIGHBORS[self.index()]
+        LEFT_NEIGHBORS[self.index as usize]
     }
 
     pub fn to_right(&self) -> Option<Self> {
-        RIGHT_NEIGHBORS[self.index()]
+        RIGHT_NEIGHBORS[self.index as usize]
     }
 
     pub fn to_up(&self) -> Option<Self> {
-        UP_NEIGHBORS[self.index()]
+        UP_NEIGHBORS[self.index as usize]
     }
 
     pub fn to_up_left(&self) -> Option<Self> {
-        UP_LEFT_NEIGHBORS[self.index()]
+        UP_LEFT_NEIGHBORS[self.index as usize]
     }
 
     pub fn to_up_right(&self) -> Option<Self> {
-        UP_RIGHT_NEIGHBORS[self.index()]
+        UP_RIGHT_NEIGHBORS[self.index as usize]
     }
 
     pub fn to_down(&self) -> Option<Self> {
-        DOWN_NEIGHBORS[self.index()]
+        DOWN_NEIGHBORS[self.index as usize]
     }
 
     pub fn to_down_left(&self) -> Option<Self> {
-        DOWN_LEFT_NEIGHBORS[self.index()]
+        DOWN_LEFT_NEIGHBORS[self.index as usize]
     }
 
     pub fn to_down_right(&self) -> Option<Self> {
-        DOWN_RIGHT_NEIGHBORS[self.index()]
+        DOWN_RIGHT_NEIGHBORS[self.index as usize]
     }
    
     pub fn to_direction(&self, d: Direction) -> Option<Coordinate> {
@@ -157,13 +154,6 @@ impl Coordinate {
             Direction::DownRight => self.to_down_right(),
         }
     }
-
-    fn index(&self) -> usize {
-        let row_offset = offset_of_row(self.row());
-        let (row_start, _) = bounds_of_row(self.row());
-        (row_offset + self.col() - row_start) as usize
-    }
-
 }
 
 impl fmt::Debug for Coordinate {
@@ -254,22 +244,6 @@ impl fmt::Debug for Coordinate {
     (6, 12)  => ($crate::game::board::Coordinate::new_unchecked(6, 12));   // 13
     (6, 13)  => ($crate::game::board::Coordinate::new_unchecked(6, 13));   // 14
     (6, 14)  => ($crate::game::board::Coordinate::new_unchecked(6, 14));   // 15
-
-    (7, 0)   => ($crate::game::board::Coordinate::new_unchecked(7, 0));    // 1 
-    (7, 1)   => ($crate::game::board::Coordinate::new_unchecked(7, 1));    // 2 
-    (7, 2)   => ($crate::game::board::Coordinate::new_unchecked(7, 2));    // 3 
-    (7, 3)   => ($crate::game::board::Coordinate::new_unchecked(7, 3));    // 4 
-    (7, 4)   => ($crate::game::board::Coordinate::new_unchecked(7, 4));    // 5 
-    (7, 5)   => ($crate::game::board::Coordinate::new_unchecked(7, 5));    // 6 
-    (7, 6)   => ($crate::game::board::Coordinate::new_unchecked(7, 6));    // 7 
-    (7, 7)   => ($crate::game::board::Coordinate::new_unchecked(7, 7));    // 8 
-    (7, 8)   => ($crate::game::board::Coordinate::new_unchecked(7, 8));    // 9 
-    (7, 9)   => ($crate::game::board::Coordinate::new_unchecked(7, 9));    // 10
-    (7, 10)  => ($crate::game::board::Coordinate::new_unchecked(7, 10));   // 11
-    (7, 11)  => ($crate::game::board::Coordinate::new_unchecked(7, 11));   // 12
-    (7, 12)  => ($crate::game::board::Coordinate::new_unchecked(7, 12));   // 13
-    (7, 13)  => ($crate::game::board::Coordinate::new_unchecked(7, 13));   // 14
-    (7, 14)  => ($crate::game::board::Coordinate::new_unchecked(7, 14));   // 15
 
     (7, 0)   => ($crate::game::board::Coordinate::new_unchecked(7, 0));    // 1 
     (7, 1)   => ($crate::game::board::Coordinate::new_unchecked(7, 1));    // 2 
@@ -1036,8 +1010,8 @@ static RIGHT_NEIGHBORS: [Option<Coordinate>; 165] = [
     Some(Coordinate::new_unchecked(14, 7)),
     Some(Coordinate::new_unchecked(14, 8)),
     Some(Coordinate::new_unchecked(14, 9)),
-    None,
-    ];
+    None,];
+
 static UP_LEFT_NEIGHBORS: [Option<Coordinate>; 165] = [
     None,
     None,
@@ -1203,8 +1177,8 @@ static UP_LEFT_NEIGHBORS: [Option<Coordinate>; 165] = [
     Some(Coordinate::new_unchecked(13, 5)),
     Some(Coordinate::new_unchecked(13, 6)),
     Some(Coordinate::new_unchecked(13, 7)),
-    Some(Coordinate::new_unchecked(13, 8)),
-    ];
+    Some(Coordinate::new_unchecked(13, 8)),];
+
 static UP_RIGHT_NEIGHBORS: [Option<Coordinate>; 165] = [
     None,
     None,
@@ -1706,61 +1680,222 @@ static DOWN_RIGHT_NEIGHBORS: [Option<Coordinate>; 165] = [
     None,
     None,];
 
-/// Returns the start and end columns of `row`, which must be in [0, 14].
-fn bounds_of_row(row: u8) -> (u8, u8) {
-    let row_start = match row {
-        r @ 0...4 => 5 - r,
-        r @ 10...14 => r - 9,
-        _ => 0,
-    };
-    let row_end = 14 - row_start;
-    (row_start, row_end)
-}
+static ALL_COORDINATES: [Coordinate; 165] = [
+    Coordinate::new_unchecked(0, 5),
+    Coordinate::new_unchecked(0, 6),
+    Coordinate::new_unchecked(0, 7),
+    Coordinate::new_unchecked(0, 8),
+    Coordinate::new_unchecked(0, 9),
 
-/// Returns the offset in 1-d row-major order of `row`, which should be in [0, 14].
-fn offset_of_row(row: u8) -> u8 {
-    match row {
-        0 => 0,
-        1 => 5,
-        2 => 12,
-        3 => 21,
-        4 => 32,
-        5 => 45,
-        6 => 60,
-        7 => 75,
-        8 => 90,
-        9 => 105,
-        10 => 120,
-        11 => 133,
-        12 => 144,
-        13 => 153,
-        14 => 160,
-        _ => unreachable!(),
-    }
-}
+    Coordinate::new_unchecked(1, 4),
+    Coordinate::new_unchecked(1, 5),
+    Coordinate::new_unchecked(1, 6),
+    Coordinate::new_unchecked(1, 7),
+    Coordinate::new_unchecked(1, 8),
+    Coordinate::new_unchecked(1, 9),
+    Coordinate::new_unchecked(1, 10),
 
-/// Returns the row (in 15x15 gridspace) that `index` (in linear cellspace) is
-/// in.
-fn row_of_index(index: usize) -> u8 {
-    match index {
-        0...4 => 0u8,
-        5...11 => 1u8,
-        12...20 => 2u8,
-        21...31 => 3u8,
-        31...44 => 4u8,
-        45...59 => 5u8,
-        60...74 => 6u8,
-        75...89 => 7u8,
-        90...104 => 8u8,
-        105...119 => 9u8,
-        120...132 => 10u8,
-        133...143 => 11u8,
-        144...152 => 12u8,
-        153...159 => 13u8,
-        160...164 => 14u8,
-        _ => unreachable!(),
-    }
-}
+    Coordinate::new_unchecked(2, 3),
+    Coordinate::new_unchecked(2, 4),
+    Coordinate::new_unchecked(2, 5),
+    Coordinate::new_unchecked(2, 6),
+    Coordinate::new_unchecked(2, 7),
+    Coordinate::new_unchecked(2, 8),
+    Coordinate::new_unchecked(2, 9),
+    Coordinate::new_unchecked(2, 10),
+    Coordinate::new_unchecked(2, 11),
+
+    Coordinate::new_unchecked(3, 2),
+    Coordinate::new_unchecked(3, 3),
+    Coordinate::new_unchecked(3, 4),
+    Coordinate::new_unchecked(3, 5),
+    Coordinate::new_unchecked(3, 6),
+    Coordinate::new_unchecked(3, 7),
+    Coordinate::new_unchecked(3, 8),
+    Coordinate::new_unchecked(3, 9),
+    Coordinate::new_unchecked(3, 10),
+    Coordinate::new_unchecked(3, 11),
+    Coordinate::new_unchecked(3, 12),
+
+    Coordinate::new_unchecked(4, 1),
+    Coordinate::new_unchecked(4, 2),
+    Coordinate::new_unchecked(4, 3),
+    Coordinate::new_unchecked(4, 4),
+    Coordinate::new_unchecked(4, 5),
+    Coordinate::new_unchecked(4, 6),
+    Coordinate::new_unchecked(4, 7),
+    Coordinate::new_unchecked(4, 8),
+    Coordinate::new_unchecked(4, 9),
+    Coordinate::new_unchecked(4, 10),
+    Coordinate::new_unchecked(4, 11),
+    Coordinate::new_unchecked(4, 12),
+    Coordinate::new_unchecked(4, 13),
+
+    Coordinate::new_unchecked(5, 0),
+    Coordinate::new_unchecked(5, 1),
+    Coordinate::new_unchecked(5, 2),
+    Coordinate::new_unchecked(5, 3),
+    Coordinate::new_unchecked(5, 4),
+    Coordinate::new_unchecked(5, 5),
+    Coordinate::new_unchecked(5, 6),
+    Coordinate::new_unchecked(5, 7),
+    Coordinate::new_unchecked(5, 8),
+    Coordinate::new_unchecked(5, 9),
+    Coordinate::new_unchecked(5, 10),
+    Coordinate::new_unchecked(5, 11),
+    Coordinate::new_unchecked(5, 12),
+    Coordinate::new_unchecked(5, 13),
+    Coordinate::new_unchecked(5, 14),
+
+    Coordinate::new_unchecked(6, 0),
+    Coordinate::new_unchecked(6, 1),
+    Coordinate::new_unchecked(6, 2),
+    Coordinate::new_unchecked(6, 3),
+    Coordinate::new_unchecked(6, 4),
+    Coordinate::new_unchecked(6, 5),
+    Coordinate::new_unchecked(6, 6),
+    Coordinate::new_unchecked(6, 7),
+    Coordinate::new_unchecked(6, 8),
+    Coordinate::new_unchecked(6, 9),
+    Coordinate::new_unchecked(6, 10),
+    Coordinate::new_unchecked(6, 11),
+    Coordinate::new_unchecked(6, 12),
+    Coordinate::new_unchecked(6, 13),
+    Coordinate::new_unchecked(6, 14),
+
+    Coordinate::new_unchecked(7, 0),
+    Coordinate::new_unchecked(7, 1),
+    Coordinate::new_unchecked(7, 2),
+    Coordinate::new_unchecked(7, 3),
+    Coordinate::new_unchecked(7, 4),
+    Coordinate::new_unchecked(7, 5),
+    Coordinate::new_unchecked(7, 6),
+    Coordinate::new_unchecked(7, 7),
+    Coordinate::new_unchecked(7, 8),
+    Coordinate::new_unchecked(7, 9),
+    Coordinate::new_unchecked(7, 10),
+    Coordinate::new_unchecked(7, 11),
+    Coordinate::new_unchecked(7, 12),
+    Coordinate::new_unchecked(7, 13),
+    Coordinate::new_unchecked(7, 14),
+
+    Coordinate::new_unchecked(8, 0),
+    Coordinate::new_unchecked(8, 1),
+    Coordinate::new_unchecked(8, 2),
+    Coordinate::new_unchecked(8, 3),
+    Coordinate::new_unchecked(8, 4),
+    Coordinate::new_unchecked(8, 5),
+    Coordinate::new_unchecked(8, 6),
+    Coordinate::new_unchecked(8, 7),
+    Coordinate::new_unchecked(8, 8),
+    Coordinate::new_unchecked(8, 9),
+    Coordinate::new_unchecked(8, 10),
+    Coordinate::new_unchecked(8, 11),
+    Coordinate::new_unchecked(8, 12),
+    Coordinate::new_unchecked(8, 13),
+    Coordinate::new_unchecked(8, 14),
+
+    Coordinate::new_unchecked(9, 0),
+    Coordinate::new_unchecked(9, 1),
+    Coordinate::new_unchecked(9, 2),
+    Coordinate::new_unchecked(9, 3),
+    Coordinate::new_unchecked(9, 4),
+    Coordinate::new_unchecked(9, 5),
+    Coordinate::new_unchecked(9, 6),
+    Coordinate::new_unchecked(9, 7),
+    Coordinate::new_unchecked(9, 8),
+    Coordinate::new_unchecked(9, 9),
+    Coordinate::new_unchecked(9, 10),
+    Coordinate::new_unchecked(9, 11),
+    Coordinate::new_unchecked(9, 12),
+    Coordinate::new_unchecked(9, 13),
+    Coordinate::new_unchecked(9, 14),
+
+    Coordinate::new_unchecked(10, 1),
+    Coordinate::new_unchecked(10, 2),
+    Coordinate::new_unchecked(10, 3),
+    Coordinate::new_unchecked(10, 4),
+    Coordinate::new_unchecked(10, 5),
+    Coordinate::new_unchecked(10, 6),
+    Coordinate::new_unchecked(10, 7),
+    Coordinate::new_unchecked(10, 8),
+    Coordinate::new_unchecked(10, 9),
+    Coordinate::new_unchecked(10, 10),
+    Coordinate::new_unchecked(10, 11),
+    Coordinate::new_unchecked(10, 12),
+    Coordinate::new_unchecked(10, 13),
+
+    Coordinate::new_unchecked(11, 2),
+    Coordinate::new_unchecked(11, 3),
+    Coordinate::new_unchecked(11, 4),
+    Coordinate::new_unchecked(11, 5),
+    Coordinate::new_unchecked(11, 6),
+    Coordinate::new_unchecked(11, 7),
+    Coordinate::new_unchecked(11, 8),
+    Coordinate::new_unchecked(11, 9),
+    Coordinate::new_unchecked(11, 10),
+    Coordinate::new_unchecked(11, 11),
+    Coordinate::new_unchecked(11, 12),
+
+    Coordinate::new_unchecked(12, 3),
+    Coordinate::new_unchecked(12, 4),
+    Coordinate::new_unchecked(12, 5),
+    Coordinate::new_unchecked(12, 6),
+    Coordinate::new_unchecked(12, 7),
+    Coordinate::new_unchecked(12, 8),
+    Coordinate::new_unchecked(12, 9),
+    Coordinate::new_unchecked(12, 10),
+    Coordinate::new_unchecked(12, 11),
+
+    Coordinate::new_unchecked(13, 4),
+    Coordinate::new_unchecked(13, 5),
+    Coordinate::new_unchecked(13, 6),
+    Coordinate::new_unchecked(13, 7),
+    Coordinate::new_unchecked(13, 8),
+    Coordinate::new_unchecked(13, 9),
+    Coordinate::new_unchecked(13, 10),
+
+    Coordinate::new_unchecked(14, 5),
+    Coordinate::new_unchecked(14, 6),
+    Coordinate::new_unchecked(14, 7),
+    Coordinate::new_unchecked(14, 8),
+    Coordinate::new_unchecked(14, 9),];
+
+/// The start and end columns of `row`, which must be in [0, 14].
+const ROW_BOUNDS: &'static [(u8, u8); 15] = &[
+    (5u8, 9u8),
+    (4u8, 10u8),
+    (3u8, 11u8),
+    (2u8, 12u8),
+    (1u8, 13u8),
+    (0u8, 14u8),
+    (0u8, 14u8),
+    (0u8, 14u8),
+    (0u8, 14u8),
+    (0u8, 14u8),
+    (1u8, 13u8),
+    (2u8, 12u8),
+    (3u8, 11u8),
+    (4u8, 10u8),
+    (5u8, 9u8)];
+
+/// The offset in 1-d row-major order of `row`, which should be in [0, 14].
+const ROW_OFFSET: &'static [u8; 15] = &[
+    0,
+    5,
+    12,
+    21,
+    32,
+    45,
+    60,
+    75,
+    90,
+    105,
+    120,
+    133,
+    144,
+    153,
+    160,];
 
 /// A direction linking one Coordinate to another.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1963,13 +2098,13 @@ impl Index<Coordinate> for Cells {
     type Output = Content;
 
     fn index(&self, i: Coordinate) -> &Content {
-        &self.cells[i.index()]
+        &self.cells[i.index as usize]
     }
 }
 
 impl IndexMut<Coordinate> for Cells {
     fn index_mut(&mut self, i: Coordinate) -> &mut Content {
-        &mut self.cells[i.index()]
+        &mut self.cells[i.index as usize]
     }
 }
 
@@ -1985,7 +2120,7 @@ impl<'a> Iterator for ContentsIter<'a> {
         if self.index >= self.board.cells.len() {
             None
         } else {
-            let coordinate = Coordinate::from_index(self.index);
+            let coordinate = ALL_COORDINATES[self.index];
             self.index += 1;
             Some((coordinate, self.board[coordinate]))
         }
@@ -2006,7 +2141,7 @@ impl<'a> Iterator for OccupiedCellsIter<'a> {
             if self.index >= self.board.cells.len() {
                 return None
             } else {
-                let coordinate = Coordinate::from_index(self.index);
+                let coordinate = ALL_COORDINATES[self.index];
                 self.index += 1;
                 match self.board[coordinate] {
                     Content::Occupied(t) if t.role() == Some(self.role) =>
