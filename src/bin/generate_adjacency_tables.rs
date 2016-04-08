@@ -19,7 +19,7 @@ fn main() {
                     match c.to_direction(d) {
                         None => println!("None,"),
                         Some(neighbor) =>
-                            println!("Coordinate::new_unchecked({}, {}),",
+                            println!("Some(Coordinate::new_unchecked({}, {})),",
                                      neighbor.row(), neighbor.col()),
                     }
                 }

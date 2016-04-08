@@ -1,4 +1,5 @@
 #![feature(associated_type_defaults)]
+#![feature(const_fn)]
 #![feature(fn_traits)]
 #![feature(unboxed_closures)]
 
