@@ -35,3 +35,6 @@ name = "console_play"
 
 [[bin]]
 name = "console_mc"
+
+[[bin]]
+name = "generate_adjacency_tables"
