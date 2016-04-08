@@ -581,6 +581,7 @@ impl<'a> Iterator for HurlIterator<'a> {
 #[cfg(test)]
 mod test {
     use ::game;
+    use std::cmp::{Ord, Ordering};
 
     #[test]
     fn troll_can_move() {
@@ -641,5 +642,113 @@ Td__________dd_
 "#));
         let actions: Vec<game::Action> = state.role_actions(game::Role::Troll).collect();
         assert!(actions.is_empty());
+    }
+
+    fn cmp_actions(a: &game::Action, b: &game::Action) -> Ordering {
+        match (*a, *b) {
+            (game::Action::Move(a_start, a_end), game::Action::Move(b_start, b_end)) =>
+                (a_start, a_end).cmp(&(b_start, b_end)),
+            (game::Action::Move(_, _), _) => Ordering::Less,
+            (game::Action::Hurl(a_start, a_end), game::Action::Hurl(b_start, b_end)) =>
+                (a_start, a_end).cmp(&(b_start, b_end)),
+            (game::Action::Hurl(_, _), game::Action::Move(_, _)) => Ordering::Greater,
+            (game::Action::Hurl(_, _), _) => Ordering::Less,
+            (game::Action::Shove(a_start, a_end, a_capture_count, a_captures),
+             game::Action::Shove(b_start, b_end, b_capture_count, b_captures)) => {
+                let mut a_captures_sorted = a_captures.clone();
+                a_captures_sorted.sort();
+                let mut b_captures_sorted = b_captures.clone();
+                b_captures_sorted.sort();
+                (a_start, a_end, a_capture_count, a_captures_sorted).cmp(
+                    &(b_start, b_end, b_capture_count, b_captures_sorted))
+            },
+            (game::Action::Shove(_, _, _, _), _) => Ordering::Greater,
+        }
+    }
+
+    #[test]
+    fn troll_can_move_and_shove() {
+        let state = game::State::<game::board::TranspositionalEquivalence>::new(
+//             game::board::decode_board(r#"
+// ....._____.....
+// ....______d....
+// ..._T___d__d...
+// ..__________d..
+// .d___d___d___d.
+// d________d_____
+// _______T_T____d
+// _d___T_O_______
+// _______T______d
+// d___d_____T___d
+// .d______T_____.
+// ..d_T______dd..
+// ..._____d___...
+// ....d_____d....
+// ....._d___.....
+// "#)
+            game::board::decode_board(r#"
+....._____.....
+....______d....
+..._T___d__d...
+..__________d..
+.d___d___d___d.
+d________d_____
+_______T_T____d
+_d_____O_______
+______________d
+d___d_________d
+.d____________.
+..d________dd..
+..._____d___...
+....d_____d....
+....._d___.....
+"#)
+);
+        let actions = {
+            let mut v: Vec<game::Action> = state.role_actions(game::Role::Troll).collect();
+            v.sort_by(cmp_actions);
+            v
+        };
+        let desired_actions = {
+            let mut v = vec!(
+                // Troll at (2, 4).
+                move_literal!((2, 4), (2, 3)),
+                move_literal!((2, 4), (2, 5)),
+                move_literal!((2, 4), (1, 4)),
+                move_literal!((2, 4), (1, 5)),
+                move_literal!((2, 4), (3, 4)),
+                move_literal!((2, 4), (3, 5)),
+                move_literal!((2, 4), (3, 3)),
+                shove_literal!((2, 4), (3, 4), [(4, 5)]),
+                shove_literal!((2, 4), (3, 5), [(4, 5)]),
+                // Troll at (6, 7).
+                move_literal!((6, 7), (6, 6)),
+                move_literal!((6, 7), (6, 8)),
+                move_literal!((6, 7), (5, 7)),
+                move_literal!((6, 7), (5, 6)),
+                move_literal!((6, 7), (5, 8)),
+                move_literal!((6, 7), (7, 8)),
+                move_literal!((6, 7), (7, 6)),
+                shove_literal!((6, 7), (5, 6), [(4, 5)]),
+                shove_literal!((6, 7), (6, 8), [(5, 9)]),
+                shove_literal!((6, 7), (5, 8), [(4, 9), (5, 9)]),
+                // Troll at (6, 9).
+                move_literal!((6, 9), (6, 8)),
+                move_literal!((6, 9), (6, 10)),
+                move_literal!((6, 9), (7, 9)),
+                move_literal!((6, 9), (5, 8)),
+                move_literal!((6, 9), (5, 10)),
+                move_literal!((6, 9), (7, 8)),
+                move_literal!((6, 9), (7, 10)),
+                shove_literal!((6, 9), (6, 8), [(5, 9)]),
+                shove_literal!((6, 9), (6, 10), [(5, 9)]),
+                shove_literal!((6, 9), (5, 8), [(5, 9), (4, 9)]),
+                shove_literal!((6, 9), (5, 10), [(5, 9), (4, 9)]),
+                // Troll at (7, 5).
+            );
+            v.sort_by(cmp_actions);
+            v
+        };
+        assert_eq!(actions, desired_actions);
     }
 }
