@@ -1,14 +1,15 @@
 use ::mcts::base::*;
 use ::mcts::ucb;
 
-use ::search_graph::{Target, Traversal};
+use ::search_graph::Target;
+use ::search_graph::search::Traversal;
 use ::rand::Rng;
 
 use std::error::Error;
 use std::fmt;
 
 pub enum RolloutError<'a> {
-    Cycle(SearchPath<'a>),
+    Cycle(SearchStack<'a>),
     Ucb(ucb::UcbError),
 }
 
@@ -51,7 +52,7 @@ impl<'a> Error for RolloutError<'a> {
 
 pub fn rollout<'a, R: Rng>(node: MutNode<'a>, state: &mut State, explore_bias: f64,
                            epoch: usize, rng: &mut R) -> Result<'a> {
-    let mut path = SearchPath::new(node);
+    let mut path = SearchStack::new(node);
     loop {
         if !path.is_head_expanded() {
             match path.to_head() {
@@ -92,9 +93,9 @@ pub fn rollout<'a, R: Rng>(node: MutNode<'a>, state: &mut State, explore_bias: f
                 state.do_action(&selected_edge.get_data().action)
             },
             Ok(None) => panic!("rollout: failed to select a child"),
-            Err(::search_graph::SearchError::SelectionError(ucb::UcbError::NoChildren)) =>
+            Err(::search_graph::search::SearchError::SelectionError(ucb::UcbError::NoChildren)) =>
                 no_children = true,
-            Err(::search_graph::SearchError::SelectionError(e)) =>
+            Err(::search_graph::search::SearchError::SelectionError(e)) =>
                 return Err(RolloutError::Ucb(e)),
             Err(e) =>
                 panic!("Internal error in rollout: {}", e),

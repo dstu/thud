@@ -8,7 +8,7 @@ use ::rand::Rng;
 pub fn expand<'a, R: Rng>(expander: EdgeExpander<'a>, state: State, rng: &mut R,
                           simulation_count: usize) -> (MutNode<'a>, game::Role, Payoff) {
     match expander.expand_to_edge(state.clone(), Default::default) {
-        ::search_graph::Expanded::New(e) => {
+        ::search_graph::mutators::Expanded::New(e) => {
             let mut target = e.to_target();
             trace!("expand: made new node {}; now to play: {:?}; board: {}",
                    target.get_id(), state.active_role(), format_board(state.board()));
@@ -20,7 +20,7 @@ pub fn expand<'a, R: Rng>(expander: EdgeExpander<'a>, state: State, rng: &mut R,
             trace!("expand: simulation of new node {} gives payoff {:?}", target.get_id(), payoff);
             (target, state.active_role(), payoff)
         },
-        ::search_graph::Expanded::Extant(e) => {
+        ::search_graph::mutators::Expanded::Extant(e) => {
             let payoff = {
                 let target = e.get_target();
                 trace!("expand: hit extant node {}", target.get_id());
