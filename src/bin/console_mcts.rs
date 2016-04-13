@@ -89,11 +89,13 @@ fn main() {
     }
     let mut graph = mcts::Graph::new();
 
-    util::initialize_search(state.clone(), &mut graph);
     let mut search_state = mcts::SearchState::new(rand::thread_rng(), exploration_bias);
     let mut turn_number = 0;
     loop {
         info!("begin turn {}; board: {}", turn_number, ::thud::game::board::format_board(state.board()));
+        if graph.get_node(&state).is_none() {
+            util::initialize_search(state.clone(), &mut graph);
+        }
         let mut best_action = None;
         for iteration in 0..iteration_count {
             if iteration % 100 == 0 {
@@ -167,8 +169,7 @@ fn main() {
             Some(action) => {
                 info!("turn {}: performing best action {:?}", turn_number, action);
                 state.do_action(&action);
-                graph = mcts::Graph::new();
-                util::initialize_search(state.clone(), &mut graph);
+                graph.retain_reachable_from(&[&state]);
                 turn_number += 1;
             },
             None => {

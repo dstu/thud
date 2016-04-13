@@ -106,7 +106,7 @@ impl<R> SearchState<R> where R: Rng {
                 Some(root) => {
                     trace!("SearchState::search: beginning epoch {}", self.epoch);
                     let settings = settings_fn(self.epoch);
-                try!(self.iterate_search(root_state.clone(), root, &settings));
+                    try!(self.iterate_search(root_state.clone(), root, &settings));
                 },
                 None => return Err(SearchError::NoRootState),
             }
@@ -153,7 +153,28 @@ impl<R> SearchState<R> where R: Rng {
                         return Ok(())
                     },
                 },
-            Err(rollout::RolloutError::Cycle(_)) => panic!("cycle in rollout"),
+            Err(rollout::RolloutError::Cycle(stack)) => {
+                error!("rollout found cycle:");
+                for item in stack.iter() {
+                    match item {
+                        ::search_graph::search::StackItem::Item(e) =>
+                            error!("Edge action: {:?}", e.get_data().action),
+                        ::search_graph::search::StackItem::Head(::search_graph::Target::Expanded(n)) => {
+                            error!("Head node parent actions:");
+                            for parent in n.get_parent_list().iter() {
+                                error!("{:?}", parent.get_data().action);
+                            }
+                            error!("Head node child actions:");
+                            for child in n.get_parent_list().iter() {
+                                error!("{:?}", child.get_data().action);
+                            }
+                        },
+                        ::search_graph::search::StackItem::Head(::search_graph::Target::Unexpanded(e)) =>
+                            error!("Head edge action: {:?}", e.get_data().action),
+                    }
+                }
+                panic!("cycle in rollout")
+            },
             Err(rollout::RolloutError::Ucb(e)) => Err(SearchError::Ucb(e)),
             // Err(e) => panic!("{:?}", e),
             // rollout::Result::Cycle(mut cyclic_edge) => {

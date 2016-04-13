@@ -75,13 +75,17 @@ fn main() {
     }
 
     let mut state = mcts::State::new(initial_cells);
+    let mut graph = mcts::Graph::new();
+    let mut search_state = mcts::SearchState::new(rand::thread_rng(), exploration_bias);
     loop {
         console_ui::write_board(state.board());
         if state.active_role() == ai_role {
+            println!("{:?} player's turn. Thinking...", ai_role);
+            if graph.get_node(&state).is_none() {
+                util::initialize_search(state.clone(), &mut graph);
+                info!("Manually added current game state to graph");
+            }
             let mut best_action = None;
-            let mut graph = mcts::Graph::new();
-            util::initialize_search(state.clone(), &mut graph);
-            let mut search_state = mcts::SearchState::new(rand::thread_rng(), exploration_bias);
             for iteration in 0..iteration_count {
                 if iteration % 100 == 0 {
                     info!("iteration: {} / {} = {:.02}%", iteration, iteration_count,
@@ -122,6 +126,7 @@ fn main() {
                 Some(a) => {
                     info!("best action: {:?}", a);
                     state.do_action(&a);
+                    graph.retain_reachable_from(&[&state]);
                 },
                 None => {
                     info!("No best action. Exiting.");
@@ -146,6 +151,7 @@ fn main() {
                         match console_ui::select_one(&["y", "n"]) {
                             Some(&"y") => {
                                 state = moved_state;
+                                graph.retain_reachable_from(&[&state]);
                                 break
                             },
                             _ => continue,

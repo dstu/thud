@@ -751,4 +751,28 @@ d___d_________d
         };
         assert_eq!(actions, desired_actions);
     }
+
+    #[test]
+    fn dwarf_cant_move_illegally_ok() {
+        let state = game::State::<game::board::TranspositionalEquivalence>::new(
+            game::board::decode_board(r#"
+.....dd_dd.....
+....d_____d....
+..._d______d...
+..d_________d..
+.d___________d.
+d_____________d
+d_____TTT_____d
+______TOT______
+d_____TT______d
+d______T______d
+.d___________d.
+..d_________d..
+...d_______d...
+....d_____d....
+.....dd_dd.....
+"#));
+        let actions: Vec<game::Action> = state.role_actions(game::Role::Dwarf).collect();
+        assert!(!actions.contains(&move_literal!((9, 0), (9, 7))));
+    }
 }
