@@ -48,7 +48,7 @@ fn main() {
             Some(Ok(x)) => x.cells(),
             Some(Err(e)) => panic!("Bad initial board configuration: {}", e),
         };
-    let ai_role = match matches.value_of(util::INITIAL_PLAYER_FLAG).map(|x| x.parse::<game::Role>()) {
+    let ai_role = match matches.value_of(util::AI_PLAYER_FLAG).map(|x| x.parse::<game::Role>()) {
         None | Some(Ok(game::Role::Dwarf)) => game::Role::Dwarf,
         Some(Ok(game::Role::Troll)) => game::Role::Troll,
         Some(Err(x)) => panic!("{}", x),
