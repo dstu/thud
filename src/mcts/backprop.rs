@@ -70,10 +70,6 @@ pub fn backprop_payoff<'a, R: Rng>(node: Node<'a>, epoch: usize, payoff: Payoff,
                 e.get_data().statistics.set(stats);
                 to_visit.push((player.toggle(), e.get_source()));
             }
-            trace!("backprop_payoff: increment_visit(node {}, {:?})", node.get_id(), payoff);
-            let mut stats = node.get_data().statistics.get();
-            stats.increment_visit(payoff);
-            node.get_data().statistics.set(stats);
         }
     }
 }

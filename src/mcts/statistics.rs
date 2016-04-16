@@ -36,7 +36,6 @@ impl fmt::Debug for Statistics {
 pub struct NodeData {
     backprop_epoch: atomic::AtomicUsize,
     rollout_epoch: atomic::AtomicUsize,
-    pub statistics: Cell<Statistics>,
     pub cycle: bool,
     pub known_payoff: Option<Payoff>,
 }
@@ -82,7 +81,6 @@ impl Clone for NodeData {
                 self.backprop_epoch.load(atomic::Ordering::Acquire)),
             rollout_epoch: atomic::AtomicUsize::new(
                 self.rollout_epoch.load(atomic::Ordering::Acquire)),
-            statistics: self.statistics.clone(),
             cycle: self.cycle.clone(),
             known_payoff: self.known_payoff.clone(),
         }
@@ -96,7 +94,6 @@ impl Default for NodeData {
             rollout_epoch: atomic::AtomicUsize::new(0),
             cycle: false,
             known_payoff: None,
-            statistics: Cell::new(Default::default()),
         }
     }
 }

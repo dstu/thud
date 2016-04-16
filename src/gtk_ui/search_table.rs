@@ -40,7 +40,7 @@ impl Column {
                 Column::Id =>
                     v.set_string(format!("node:{}", n.get_id()).as_str()),
                 Column::Statistics =>
-                    v.set_string(format!("{:?}", n.get_data().statistics).as_str()),
+                    v.set_string(""),
                 Column::Action =>
                     v.set_string(""),
                 Column::EdgeStatus =>

@@ -90,7 +90,7 @@ fn write_node_tree<'a>(n: &mcts::Node<'a>, indentation_level: usize, visited_nod
                 search_graph::Target::Unexpanded(_) =>
                     println!("Unexpanded"),
                 search_graph::Target::Expanded(target) => {
-                    println!("Expanded({}, {:?})", target.get_id(), target.get_data().statistics);
+                    println!("Expanded({})", target.get_id());
                     write_node_tree(&target, indentation_level + 1, visited_nodes);
                 },
             }

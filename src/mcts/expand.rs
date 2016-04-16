@@ -24,9 +24,14 @@ pub fn expand<'a, R: Rng>(expander: EdgeExpander<'a>, state: State, rng: &mut R,
             let payoff = {
                 let target = e.get_target();
                 trace!("expand: hit extant node {}", target.get_id());
-                let stats = target.get_data().statistics.get();
-                Payoff { weight: stats.visits,
-                         values: stats.payoff.values.clone(), }
+                let mut payoff = Payoff::default();
+                for child in target.get_child_list().iter() {
+                    let stats = child.get_data().statistics.get();
+                    payoff.weight += stats.visits;
+                    payoff.values[0] += stats.payoff.values[0];
+                    payoff.values[1] += stats.payoff.values[1];
+                }
+                payoff
             };
             {
                 let mut edge_stats = e.get_data().statistics.get();

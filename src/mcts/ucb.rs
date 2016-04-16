@@ -141,20 +141,12 @@ pub fn is_best_child<'a>(e: &Edge<'a>, role: game::Role, explore_bias: f64) -> b
         return true
     }
     // trace!("is_best_child: edge {} (from node {}) has {} siblings", e.get_id(), parent.get_id(), siblings.len());
-    let parent_stats = parent.get_data().statistics.get();
     let log_parent_visits = {
-        let parent_visits = parent_stats.visits;
-        if parent_visits == 0 {
-            // We should never see this case, as the number of visits to the
-            // parent vertex should never be less than the number of visits to a
-            // child edge. But it's reasonable to fall back to a value of 0.0,
-            // just in case.
-            error!("is_best_child: edge {} (from node {}) has {} visits, but node {} has {} visits",
-                   e.get_id(), parent.get_id(), stats.visits, parent.get_id(), parent_stats.visits);
-            0.0
-        } else {
-            f64::ln(parent_visits as f64)
+        let mut parent_visits = 0;
+        for child_edge in parent.get_child_list().iter() {
+            parent_visits += child_edge.get_data().statistics.get().visits;
         }
+        f64::ln(parent_visits as f64)
     };
     let mut edge_ucb = None;
     let mut best_ucb = ::std::f64::MIN;
@@ -277,13 +269,19 @@ pub fn find_best_child_edge_index<'a, R>(c: &ChildList<'a>, role: game::Role, ep
             error!("find_best_child_edge_index: no children for node {}", c.get_source_node().get_id());
             return Err(UcbError::NoChildren)
         }
-        let log_parent_visits =
-            match c.get_source_node().get_data().statistics.get().visits {
+        let log_parent_visits = {
+            let mut parent_visits = 0;
+            for child in c.iter() {
+                parent_visits += child.get_data().statistics.get().visits;
+            }
+            if parent_visits == 0 {
                 // When we visit a vertex for the first time, it will have zero visits.
-                0 => 0.0,
+                0.0
+            } else {
                 // Otherwise, it should be positive.
-                parent_visits => f64::ln(parent_visits as f64),
-            };
+                f64::ln(parent_visits as f64)
+            }
+        };
         let mut best_index = 0;
         let mut best_ucb = ::std::f64::MIN;
         let mut sampling_count = 0u32;
@@ -329,12 +327,18 @@ pub fn find_best_child_edge_index<'a, R>(c: &ChildList<'a>, role: game::Role, ep
 pub fn child_edge_ucb_scores<'a, R>(c: &ChildList<'a>, role: game::Role, epoch: usize,
                                     explore_bias: f64, rng: &mut R) -> Vec<Result<UcbSuccess<'a>, UcbError>>
     where R: Rng {
-        let log_parent_visits =
-            match c.get_source_node().get_data().statistics.get().visits {
+        let log_parent_visits = {
+            let mut parent_visits = 0;
+            for child in c.iter() {
+                parent_visits += child.get_data().statistics.get().visits;
+            }
+            if parent_visits == 0 {
                 // When we visit a vertex for the first time, it will have zero visits.
-                0 => 0.0,
+                0.0
+            } else {
                 // Otherwise, it should be positive.
-                parent_visits => f64::ln(parent_visits as f64),
-            };
+                f64::ln(parent_visits as f64)
+            }
+        };
         EdgeUcbIter::new(log_parent_visits, explore_bias, role, c.iter()).collect()
     }
