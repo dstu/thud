@@ -11,6 +11,7 @@ pub const INITIAL_PLAYER_FLAG: &'static str = "initial_player";
 pub const AI_PLAYER_FLAG: &'static str = "ai_player";
 pub const LOG_LEVEL_FLAG: &'static str = "log_level";
 pub const MOVE_SELECTION_CRITERION_FLAG: &'static str = "move_selection_criterion";
+pub const RNG_SEED_FLAG: &'static str = "rng_seed";
 
 arg_enum! {
     #[derive(Debug)]
@@ -171,6 +172,11 @@ pub fn set_common_args<'a, 'b>(app: App<'a, 'b>, flags: &[&str]) -> App<'a, 'b> 
             .takes_value(true)
             .possible_values(&["visitcount", "ucb"])
             .help("Criteria for selecting the best move to make"),
+        x if x == RNG_SEED_FLAG =>
+            Arg::with_name(RNG_SEED_FLAG)
+            .long("seed")
+            .takes_value(true)
+            .help("Manually specify RNG seed"),
         x => panic!("Unrecognized flag identifier '{}'", x),
     }).collect();
     app.args(&populated_flags)

@@ -7,6 +7,8 @@ extern crate rand;
 extern crate thud;
 
 use ::clap::App;
+use ::rand::isaac::IsaacRng;
+use ::rand::SeedableRng;
 
 use ::thud::game;
 use ::thud::mcts;
@@ -68,6 +70,12 @@ fn main() {
             Some(Err(e)) => panic!("Bad move selection criterion: {}", e),
             None => util::MoveSelectionCriterion::VisitCount,
         };
+    let rng =
+        match matches.value_of(util::RNG_SEED_FLAG).map(|x| x.parse::<u32>()) {
+            Some(Ok(x)) => IsaacRng::from_seed(&[x]),
+            Some(Err(e)) => panic!("Bad RNG seed: {}", e),
+            None => IsaacRng::new_unseeded(),
+        };
 
     // Set up logging.
     let logger_config = fern::DispatchConfig {
@@ -89,7 +97,7 @@ fn main() {
     }
     let mut graph = mcts::Graph::new();
 
-    let mut search_state = mcts::SearchState::new(rand::thread_rng(), exploration_bias);
+    let mut search_state = mcts::SearchState::new(rng, exploration_bias);
     let mut turn_number = 0;
     loop {
         info!("begin turn {}; board: {}", turn_number, ::thud::game::board::format_board(state.board()));
