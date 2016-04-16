@@ -581,7 +581,6 @@ impl<'a> Iterator for HurlIterator<'a> {
 #[cfg(test)]
 mod test {
     use ::game;
-    use std::cmp::{Ord, Ordering};
 
     #[test]
     fn troll_can_move() {
@@ -644,28 +643,6 @@ Td__________dd_
         assert!(actions.is_empty());
     }
 
-    fn cmp_actions(a: &game::Action, b: &game::Action) -> Ordering {
-        match (*a, *b) {
-            (game::Action::Move(a_start, a_end), game::Action::Move(b_start, b_end)) =>
-                (a_start, a_end).cmp(&(b_start, b_end)),
-            (game::Action::Move(_, _), _) => Ordering::Less,
-            (game::Action::Hurl(a_start, a_end), game::Action::Hurl(b_start, b_end)) =>
-                (a_start, a_end).cmp(&(b_start, b_end)),
-            (game::Action::Hurl(_, _), game::Action::Move(_, _)) => Ordering::Greater,
-            (game::Action::Hurl(_, _), _) => Ordering::Less,
-            (game::Action::Shove(a_start, a_end, a_capture_count, a_captures),
-             game::Action::Shove(b_start, b_end, b_capture_count, b_captures)) => {
-                let mut a_captures_sorted = a_captures.clone();
-                a_captures_sorted.sort();
-                let mut b_captures_sorted = b_captures.clone();
-                b_captures_sorted.sort();
-                (a_start, a_end, a_capture_count, a_captures_sorted).cmp(
-                    &(b_start, b_end, b_capture_count, b_captures_sorted))
-            },
-            (game::Action::Shove(_, _, _, _), _) => Ordering::Greater,
-        }
-    }
-
     #[test]
     fn troll_can_move_and_shove() {
         let state = game::State::<game::board::TranspositionalEquivalence>::new(
@@ -706,7 +683,7 @@ d___d_________d
 );
         let actions = {
             let mut v: Vec<game::Action> = state.role_actions(game::Role::Troll).collect();
-            v.sort_by(cmp_actions);
+            v.sort_by(::util::cmp_actions);
             v
         };
         let desired_actions = {
@@ -746,7 +723,7 @@ d___d_________d
                 shove_literal!((6, 9), (5, 10), [(5, 9), (4, 9)]),
                 // Troll at (7, 5).
             );
-            v.sort_by(cmp_actions);
+            v.sort_by(::util::cmp_actions);
             v
         };
         assert_eq!(actions, desired_actions);

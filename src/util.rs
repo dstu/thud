@@ -3,6 +3,8 @@ use ::game::board;
 use ::clap::{App, Arg};
 use ::mcts;
 
+use std::cmp::{Ord, Ordering};
+
 pub const ITERATION_COUNT_FLAG: &'static str = "iterations";
 pub const SIMULATION_COUNT_FLAG: &'static str = "simulations";
 pub const EXPLORATION_BIAS_FLAG: &'static str = "explore_bias";
@@ -187,5 +189,27 @@ pub fn initialize_search(state: mcts::State, graph: &mut mcts::Graph) {
     let mut children = graph.add_root(state, Default::default()).to_child_list();
     for a in actions.into_iter() {
         children.add_child(mcts::EdgeData::new(a));
+    }
+}
+
+pub fn cmp_actions(a: &game::Action, b: &game::Action) -> Ordering {
+    match (*a, *b) {
+        (game::Action::Move(a_start, a_end), game::Action::Move(b_start, b_end)) =>
+            (a_start, a_end).cmp(&(b_start, b_end)),
+        (game::Action::Move(_, _), _) => Ordering::Less,
+        (game::Action::Hurl(a_start, a_end), game::Action::Hurl(b_start, b_end)) =>
+            (a_start, a_end).cmp(&(b_start, b_end)),
+        (game::Action::Hurl(_, _), game::Action::Move(_, _)) => Ordering::Greater,
+        (game::Action::Hurl(_, _), _) => Ordering::Less,
+        (game::Action::Shove(a_start, a_end, a_capture_count, a_captures),
+         game::Action::Shove(b_start, b_end, b_capture_count, b_captures)) => {
+            let mut a_captures_sorted = a_captures.clone();
+            a_captures_sorted.sort();
+            let mut b_captures_sorted = b_captures.clone();
+            b_captures_sorted.sort();
+            (a_start, a_end, a_capture_count, a_captures_sorted).cmp(
+                &(b_start, b_end, b_capture_count, b_captures_sorted))
+        },
+        (game::Action::Shove(_, _, _, _), _) => Ordering::Greater,
     }
 }
