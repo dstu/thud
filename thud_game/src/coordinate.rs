@@ -39,20 +39,6 @@ impl Coordinate {
         ALL_COORDINATES
     }
 
-    pub fn convolved(&self, i: u8) -> Coordinate {
-        match i {
-            0 => *self,
-            1 => Coordinate::new_unchecked(14u8 - self.row(), self.col()),
-            2 => Coordinate::new_unchecked(self.row(), 14u8 - self.col()),
-            3 => Coordinate::new_unchecked(14u8 - self.row(), 14u8 - self.col()),
-            4 => Coordinate::new_unchecked(self.col(), self.row()),
-            5 => Coordinate::new_unchecked(14u8 - self.col(), self.row()),
-            6 => Coordinate::new_unchecked(self.col(), 14u8 - self.row()),
-            7 => Coordinate::new_unchecked(14u8 - self.col(), 14u8 - self.row()),
-            _ => panic!("Invalid convolution number {}", i),
-        }
-    }
-
     pub fn row(&self) -> u8 {
         (self.packed & ROW_MASK) / ROW_MULTIPLIER
     }
@@ -2069,5 +2055,67 @@ impl Direction {
 
     pub fn all() -> &'static [Direction] {
         ALL_DIRECTIONS_REF
+    }
+}
+
+pub struct Convolution {
+    i: u8
+}
+
+impl Convolution {
+    pub fn convolve(&self, c: Coordinate) -> Coordinate {
+        match self.i {
+            0 => c,
+            1 => Coordinate::new_unchecked(14u8 - c.row(), c.col()),
+            2 => Coordinate::new_unchecked(c.row(), 14u8 - c.col()),
+            3 => Coordinate::new_unchecked(14u8 - c.row(), 14u8 - c.col()),
+            4 => Coordinate::new_unchecked(c.col(), c.row()),
+            5 => Coordinate::new_unchecked(14u8 - c.col(), c.row()),
+            6 => Coordinate::new_unchecked(c.col(), 14u8 - c.row()),
+            7 => Coordinate::new_unchecked(14u8 - c.col(), 14u8 - c.row()),
+            _ => unreachable!(),
+        }
+    }
+
+    pub fn inverse(&self, c: Coordinate) -> Coordinate {
+        match self.i {
+            0 => c,
+            1 => Coordinate::new_unchecked(14u8 - c.row(), c.col()),
+            2 => Coordinate::new_unchecked(c.row(), 14u8 - c.col()),
+            3 => Coordinate::new_unchecked(14u8 - c.row(), 14u8 - c.col()),
+            4 => Coordinate::new_unchecked(c.col(), c.row()),
+            5 => Coordinate::new_unchecked(c.col(), 14u8 - c.row()),
+            6 => Coordinate::new_unchecked(14u8 - c.col(), c.row()),
+            7 => Coordinate::new_unchecked(14u8 - c.col(), 14u8 - c.row()),
+            _ => unreachable!(),
+        }
+    }
+
+    pub const fn all() -> &'static [Self] {
+        ALL_CONVOLUTIONS
+    }
+}
+
+const ALL_CONVOLUTIONS: &'static [Convolution; 8] =
+    &[Convolution { i: 0, },
+      Convolution { i: 1, },
+      Convolution { i: 2, },
+      Convolution { i: 3, },
+      Convolution { i: 4, },
+      Convolution { i: 5, },
+      Convolution { i: 6, },
+      Convolution { i: 7, },];
+
+#[cfg(test)]
+mod test {
+    use super::{Coordinate, Convolution};
+
+    #[test]
+    fn convolved_inverse_ok() {
+        for c in Coordinate::all() {
+            for v in Convolution::all() {
+                assert_eq!(*c, v.inverse(v.convolve(*c)));
+            }
+        }
     }
 }

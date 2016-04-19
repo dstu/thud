@@ -2,7 +2,7 @@ use super::Role;
 use super::actions::{Action, ActionIterator,
                      DwarfCoordinateConsumer, DwarfDirectionConsumer,
                      TrollCoordinateConsumer, TrollDirectionConsumer};
-use super::coordinate::{Coordinate, Direction};
+use super::coordinate::{Coordinate, Convolution, Direction};
 
 use std::clone::Clone;
 use std::default::Default;
@@ -334,8 +334,8 @@ impl CellEquivalence for TranspositionalEquivalence {
                            SipHasher::new(),
                            SipHasher::new(),];
         for c in Coordinate::all() {
-            for i in 0..8 {
-                board[c.convolved(i)].hash(&mut hashers[i as usize]);
+            for (i, v) in Convolution::all().iter().enumerate() {
+                board[v.convolve(*c)].hash(&mut hashers[i]);
             }
         }
         let mut hash_values = [hashers[0].finish(),

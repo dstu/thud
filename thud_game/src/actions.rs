@@ -55,10 +55,6 @@ impl Action {
             _ => None,
         }
     }
-
-    pub fn convolutions(&self) -> ActionConvolutionIter {
-        ActionConvolutionIter { action: self.clone(), i: 0, }
-    }
 }
 
 impl fmt::Debug for Action {
@@ -617,40 +613,6 @@ impl<'a> Iterator for HurlIterator<'a> {
                 _ => return None,
             }
         }
-    }
-}
-
-
-pub struct ActionConvolutionIter {
-    action: Action,
-    i: u8,
-}
-
-impl Iterator for ActionConvolutionIter {
-    type Item = Action;
-
-    fn next(&mut self) -> Option<Action> {
-        if self.i > 7 {
-            return None
-        }
-        let old_i = self.i;
-        self.i += 1;
-        Some(match self.action {
-            Action::ProposeEnd | Action::HandleEndProposal(_) => return None,
-            Action::Move(from, target) =>
-                Action::Move(from.convolved(old_i), target.convolved(old_i)),
-            Action::Hurl(from, target) =>
-                Action::Hurl(from.convolved(old_i), target.convolved(old_i)),
-            Action::Shove(from, target, capture_count, captures) =>
-                Action::Shove(from.convolved(old_i), target.convolved(old_i), capture_count,
-                              [captures[0].convolved(old_i),
-                               captures[1].convolved(old_i),
-                               captures[2].convolved(old_i),
-                               captures[3].convolved(old_i),
-                               captures[4].convolved(old_i),
-                               captures[5].convolved(old_i),
-                               captures[6].convolved(old_i),]),
-        })
     }
 }
 

@@ -1,7 +1,7 @@
 use super::Role;
 use super::actions::{Action, ActionIterator};
 use super::board;
-use super::coordinate::Coordinate;
+use super::coordinate::{Coordinate, Convolution};
 use super::end;
 
 use std::hash::{Hash, Hasher};
@@ -56,19 +56,23 @@ impl<E> State<E> where E: board::CellEquivalence {
     pub fn set_from_convolved(&mut self, convolved: &Self) {
         use super::board::CellEquivalence;
 
-        let mut i = 0u8;
+        let mut convolutions = Convolution::all().iter();
         loop {
-            let mut scratch_cells = board::Cells::new();
-            for (coordinate, content) in convolved.board.cells_iter() {
-                scratch_cells[coordinate.convolved(i)] = content;
+            match convolutions.next() {
+                None => panic!("no match"),
+                Some(v) => {
+                    let mut scratch_cells = board::Cells::new();
+                    for (coordinate, content) in convolved.board.cells_iter() {
+                        scratch_cells[v.convolve(coordinate)] = content;
+                    }
+                    if board::SimpleEquivalence::boards_equal(&convolved.board, &scratch_cells) {
+                        for (coordinate, content) in convolved.board.cells_iter() {
+                            self.board[v.inverse(coordinate)] = content;
+                        }
+                        break
+                    }
+                },
             }
-            if board::SimpleEquivalence::boards_equal(&convolved.board, &scratch_cells) {
-                for (coordinate, content) in scratch_cells.cells_iter() {
-                    self.board[coordinate.convolved(i)] = content;
-                }
-                break
-            }
-            i += 1;
         }
         self.active_role = convolved.active_role;
         self.proposed_terminate = convolved.proposed_terminate;
