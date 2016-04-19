@@ -1,3 +1,4 @@
+use ::itertools::Itertools;
 use ::rand::Rng;
 
 use super::base::*;
@@ -78,7 +79,8 @@ pub fn rollout<'a, R: Rng>(mut node: Node<'a>, explore_bias: f64, epoch: usize, 
             }
         }
     }
-    trace!("rollout: downward_trace has {} elements", downward_trace.len());
+    trace!("rollout: downward_trace has edges: {}",
+           downward_trace.iter().map(|e| e.get_id()).join(", "));
     // Upward scan to do best-child backprop.
     let mut upward_trace = Vec::new();
     let mut frontier: Vec<Node<'a>> =
@@ -100,8 +102,18 @@ pub fn rollout<'a, R: Rng>(mut node: Node<'a>, explore_bias: f64, epoch: usize, 
             _ => break,
         }
     }
-    trace!("rollout: upward_trace has {} elements", upward_trace.len());
+    trace!("rollout: upward_trace has edges: {}",
+           upward_trace.iter().map(|e| e.get_id()).join(", "));
     downward_trace.extend(upward_trace.into_iter());
+    // Retain only unique edges.
+    downward_trace.sort_by_key(|e| e.get_id());
+    downward_trace =
+        downward_trace.into_iter()
+        .group_by_lazy(|e| e.get_id()).into_iter()
+        .map(|(_, mut es)| es.next().unwrap())
+        .collect();
+    trace!("rollout: final trace has edges: {}",
+           downward_trace.iter().map(|e| e.get_id()).join(", "));
     trace!("rollout: ended on node {}", node.get_id());
     Ok((node, downward_trace))
 }
