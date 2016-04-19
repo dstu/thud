@@ -1,64 +1,9 @@
-#[macro_use] pub mod board;
+use super::Role;
+use super::actions::{Action, ActionIterator};
+use super::board;
 
-#[macro_use] mod actions;
-
-use std::error::Error;
-use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
-use std::str::FromStr;
-
-pub use self::actions::Action;
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum Role {
-    Dwarf,
-    Troll,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct UnrecognizedRoleError(String);
-
-impl Role {
-    pub fn index(self) -> usize {
-        match self {
-            Role::Dwarf => 0,
-            Role::Troll => 1,
-        }
-    }
-
-    pub fn toggle(self) -> Self {
-        match self {
-            Role::Dwarf => Role::Troll,
-            Role::Troll => Role::Dwarf,
-        }
-    }
-}
-
-impl FromStr for Role {
-    type Err = UnrecognizedRoleError;
-
-    fn from_str(s: &str) -> Result<Self, UnrecognizedRoleError> {
-        match s.to_lowercase().as_str() {
-            "dwarf" => Ok(Role::Dwarf),
-            "troll" => Ok(Role::Troll),
-            _ => Err(UnrecognizedRoleError(s.to_string())),
-        }
-    }
-}
-
-impl fmt::Display for UnrecognizedRoleError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let UnrecognizedRoleError(ref s) = *self;
-        write!(f, "Unrecognized role: {}", s)
-    }
-}
-
-impl Error for UnrecognizedRoleError {
-    fn description(&self) -> &str {
-        "Unrecognized role"
-    }
-}
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum EndProposal {
@@ -67,15 +12,15 @@ pub enum EndProposal {
     Both,
 }
 
-impl EndProposal {
-    fn advance(&mut self, role: Role) {
-        *self = match *self {
-            EndProposal::Single(r) if r != role => EndProposal::Both,
-            EndProposal::Neither => EndProposal::Single(role),
-            _ => *self,
-        }
-    }
-}
+// impl EndProposal {
+//     fn advance(&mut self, role: Role) {
+//         *self = match *self {
+//             EndProposal::Single(r) if r != role => EndProposal::Both,
+//             EndProposal::Neither => EndProposal::Single(role),
+//             _ => *self,
+//         }
+//     }
+// }
 
 pub struct State<E> where E: board::CellEquivalence {
     board: board::Cells,
@@ -102,15 +47,15 @@ impl<E> State<E> where E: board::CellEquivalence {
         self.active_role
     }
 
-    pub fn actions<'s>(&'s self) -> actions::ActionIterator<'s> {
+    pub fn actions<'s>(&'s self) -> ActionIterator<'s> {
         self.role_actions(self.active_role())
     }
 
-    pub fn role_actions<'s>(&'s self, r: Role) -> actions::ActionIterator<'s> {
+    pub fn role_actions<'s>(&'s self, r: Role) -> ActionIterator<'s> {
         self.board.role_actions(r)
     }
 
-    pub fn position_actions<'s>(&'s self, position: board::Coordinate) -> actions::ActionIterator<'s> {
+    pub fn position_actions<'s>(&'s self, position: board::Coordinate) -> ActionIterator<'s> {
         self.board.position_actions(position)
     }
 
@@ -119,7 +64,7 @@ impl<E> State<E> where E: board::CellEquivalence {
     }
 
     pub fn set_from_convolved(&mut self, convolved: &Self) {
-        use game::board::CellEquivalence;
+        use super::board::CellEquivalence;
 
         let mut i = 0u8;
         loop {
@@ -139,9 +84,9 @@ impl<E> State<E> where E: board::CellEquivalence {
         self.end_proposal = convolved.end_proposal;
     }
 
-    pub fn do_action(&mut self, a: &actions::Action) {
+    pub fn do_action(&mut self, a: &Action) {
         match a {
-            // &actions::Action::Concede => self.end_proposal.advance(self.active_role),
+            // &Action::Concede => self.end_proposal.advance(self.active_role),
             _ => self.board.do_action(a),
         }
         self.toggle_active_role();
@@ -197,6 +142,7 @@ impl<E> Hash for State<E> where E: board::CellEquivalence {
 mod test {
     use std::collections::HashMap;
 
+    use ::board;
     use super::*;
 
     fn new_simple_state() -> State<board::SimpleEquivalence> {
@@ -242,7 +188,7 @@ mod test {
         assert!(s1 == s2);
     }
 
-    fn check_hash_collision<E>(s1: State<E>, s2: State<E>) where E: ::game::board::CellEquivalence {
+    fn check_hash_collision<E>(s1: State<E>, s2: State<E>) where E: board::CellEquivalence {
         let mut table = HashMap::new();
         assert!(table.is_empty());
         table.insert(s1, true);

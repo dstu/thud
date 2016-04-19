@@ -1,7 +1,7 @@
-use ::game::actions::{Action, ActionIterator,
-                      DwarfCoordinateConsumer, DwarfDirectionConsumer,
-                      TrollCoordinateConsumer, TrollDirectionConsumer};
-use ::game;
+use super::Role;
+use super::actions::{Action, ActionIterator,
+                     DwarfCoordinateConsumer, DwarfDirectionConsumer,
+                     TrollCoordinateConsumer, TrollDirectionConsumer};
 
 use std::clone::Clone;
 use std::default::Default;
@@ -19,11 +19,11 @@ pub enum Token {
 
 impl Token {
     /// Returns the token's role, or `None` if the token is the Thudstone.
-    pub fn role(&self) -> Option<game::Role> {
+    pub fn role(&self) -> Option<Role> {
         match *self {
             Token::Stone => None,
-            Token::Dwarf => Some(game::Role::Dwarf),
-            Token::Troll => Some(game::Role::Troll),
+            Token::Dwarf => Some(Role::Dwarf),
+            Token::Troll => Some(Role::Troll),
         }
     }
 }
@@ -55,7 +55,7 @@ impl Content {
         *self == Content::Occupied(Token::Dwarf)
     }
 
-    pub fn role(&self) -> Option<game::Role> {
+    pub fn role(&self) -> Option<Role> {
         match *self {
             Content::Empty => None,
             Content::Occupied(t) => t.role(),
@@ -177,185 +177,185 @@ impl fmt::Debug for Coordinate {
 }
 
 #[macro_export] macro_rules! coordinate_literal {
-    (0, 5)   => ($crate::game::board::Coordinate::new_unchecked(0, 5));    // 1
-    (0, 6)   => ($crate::game::board::Coordinate::new_unchecked(0, 6));    // 2
-    (0, 7)   => ($crate::game::board::Coordinate::new_unchecked(0, 7));    // 3
-    (0, 8)   => ($crate::game::board::Coordinate::new_unchecked(0, 8));    // 4
-    (0, 9)   => ($crate::game::board::Coordinate::new_unchecked(0, 9));    // 5
+    (0, 5)   => ($crate::board::Coordinate::new_unchecked(0, 5));    // 1
+    (0, 6)   => ($crate::board::Coordinate::new_unchecked(0, 6));    // 2
+    (0, 7)   => ($crate::board::Coordinate::new_unchecked(0, 7));    // 3
+    (0, 8)   => ($crate::board::Coordinate::new_unchecked(0, 8));    // 4
+    (0, 9)   => ($crate::board::Coordinate::new_unchecked(0, 9));    // 5
 
-    (1, 4)   => ($crate::game::board::Coordinate::new_unchecked(1, 4));    // 1
-    (1, 5)   => ($crate::game::board::Coordinate::new_unchecked(1, 5));    // 2
-    (1, 6)   => ($crate::game::board::Coordinate::new_unchecked(1, 6));    // 3
-    (1, 7)   => ($crate::game::board::Coordinate::new_unchecked(1, 7));    // 4
-    (1, 8)   => ($crate::game::board::Coordinate::new_unchecked(1, 8));    // 5
-    (1, 9)   => ($crate::game::board::Coordinate::new_unchecked(1, 9));    // 6
-    (1, 10)  => ($crate::game::board::Coordinate::new_unchecked(1, 10));   // 7
+    (1, 4)   => ($crate::board::Coordinate::new_unchecked(1, 4));    // 1
+    (1, 5)   => ($crate::board::Coordinate::new_unchecked(1, 5));    // 2
+    (1, 6)   => ($crate::board::Coordinate::new_unchecked(1, 6));    // 3
+    (1, 7)   => ($crate::board::Coordinate::new_unchecked(1, 7));    // 4
+    (1, 8)   => ($crate::board::Coordinate::new_unchecked(1, 8));    // 5
+    (1, 9)   => ($crate::board::Coordinate::new_unchecked(1, 9));    // 6
+    (1, 10)  => ($crate::board::Coordinate::new_unchecked(1, 10));   // 7
 
-    (2, 3)   => ($crate::game::board::Coordinate::new_unchecked(2, 3));    // 1
-    (2, 4)   => ($crate::game::board::Coordinate::new_unchecked(2, 4));    // 2
-    (2, 5)   => ($crate::game::board::Coordinate::new_unchecked(2, 5));    // 3
-    (2, 6)   => ($crate::game::board::Coordinate::new_unchecked(2, 6));    // 4
-    (2, 7)   => ($crate::game::board::Coordinate::new_unchecked(2, 7));    // 5
-    (2, 8)   => ($crate::game::board::Coordinate::new_unchecked(2, 8));    // 6
-    (2, 9)   => ($crate::game::board::Coordinate::new_unchecked(2, 9));    // 7
-    (2, 10)  => ($crate::game::board::Coordinate::new_unchecked(2, 10));   // 8
-    (2, 11)  => ($crate::game::board::Coordinate::new_unchecked(2, 11));   // 9
+    (2, 3)   => ($crate::board::Coordinate::new_unchecked(2, 3));    // 1
+    (2, 4)   => ($crate::board::Coordinate::new_unchecked(2, 4));    // 2
+    (2, 5)   => ($crate::board::Coordinate::new_unchecked(2, 5));    // 3
+    (2, 6)   => ($crate::board::Coordinate::new_unchecked(2, 6));    // 4
+    (2, 7)   => ($crate::board::Coordinate::new_unchecked(2, 7));    // 5
+    (2, 8)   => ($crate::board::Coordinate::new_unchecked(2, 8));    // 6
+    (2, 9)   => ($crate::board::Coordinate::new_unchecked(2, 9));    // 7
+    (2, 10)  => ($crate::board::Coordinate::new_unchecked(2, 10));   // 8
+    (2, 11)  => ($crate::board::Coordinate::new_unchecked(2, 11));   // 9
 
-    (3, 2)   => ($crate::game::board::Coordinate::new_unchecked(3, 2));    // 1
-    (3, 3)   => ($crate::game::board::Coordinate::new_unchecked(3, 3));    // 2
-    (3, 4)   => ($crate::game::board::Coordinate::new_unchecked(3, 4));    // 3
-    (3, 5)   => ($crate::game::board::Coordinate::new_unchecked(3, 5));    // 4
-    (3, 6)   => ($crate::game::board::Coordinate::new_unchecked(3, 6));    // 5
-    (3, 7)   => ($crate::game::board::Coordinate::new_unchecked(3, 7));    // 6
-    (3, 8)   => ($crate::game::board::Coordinate::new_unchecked(3, 8));    // 7
-    (3, 9)   => ($crate::game::board::Coordinate::new_unchecked(3, 9));    // 8
-    (3, 10)  => ($crate::game::board::Coordinate::new_unchecked(3, 10));   // 9
-    (3, 11)  => ($crate::game::board::Coordinate::new_unchecked(3, 11));   // 10
-    (3, 12)  => ($crate::game::board::Coordinate::new_unchecked(3, 12));   // 11
+    (3, 2)   => ($crate::board::Coordinate::new_unchecked(3, 2));    // 1
+    (3, 3)   => ($crate::board::Coordinate::new_unchecked(3, 3));    // 2
+    (3, 4)   => ($crate::board::Coordinate::new_unchecked(3, 4));    // 3
+    (3, 5)   => ($crate::board::Coordinate::new_unchecked(3, 5));    // 4
+    (3, 6)   => ($crate::board::Coordinate::new_unchecked(3, 6));    // 5
+    (3, 7)   => ($crate::board::Coordinate::new_unchecked(3, 7));    // 6
+    (3, 8)   => ($crate::board::Coordinate::new_unchecked(3, 8));    // 7
+    (3, 9)   => ($crate::board::Coordinate::new_unchecked(3, 9));    // 8
+    (3, 10)  => ($crate::board::Coordinate::new_unchecked(3, 10));   // 9
+    (3, 11)  => ($crate::board::Coordinate::new_unchecked(3, 11));   // 10
+    (3, 12)  => ($crate::board::Coordinate::new_unchecked(3, 12));   // 11
 
-    (4, 1)   => ($crate::game::board::Coordinate::new_unchecked(4, 1));    // 1
-    (4, 2)   => ($crate::game::board::Coordinate::new_unchecked(4, 2));    // 2 
-    (4, 3)   => ($crate::game::board::Coordinate::new_unchecked(4, 3));    // 3 
-    (4, 4)   => ($crate::game::board::Coordinate::new_unchecked(4, 4));    // 4 
-    (4, 5)   => ($crate::game::board::Coordinate::new_unchecked(4, 5));    // 5 
-    (4, 6)   => ($crate::game::board::Coordinate::new_unchecked(4, 6));    // 6 
-    (4, 7)   => ($crate::game::board::Coordinate::new_unchecked(4, 7));    // 7 
-    (4, 8)   => ($crate::game::board::Coordinate::new_unchecked(4, 8));    // 8 
-    (4, 9)   => ($crate::game::board::Coordinate::new_unchecked(4, 9));    // 9
-    (4, 10)  => ($crate::game::board::Coordinate::new_unchecked(4, 10));   // 10
-    (4, 11)  => ($crate::game::board::Coordinate::new_unchecked(4, 11));   // 11
-    (4, 12)  => ($crate::game::board::Coordinate::new_unchecked(4, 12));   // 12
-    (4, 13)  => ($crate::game::board::Coordinate::new_unchecked(4, 13));   // 13
+    (4, 1)   => ($crate::board::Coordinate::new_unchecked(4, 1));    // 1
+    (4, 2)   => ($crate::board::Coordinate::new_unchecked(4, 2));    // 2 
+    (4, 3)   => ($crate::board::Coordinate::new_unchecked(4, 3));    // 3 
+    (4, 4)   => ($crate::board::Coordinate::new_unchecked(4, 4));    // 4 
+    (4, 5)   => ($crate::board::Coordinate::new_unchecked(4, 5));    // 5 
+    (4, 6)   => ($crate::board::Coordinate::new_unchecked(4, 6));    // 6 
+    (4, 7)   => ($crate::board::Coordinate::new_unchecked(4, 7));    // 7 
+    (4, 8)   => ($crate::board::Coordinate::new_unchecked(4, 8));    // 8 
+    (4, 9)   => ($crate::board::Coordinate::new_unchecked(4, 9));    // 9
+    (4, 10)  => ($crate::board::Coordinate::new_unchecked(4, 10));   // 10
+    (4, 11)  => ($crate::board::Coordinate::new_unchecked(4, 11));   // 11
+    (4, 12)  => ($crate::board::Coordinate::new_unchecked(4, 12));   // 12
+    (4, 13)  => ($crate::board::Coordinate::new_unchecked(4, 13));   // 13
 
-    (5, 0)   => ($crate::game::board::Coordinate::new_unchecked(5, 0));    // 1 
-    (5, 1)   => ($crate::game::board::Coordinate::new_unchecked(5, 1));    // 2 
-    (5, 2)   => ($crate::game::board::Coordinate::new_unchecked(5, 2));    // 3 
-    (5, 3)   => ($crate::game::board::Coordinate::new_unchecked(5, 3));    // 4 
-    (5, 4)   => ($crate::game::board::Coordinate::new_unchecked(5, 4));    // 5 
-    (5, 5)   => ($crate::game::board::Coordinate::new_unchecked(5, 5));    // 6 
-    (5, 6)   => ($crate::game::board::Coordinate::new_unchecked(5, 6));    // 7 
-    (5, 7)   => ($crate::game::board::Coordinate::new_unchecked(5, 7));    // 8 
-    (5, 8)   => ($crate::game::board::Coordinate::new_unchecked(5, 8));    // 9 
-    (5, 9)   => ($crate::game::board::Coordinate::new_unchecked(5, 9));    // 10
-    (5, 10)  => ($crate::game::board::Coordinate::new_unchecked(5, 10));   // 11
-    (5, 11)  => ($crate::game::board::Coordinate::new_unchecked(5, 11));   // 12
-    (5, 12)  => ($crate::game::board::Coordinate::new_unchecked(5, 12));   // 13
-    (5, 13)  => ($crate::game::board::Coordinate::new_unchecked(5, 13));   // 14
-    (5, 14)  => ($crate::game::board::Coordinate::new_unchecked(5, 14));   // 15
+    (5, 0)   => ($crate::board::Coordinate::new_unchecked(5, 0));    // 1 
+    (5, 1)   => ($crate::board::Coordinate::new_unchecked(5, 1));    // 2 
+    (5, 2)   => ($crate::board::Coordinate::new_unchecked(5, 2));    // 3 
+    (5, 3)   => ($crate::board::Coordinate::new_unchecked(5, 3));    // 4 
+    (5, 4)   => ($crate::board::Coordinate::new_unchecked(5, 4));    // 5 
+    (5, 5)   => ($crate::board::Coordinate::new_unchecked(5, 5));    // 6 
+    (5, 6)   => ($crate::board::Coordinate::new_unchecked(5, 6));    // 7 
+    (5, 7)   => ($crate::board::Coordinate::new_unchecked(5, 7));    // 8 
+    (5, 8)   => ($crate::board::Coordinate::new_unchecked(5, 8));    // 9 
+    (5, 9)   => ($crate::board::Coordinate::new_unchecked(5, 9));    // 10
+    (5, 10)  => ($crate::board::Coordinate::new_unchecked(5, 10));   // 11
+    (5, 11)  => ($crate::board::Coordinate::new_unchecked(5, 11));   // 12
+    (5, 12)  => ($crate::board::Coordinate::new_unchecked(5, 12));   // 13
+    (5, 13)  => ($crate::board::Coordinate::new_unchecked(5, 13));   // 14
+    (5, 14)  => ($crate::board::Coordinate::new_unchecked(5, 14));   // 15
 
-    (6, 0)   => ($crate::game::board::Coordinate::new_unchecked(6, 0));    // 1 
-    (6, 1)   => ($crate::game::board::Coordinate::new_unchecked(6, 1));    // 2 
-    (6, 2)   => ($crate::game::board::Coordinate::new_unchecked(6, 2));    // 3 
-    (6, 3)   => ($crate::game::board::Coordinate::new_unchecked(6, 3));    // 4 
-    (6, 4)   => ($crate::game::board::Coordinate::new_unchecked(6, 4));    // 5 
-    (6, 5)   => ($crate::game::board::Coordinate::new_unchecked(6, 5));    // 6 
-    (6, 6)   => ($crate::game::board::Coordinate::new_unchecked(6, 6));    // 7 
-    (6, 7)   => ($crate::game::board::Coordinate::new_unchecked(6, 7));    // 8 
-    (6, 8)   => ($crate::game::board::Coordinate::new_unchecked(6, 8));    // 9 
-    (6, 9)   => ($crate::game::board::Coordinate::new_unchecked(6, 9));    // 10
-    (6, 10)  => ($crate::game::board::Coordinate::new_unchecked(6, 10));   // 11
-    (6, 11)  => ($crate::game::board::Coordinate::new_unchecked(6, 11));   // 12
-    (6, 12)  => ($crate::game::board::Coordinate::new_unchecked(6, 12));   // 13
-    (6, 13)  => ($crate::game::board::Coordinate::new_unchecked(6, 13));   // 14
-    (6, 14)  => ($crate::game::board::Coordinate::new_unchecked(6, 14));   // 15
+    (6, 0)   => ($crate::board::Coordinate::new_unchecked(6, 0));    // 1 
+    (6, 1)   => ($crate::board::Coordinate::new_unchecked(6, 1));    // 2 
+    (6, 2)   => ($crate::board::Coordinate::new_unchecked(6, 2));    // 3 
+    (6, 3)   => ($crate::board::Coordinate::new_unchecked(6, 3));    // 4 
+    (6, 4)   => ($crate::board::Coordinate::new_unchecked(6, 4));    // 5 
+    (6, 5)   => ($crate::board::Coordinate::new_unchecked(6, 5));    // 6 
+    (6, 6)   => ($crate::board::Coordinate::new_unchecked(6, 6));    // 7 
+    (6, 7)   => ($crate::board::Coordinate::new_unchecked(6, 7));    // 8 
+    (6, 8)   => ($crate::board::Coordinate::new_unchecked(6, 8));    // 9 
+    (6, 9)   => ($crate::board::Coordinate::new_unchecked(6, 9));    // 10
+    (6, 10)  => ($crate::board::Coordinate::new_unchecked(6, 10));   // 11
+    (6, 11)  => ($crate::board::Coordinate::new_unchecked(6, 11));   // 12
+    (6, 12)  => ($crate::board::Coordinate::new_unchecked(6, 12));   // 13
+    (6, 13)  => ($crate::board::Coordinate::new_unchecked(6, 13));   // 14
+    (6, 14)  => ($crate::board::Coordinate::new_unchecked(6, 14));   // 15
 
-    (7, 0)   => ($crate::game::board::Coordinate::new_unchecked(7, 0));    // 1 
-    (7, 1)   => ($crate::game::board::Coordinate::new_unchecked(7, 1));    // 2 
-    (7, 2)   => ($crate::game::board::Coordinate::new_unchecked(7, 2));    // 3 
-    (7, 3)   => ($crate::game::board::Coordinate::new_unchecked(7, 3));    // 4 
-    (7, 4)   => ($crate::game::board::Coordinate::new_unchecked(7, 4));    // 5 
-    (7, 5)   => ($crate::game::board::Coordinate::new_unchecked(7, 5));    // 6 
-    (7, 6)   => ($crate::game::board::Coordinate::new_unchecked(7, 6));    // 7 
-    (7, 7)   => ($crate::game::board::Coordinate::new_unchecked(7, 7));    // 8 
-    (7, 8)   => ($crate::game::board::Coordinate::new_unchecked(7, 8));    // 9 
-    (7, 9)   => ($crate::game::board::Coordinate::new_unchecked(7, 9));    // 10
-    (7, 10)  => ($crate::game::board::Coordinate::new_unchecked(7, 10));   // 11
-    (7, 11)  => ($crate::game::board::Coordinate::new_unchecked(7, 11));   // 12
-    (7, 12)  => ($crate::game::board::Coordinate::new_unchecked(7, 12));   // 13
-    (7, 13)  => ($crate::game::board::Coordinate::new_unchecked(7, 13));   // 14
-    (7, 14)  => ($crate::game::board::Coordinate::new_unchecked(7, 14));   // 15
+    (7, 0)   => ($crate::board::Coordinate::new_unchecked(7, 0));    // 1 
+    (7, 1)   => ($crate::board::Coordinate::new_unchecked(7, 1));    // 2 
+    (7, 2)   => ($crate::board::Coordinate::new_unchecked(7, 2));    // 3 
+    (7, 3)   => ($crate::board::Coordinate::new_unchecked(7, 3));    // 4 
+    (7, 4)   => ($crate::board::Coordinate::new_unchecked(7, 4));    // 5 
+    (7, 5)   => ($crate::board::Coordinate::new_unchecked(7, 5));    // 6 
+    (7, 6)   => ($crate::board::Coordinate::new_unchecked(7, 6));    // 7 
+    (7, 7)   => ($crate::board::Coordinate::new_unchecked(7, 7));    // 8 
+    (7, 8)   => ($crate::board::Coordinate::new_unchecked(7, 8));    // 9 
+    (7, 9)   => ($crate::board::Coordinate::new_unchecked(7, 9));    // 10
+    (7, 10)  => ($crate::board::Coordinate::new_unchecked(7, 10));   // 11
+    (7, 11)  => ($crate::board::Coordinate::new_unchecked(7, 11));   // 12
+    (7, 12)  => ($crate::board::Coordinate::new_unchecked(7, 12));   // 13
+    (7, 13)  => ($crate::board::Coordinate::new_unchecked(7, 13));   // 14
+    (7, 14)  => ($crate::board::Coordinate::new_unchecked(7, 14));   // 15
 
-    (8, 0)   => ($crate::game::board::Coordinate::new_unchecked(8, 0));    // 1 
-    (8, 1)   => ($crate::game::board::Coordinate::new_unchecked(8, 1));    // 2 
-    (8, 2)   => ($crate::game::board::Coordinate::new_unchecked(8, 2));    // 3 
-    (8, 3)   => ($crate::game::board::Coordinate::new_unchecked(8, 3));    // 4 
-    (8, 4)   => ($crate::game::board::Coordinate::new_unchecked(8, 4));    // 5 
-    (8, 5)   => ($crate::game::board::Coordinate::new_unchecked(8, 5));    // 6 
-    (8, 6)   => ($crate::game::board::Coordinate::new_unchecked(8, 6));    // 7 
-    (8, 7)   => ($crate::game::board::Coordinate::new_unchecked(8, 7));    // 8 
-    (8, 8)   => ($crate::game::board::Coordinate::new_unchecked(8, 8));    // 9 
-    (8, 9)   => ($crate::game::board::Coordinate::new_unchecked(8, 9));    // 10
-    (8, 10)  => ($crate::game::board::Coordinate::new_unchecked(8, 10));   // 11
-    (8, 11)  => ($crate::game::board::Coordinate::new_unchecked(8, 11));   // 12
-    (8, 12)  => ($crate::game::board::Coordinate::new_unchecked(8, 12));   // 13
-    (8, 13)  => ($crate::game::board::Coordinate::new_unchecked(8, 13));   // 14
-    (8, 14)  => ($crate::game::board::Coordinate::new_unchecked(8, 14));   // 15
+    (8, 0)   => ($crate::board::Coordinate::new_unchecked(8, 0));    // 1 
+    (8, 1)   => ($crate::board::Coordinate::new_unchecked(8, 1));    // 2 
+    (8, 2)   => ($crate::board::Coordinate::new_unchecked(8, 2));    // 3 
+    (8, 3)   => ($crate::board::Coordinate::new_unchecked(8, 3));    // 4 
+    (8, 4)   => ($crate::board::Coordinate::new_unchecked(8, 4));    // 5 
+    (8, 5)   => ($crate::board::Coordinate::new_unchecked(8, 5));    // 6 
+    (8, 6)   => ($crate::board::Coordinate::new_unchecked(8, 6));    // 7 
+    (8, 7)   => ($crate::board::Coordinate::new_unchecked(8, 7));    // 8 
+    (8, 8)   => ($crate::board::Coordinate::new_unchecked(8, 8));    // 9 
+    (8, 9)   => ($crate::board::Coordinate::new_unchecked(8, 9));    // 10
+    (8, 10)  => ($crate::board::Coordinate::new_unchecked(8, 10));   // 11
+    (8, 11)  => ($crate::board::Coordinate::new_unchecked(8, 11));   // 12
+    (8, 12)  => ($crate::board::Coordinate::new_unchecked(8, 12));   // 13
+    (8, 13)  => ($crate::board::Coordinate::new_unchecked(8, 13));   // 14
+    (8, 14)  => ($crate::board::Coordinate::new_unchecked(8, 14));   // 15
 
-    (9, 0)   => ($crate::game::board::Coordinate::new_unchecked(9, 0));    // 1 
-    (9, 1)   => ($crate::game::board::Coordinate::new_unchecked(9, 1));    // 2 
-    (9, 2)   => ($crate::game::board::Coordinate::new_unchecked(9, 2));    // 3 
-    (9, 3)   => ($crate::game::board::Coordinate::new_unchecked(9, 3));    // 4 
-    (9, 4)   => ($crate::game::board::Coordinate::new_unchecked(9, 4));    // 5 
-    (9, 5)   => ($crate::game::board::Coordinate::new_unchecked(9, 5));    // 6 
-    (9, 6)   => ($crate::game::board::Coordinate::new_unchecked(9, 6));    // 7 
-    (9, 7)   => ($crate::game::board::Coordinate::new_unchecked(9, 7));    // 8 
-    (9, 8)   => ($crate::game::board::Coordinate::new_unchecked(9, 8));    // 9 
-    (9, 9)   => ($crate::game::board::Coordinate::new_unchecked(9, 9));    // 10
-    (9, 10)  => ($crate::game::board::Coordinate::new_unchecked(9, 10));   // 11
-    (9, 11)  => ($crate::game::board::Coordinate::new_unchecked(9, 11));   // 12
-    (9, 12)  => ($crate::game::board::Coordinate::new_unchecked(9, 12));   // 13
-    (9, 13)  => ($crate::game::board::Coordinate::new_unchecked(9, 13));   // 14
-    (9, 14)  => ($crate::game::board::Coordinate::new_unchecked(9, 14));   // 15
+    (9, 0)   => ($crate::board::Coordinate::new_unchecked(9, 0));    // 1 
+    (9, 1)   => ($crate::board::Coordinate::new_unchecked(9, 1));    // 2 
+    (9, 2)   => ($crate::board::Coordinate::new_unchecked(9, 2));    // 3 
+    (9, 3)   => ($crate::board::Coordinate::new_unchecked(9, 3));    // 4 
+    (9, 4)   => ($crate::board::Coordinate::new_unchecked(9, 4));    // 5 
+    (9, 5)   => ($crate::board::Coordinate::new_unchecked(9, 5));    // 6 
+    (9, 6)   => ($crate::board::Coordinate::new_unchecked(9, 6));    // 7 
+    (9, 7)   => ($crate::board::Coordinate::new_unchecked(9, 7));    // 8 
+    (9, 8)   => ($crate::board::Coordinate::new_unchecked(9, 8));    // 9 
+    (9, 9)   => ($crate::board::Coordinate::new_unchecked(9, 9));    // 10
+    (9, 10)  => ($crate::board::Coordinate::new_unchecked(9, 10));   // 11
+    (9, 11)  => ($crate::board::Coordinate::new_unchecked(9, 11));   // 12
+    (9, 12)  => ($crate::board::Coordinate::new_unchecked(9, 12));   // 13
+    (9, 13)  => ($crate::board::Coordinate::new_unchecked(9, 13));   // 14
+    (9, 14)  => ($crate::board::Coordinate::new_unchecked(9, 14));   // 15
 
-    (10, 1)  => ($crate::game::board::Coordinate::new_unchecked(10, 1));   // 1
-    (10, 2)  => ($crate::game::board::Coordinate::new_unchecked(10, 2));   // 2 
-    (10, 3)  => ($crate::game::board::Coordinate::new_unchecked(10, 3));   // 3 
-    (10, 4)  => ($crate::game::board::Coordinate::new_unchecked(10, 4));   // 4 
-    (10, 5)  => ($crate::game::board::Coordinate::new_unchecked(10, 5));   // 5 
-    (10, 6)  => ($crate::game::board::Coordinate::new_unchecked(10, 6));   // 6 
-    (10, 7)  => ($crate::game::board::Coordinate::new_unchecked(10, 7));   // 7 
-    (10, 8)  => ($crate::game::board::Coordinate::new_unchecked(10, 8));   // 8 
-    (10, 9)  => ($crate::game::board::Coordinate::new_unchecked(10, 9));   // 9
-    (10, 10) => ($crate::game::board::Coordinate::new_unchecked(10, 10));  // 10
-    (10, 11) => ($crate::game::board::Coordinate::new_unchecked(10, 11));  // 11
-    (10, 12) => ($crate::game::board::Coordinate::new_unchecked(10, 12));  // 12
-    (10, 13) => ($crate::game::board::Coordinate::new_unchecked(10, 13));  // 13
+    (10, 1)  => ($crate::board::Coordinate::new_unchecked(10, 1));   // 1
+    (10, 2)  => ($crate::board::Coordinate::new_unchecked(10, 2));   // 2 
+    (10, 3)  => ($crate::board::Coordinate::new_unchecked(10, 3));   // 3 
+    (10, 4)  => ($crate::board::Coordinate::new_unchecked(10, 4));   // 4 
+    (10, 5)  => ($crate::board::Coordinate::new_unchecked(10, 5));   // 5 
+    (10, 6)  => ($crate::board::Coordinate::new_unchecked(10, 6));   // 6 
+    (10, 7)  => ($crate::board::Coordinate::new_unchecked(10, 7));   // 7 
+    (10, 8)  => ($crate::board::Coordinate::new_unchecked(10, 8));   // 8 
+    (10, 9)  => ($crate::board::Coordinate::new_unchecked(10, 9));   // 9
+    (10, 10) => ($crate::board::Coordinate::new_unchecked(10, 10));  // 10
+    (10, 11) => ($crate::board::Coordinate::new_unchecked(10, 11));  // 11
+    (10, 12) => ($crate::board::Coordinate::new_unchecked(10, 12));  // 12
+    (10, 13) => ($crate::board::Coordinate::new_unchecked(10, 13));  // 13
 
-    (11, 2)  => ($crate::game::board::Coordinate::new_unchecked(11, 2));   // 1
-    (11, 3)  => ($crate::game::board::Coordinate::new_unchecked(11, 3));   // 2
-    (11, 4)  => ($crate::game::board::Coordinate::new_unchecked(11, 4));   // 3
-    (11, 5)  => ($crate::game::board::Coordinate::new_unchecked(11, 5));   // 4
-    (11, 6)  => ($crate::game::board::Coordinate::new_unchecked(11, 6));   // 5
-    (11, 7)  => ($crate::game::board::Coordinate::new_unchecked(11, 7));   // 6
-    (11, 8)  => ($crate::game::board::Coordinate::new_unchecked(11, 8));   // 7
-    (11, 9)  => ($crate::game::board::Coordinate::new_unchecked(11, 9));   // 8
-    (11, 10) => ($crate::game::board::Coordinate::new_unchecked(11, 10));  // 9
-    (11, 11) => ($crate::game::board::Coordinate::new_unchecked(11, 11));  // 10
-    (11, 12) => ($crate::game::board::Coordinate::new_unchecked(11, 12));  // 11
+    (11, 2)  => ($crate::board::Coordinate::new_unchecked(11, 2));   // 1
+    (11, 3)  => ($crate::board::Coordinate::new_unchecked(11, 3));   // 2
+    (11, 4)  => ($crate::board::Coordinate::new_unchecked(11, 4));   // 3
+    (11, 5)  => ($crate::board::Coordinate::new_unchecked(11, 5));   // 4
+    (11, 6)  => ($crate::board::Coordinate::new_unchecked(11, 6));   // 5
+    (11, 7)  => ($crate::board::Coordinate::new_unchecked(11, 7));   // 6
+    (11, 8)  => ($crate::board::Coordinate::new_unchecked(11, 8));   // 7
+    (11, 9)  => ($crate::board::Coordinate::new_unchecked(11, 9));   // 8
+    (11, 10) => ($crate::board::Coordinate::new_unchecked(11, 10));  // 9
+    (11, 11) => ($crate::board::Coordinate::new_unchecked(11, 11));  // 10
+    (11, 12) => ($crate::board::Coordinate::new_unchecked(11, 12));  // 11
 
-    (12, 3)  => ($crate::game::board::Coordinate::new_unchecked(12, 3));   // 1
-    (12, 4)  => ($crate::game::board::Coordinate::new_unchecked(12, 4));   // 2
-    (12, 5)  => ($crate::game::board::Coordinate::new_unchecked(12, 5));   // 3
-    (12, 6)  => ($crate::game::board::Coordinate::new_unchecked(12, 6));   // 4
-    (12, 7)  => ($crate::game::board::Coordinate::new_unchecked(12, 7));   // 5
-    (12, 8)  => ($crate::game::board::Coordinate::new_unchecked(12, 8));   // 6
-    (12, 9)  => ($crate::game::board::Coordinate::new_unchecked(12, 9));   // 7
-    (12, 10) => ($crate::game::board::Coordinate::new_unchecked(12, 10));  // 8
-    (12, 11) => ($crate::game::board::Coordinate::new_unchecked(12, 11));  // 9
+    (12, 3)  => ($crate::board::Coordinate::new_unchecked(12, 3));   // 1
+    (12, 4)  => ($crate::board::Coordinate::new_unchecked(12, 4));   // 2
+    (12, 5)  => ($crate::board::Coordinate::new_unchecked(12, 5));   // 3
+    (12, 6)  => ($crate::board::Coordinate::new_unchecked(12, 6));   // 4
+    (12, 7)  => ($crate::board::Coordinate::new_unchecked(12, 7));   // 5
+    (12, 8)  => ($crate::board::Coordinate::new_unchecked(12, 8));   // 6
+    (12, 9)  => ($crate::board::Coordinate::new_unchecked(12, 9));   // 7
+    (12, 10) => ($crate::board::Coordinate::new_unchecked(12, 10));  // 8
+    (12, 11) => ($crate::board::Coordinate::new_unchecked(12, 11));  // 9
 
-    (13, 4)  => ($crate::game::board::Coordinate::new_unchecked(13, 4));   // 1
-    (13, 5)  => ($crate::game::board::Coordinate::new_unchecked(13, 5));   // 2
-    (13, 6)  => ($crate::game::board::Coordinate::new_unchecked(13, 6));   // 3
-    (13, 7)  => ($crate::game::board::Coordinate::new_unchecked(13, 7));   // 4
-    (13, 8)  => ($crate::game::board::Coordinate::new_unchecked(13, 8));   // 5
-    (13, 9)  => ($crate::game::board::Coordinate::new_unchecked(13, 9));   // 6
-    (13, 10) => ($crate::game::board::Coordinate::new_unchecked(13, 10));  // 7
+    (13, 4)  => ($crate::board::Coordinate::new_unchecked(13, 4));   // 1
+    (13, 5)  => ($crate::board::Coordinate::new_unchecked(13, 5));   // 2
+    (13, 6)  => ($crate::board::Coordinate::new_unchecked(13, 6));   // 3
+    (13, 7)  => ($crate::board::Coordinate::new_unchecked(13, 7));   // 4
+    (13, 8)  => ($crate::board::Coordinate::new_unchecked(13, 8));   // 5
+    (13, 9)  => ($crate::board::Coordinate::new_unchecked(13, 9));   // 6
+    (13, 10) => ($crate::board::Coordinate::new_unchecked(13, 10));  // 7
 
-    (14, 5)  => ($crate::game::board::Coordinate::new_unchecked(14, 5));   // 1
-    (14, 6)  => ($crate::game::board::Coordinate::new_unchecked(14, 6));   // 2
-    (14, 7)  => ($crate::game::board::Coordinate::new_unchecked(14, 7));   // 3
-    (14, 8)  => ($crate::game::board::Coordinate::new_unchecked(14, 8));   // 4
-    (14, 9)  => ($crate::game::board::Coordinate::new_unchecked(14, 9));   // 5
+    (14, 5)  => ($crate::board::Coordinate::new_unchecked(14, 5));   // 1
+    (14, 6)  => ($crate::board::Coordinate::new_unchecked(14, 6));   // 2
+    (14, 7)  => ($crate::board::Coordinate::new_unchecked(14, 7));   // 3
+    (14, 8)  => ($crate::board::Coordinate::new_unchecked(14, 8));   // 4
+    (14, 9)  => ($crate::board::Coordinate::new_unchecked(14, 9));   // 5
 }
 
 static UP_NEIGHBORS: [Option<Coordinate>; 165] = [
@@ -1998,10 +1998,10 @@ impl Cells {
         Cells { cells: [Content::Empty; 165], }
     }
 
-    pub fn role_actions<'s>(&'s self, r: game::Role) -> ActionIterator<'s> {
+    pub fn role_actions<'s>(&'s self, r: Role) -> ActionIterator<'s> {
         let occupied_cells = self.occupied_iter(r);
         match r {
-            game::Role::Dwarf =>
+            Role::Dwarf =>
                 ActionIterator::for_dwarf(
                     occupied_cells.flat_map(DwarfCoordinateConsumer::new(self))),
                 //  The above provides a concrete type for these iterator transforms:
@@ -2011,7 +2011,7 @@ impl Cells {
                 //             .flat_map(|d| (MoveIterator::new(self, position, *d)
                 //                            .chain(HurlIterator::new(self, position, *d))))
                 // })),
-            game::Role::Troll =>
+            Role::Troll =>
                 ActionIterator::for_troll(
                     occupied_cells.flat_map(TrollCoordinateConsumer::new(self))),
                     //  The above provides a concrete type for these iterator transforms:
@@ -2026,13 +2026,13 @@ impl Cells {
 
     pub fn position_actions<'s>(&'s self, position: Coordinate) -> ActionIterator<'s> {
         match self[position] {
-            Content::Occupied(t) if t.role() == Some(game::Role::Dwarf) => {
+            Content::Occupied(t) if t.role() == Some(Role::Dwarf) => {
                 ActionIterator::for_dwarf_position(
                     Direction::all()
                         .into_iter()
                         .flat_map(DwarfDirectionConsumer::new(self, position)))
             },
-            Content::Occupied(t) if t.role() == Some(game::Role::Troll) => {
+            Content::Occupied(t) if t.role() == Some(Role::Troll) => {
                 ActionIterator::for_troll_position(
                     Direction::all()
                         .into_iter()
@@ -2067,7 +2067,7 @@ impl Cells {
         ContentsIter { board: self, index: 0, }
     }
 
-    pub fn occupied_iter<'s>(&'s self, r: game::Role) -> OccupiedCellsIter<'s> {
+    pub fn occupied_iter<'s>(&'s self, r: Role) -> OccupiedCellsIter<'s> {
         OccupiedCellsIter { board: self, role: r, index: 0, }
     }
 }
@@ -2143,7 +2143,7 @@ impl<'a> Iterator for ContentsIter<'a> {
 
 pub struct OccupiedCellsIter<'a> {
     board: &'a Cells,
-    role: game::Role,
+    role: Role,
     index: usize,
 }
 
