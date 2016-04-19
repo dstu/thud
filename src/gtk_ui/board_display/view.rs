@@ -1,5 +1,6 @@
 use ::thud_game;
 use thud_game::board;
+use thud_game::coordinate::Coordinate;
 
 use ::gtk_ui::board_display::model;
 
@@ -68,7 +69,7 @@ impl Properties {
         }
     }
 
-    fn bounds_of(&self, position: board::Coordinate) -> BoxBounds {
+    fn bounds_of(&self, position: Coordinate) -> BoxBounds {
         BoxBounds::new(self.margin_left + (position.col() as f64) * self.cell_dimension,
                        self.margin_top + (position.row() as f64) * self.cell_dimension,
                        self.cell_dimension)
@@ -98,7 +99,7 @@ pub struct Interactive {
 }
 
 fn draw_cell(cr: &mut cairo::Context, props: &Properties,
-             position: board::Coordinate, content: board::Content) {
+             position: Coordinate, content: board::Content) {
     cr.set_source_rgb(0.0, 0.0, 0.0);
     cr.set_line_width(props.border_width);
     let bounds = props.bounds_of(position);
@@ -139,7 +140,7 @@ fn draw_cell(cr: &mut cairo::Context, props: &Properties,
 }
 
 fn draw_selected_cell(cr: &mut cairo::Context, props: &Properties,
-                      position: board::Coordinate, content: board::Content) {
+                      position: Coordinate, content: board::Content) {
     cr.set_source_rgb(0.0, 0.5, 0.7);
     cr.set_line_width(props.border_width);
     let bounds = props.bounds_of(position);

@@ -143,7 +143,6 @@ mod test {
 
     use ::actions::Action;
     use ::board;
-    use ::board::format_board;
     use ::end;
     use super::*;
 
@@ -210,7 +209,6 @@ mod test {
     #[test]
     fn transposed_move_equivalence() {
         let mut s1 = new_untransposing_state();
-        println!("new board = {}", format_board(s1.cells()));
         s1.do_action(&move_literal!((5, 0), (1, 5)));
         let mut s2 = new_untransposing_state();
         s2.do_action(&move_literal!((5, 0), (1, 5)));
@@ -220,8 +218,6 @@ mod test {
         s1.do_action(&move_literal!((5, 0), (1, 5)));
         s2 = new_untransposing_state();
         s2.do_action(&move_literal!((0, 5), (5, 1)));
-        println!("s1 = {}", format_board(s1.cells()));
-        println!("s2 = {}", format_board(s2.cells()));
         assert!(s1 == s2);
     }
 

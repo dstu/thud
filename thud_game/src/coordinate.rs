@@ -35,6 +35,10 @@ impl Coordinate {
                      index: compute_index(row, col), }
     }
 
+    pub const fn all() -> &'static [Self] {
+        ALL_COORDINATES
+    }
+
     pub fn convolved(&self, i: u8) -> Coordinate {
         match i {
             0 => *self,

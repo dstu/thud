@@ -333,22 +333,9 @@ impl CellEquivalence for TranspositionalEquivalence {
                            SipHasher::new(),
                            SipHasher::new(),
                            SipHasher::new(),];
-        for row in 0u8..15u8 {
-            for col in 0u8..15u8 {
-                let mut i = 0;
-                for &c in [Coordinate::new(row, col),
-                           Coordinate::new(14u8 - row, col),
-                           Coordinate::new(row, 14u8 - col),
-                           Coordinate::new(14u8 - row, 14u8 - col),
-                           Coordinate::new(col, row),
-                           Coordinate::new(14u8 - col, row),
-                           Coordinate::new(col, 14u8 - row),
-                           Coordinate::new(14u8 - col, 14u8 - row)].iter() {
-                    if let Some(c) = c {
-                        board[c].hash(&mut hashers[i]);
-                    }
-                    i += 1;
-                }
+        for c in Coordinate::all() {
+            for i in 0..8 {
+                board[c.convolved(i)].hash(&mut hashers[i as usize]);
             }
         }
         let mut hash_values = [hashers[0].finish(),

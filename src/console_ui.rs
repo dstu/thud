@@ -6,7 +6,7 @@ use std::io::Write;
 use ::thud_game::Role;
 use ::thud_game::board::Cells;
 use ::thud_game::board::Content;
-use ::thud_game::board::Coordinate;
+use ::thud_game::coordinate::Coordinate;
 use ::thud_game::board::format_board;
 
 use ::mcts;
