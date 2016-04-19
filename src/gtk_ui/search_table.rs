@@ -95,7 +95,7 @@ impl Store {
         while !nodes.is_empty() {
             let (n, parent) = nodes.pop().unwrap();
             self.set_node_columns(&n, &parent);
-            let children = n.get_child_list();
+            // let children = n.get_child_list();
             // for c in 0..children.len() {
             //     let e = children.get_edge(c);
             //     let e_i = self.store.append(Some(&parent));

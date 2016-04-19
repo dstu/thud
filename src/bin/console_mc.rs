@@ -89,7 +89,7 @@ fn main() {
             info!("No actions available. Exiting.");
             return
         }
-        let mut action_statistics: Vec<mcts::Statistics> = {
+        let action_statistics: Vec<mcts::Statistics> = {
             let mut v = Vec::with_capacity(actions.len());
             for _ in 0..actions.len() {
                 v.push(Default::default());
@@ -105,13 +105,14 @@ fn main() {
             let mut selected_action_index = 0;
             let mut best_ucb = std::f64::MIN;
             for (i, stats) in action_statistics.iter().enumerate() {
-                if stats.visits == 0 {
+                let payoff = stats.get();
+                if payoff.weight == 0 {
                     selected_action_index = i;
                     best_ucb = std::f64::MAX;
                     break
                 } else {
-                    let child_visits = stats.visits as f64;
-                    let child_payoff = stats.payoff.score(state.active_role()) as f64;
+                    let child_visits = payoff.weight as f64;
+                    let child_payoff = payoff.score(state.active_role()) as f64;
                     let ucb = child_payoff / child_visits
                         + exploration_bias * f64::sqrt(log_iteration / child_visits);
                     // TODO tie-breaking.
@@ -133,11 +134,12 @@ fn main() {
         let mut most_visited_index = std::usize::MIN;
         let mut most_visits = 0;
         for (i, stats) in action_statistics.iter().enumerate() {
-            info!("Action {:?} gets {:?}", actions[i], stats);
+            let payoff = stats.get();
+            info!("Action {:?} gets {:?}", actions[i], payoff);
             // TODO tie-breaking.
-            if stats.visits > most_visits {
+            if payoff.weight > most_visits {
                 most_visited_index = i;
-                most_visits = stats.visits;
+                most_visits = payoff.weight;
             }
         }
         info!("Performing move {:?} with {:?}",

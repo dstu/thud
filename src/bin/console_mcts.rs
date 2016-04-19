@@ -76,6 +76,11 @@ fn main() {
             Some(Err(e)) => panic!("Bad RNG seed: {}", e),
             None => IsaacRng::new_unseeded(),
         };
+    let compact_graph =
+        match matches.value_of(thud::COMPACT_SEARCH_GRAPH_FLAG) {
+            Some(_) => true,
+            None => false,
+        };
 
     // Set up logging.
     let logger_config = fern::DispatchConfig {
@@ -146,17 +151,14 @@ fn main() {
                     // }
                     if iteration % 1000 == 0 || iteration + 1 == iteration_count {
                         info!("root stats:");
-                        let mut best_visits = ::std::usize::MIN;
+                        let mut best_visits = ::std::u32::MIN;
                         let mut best_ucb = ::std::f64::MIN;
-                        for (action, stats, ucb) in stats.into_iter() {
-                            info!("{:?}: [{}, {}] = {:?} / {}; UCB = {:?}", action,
-                                  (stats.payoff.values[0] as f64) / (stats.visits as f64),
-                                  (stats.payoff.values[1] as f64) / (stats.visits as f64),
-                                  stats.payoff, stats.visits, ucb);
+                        for (action, payoff, ucb) in stats.into_iter() {
+                            info!("{:?}: {:?}; UCB = {:?}", action, payoff, ucb);
                             best_action = match (best_action, move_selection_criterion) {
                                 (None, _) => Some(action),
-                                (Some(_), thud::MoveSelectionCriterion::VisitCount) if best_visits < stats.visits => {
-                                    best_visits = stats.visits;
+                                (Some(_), thud::MoveSelectionCriterion::VisitCount) if best_visits < payoff.weight => {
+                                    best_visits = payoff.weight;
                                     Some(action)
                                 },
                                 (Some(_), thud::MoveSelectionCriterion::Ucb) =>
@@ -186,7 +188,11 @@ fn main() {
                 let mut canonical_state = graph.get_node(&state).unwrap().get_label().clone();
                 canonical_state.do_action(&action);
                 state.set_from_convolved(&canonical_state);
-                graph.retain_reachable_from(&[&canonical_state]);
+                if compact_graph {
+                    debug!("collecting garbage and compacting search graph");
+                    graph.retain_reachable_from(&[&canonical_state]);
+                    debug!("done compacting search graph");
+                }
                 turn_number += 1;
             },
             None => {

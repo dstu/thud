@@ -108,16 +108,13 @@ fn main() {
                     Ok(stats) => {
                         if iteration % 1000 == 0 || iteration + 1 == iteration_count {
                             info!("root stats:");
-                            let mut best_visits = ::std::usize::MIN;
-                            for (action, stats, ucb) in stats.into_iter() {
-                                info!("{:?}: [{}, {}] = {:?} / {}; UCB = {:?}", action,
-                                      (stats.payoff.values[0] as f64) / (stats.visits as f64),
-                                      (stats.payoff.values[1] as f64) / (stats.visits as f64),
-                                      stats.payoff, stats.visits, ucb);
+                            let mut best_visits = ::std::u32::MIN;
+                            for (action, payoff, ucb) in stats.into_iter() {
+                                info!("{:?}: {:?}; UCB = {:?}", action, payoff, ucb);
                                 best_action = match best_action {
                                     None => Some(action),
-                                    Some(_) if best_visits < stats.visits => {
-                                        best_visits = stats.visits;
+                                    Some(_) if best_visits < payoff.weight => {
+                                        best_visits = payoff.weight;
                                         Some(action)
                                     },
                                     _ => best_action,

@@ -7,8 +7,8 @@ use std::ops::{Add, AddAssign};
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Payoff {
-    pub weight: usize,
-    pub values: [usize; 2],
+    pub weight: u32,
+    pub values: [u32; 2],
 }
 
 impl Payoff {
@@ -46,7 +46,7 @@ impl fmt::Debug for Payoff {
     }
 }
 
-fn role_payoff(r: thud_game::Role) -> usize {
+fn role_payoff(r: thud_game::Role) -> u32 {
     match r {
         thud_game::Role::Dwarf => 1,
         thud_game::Role::Troll => 4,
@@ -84,7 +84,7 @@ mod test {
         assert_eq!(None, payoff(&state));
     }
 
-    fn check_payoff(dwarf: usize, troll: usize, board: board::Cells) {
+    fn check_payoff(dwarf: u32, troll: u32, board: board::Cells) {
         let state = ::State::new(board);
         assert_eq!(Some(Payoff { weight: 1, values: [dwarf, troll], }), payoff(&state));
     }

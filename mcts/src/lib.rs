@@ -1,6 +1,7 @@
 #[macro_use] extern crate log;
 extern crate rand;
 extern crate search_graph;
+extern crate syncbox;
 extern crate thud_game;
 
 pub mod base;
@@ -49,7 +50,7 @@ impl UcbProxy {
     }
 }
 
-pub type ActionStatistics = Vec<(game::Action, Statistics, ::std::result::Result<UcbProxy, ucb::UcbError>)>;
+pub type ActionStatistics = Vec<(game::Action, Payoff, ::std::result::Result<UcbProxy, ucb::UcbError>)>;
 
 pub type Result = ::std::result::Result<ActionStatistics, SearchError>;
 
@@ -168,11 +169,9 @@ impl<R> SearchState<R> where R: Rng {
                            rollout_node.get_id(), rollout_node.get_child_list().len());
                     let mut payoff = Payoff::default();
                     for child in rollout_node.get_child_list().iter() {
-                        let stats = child.get_data().statistics.get();
-                        trace!("iterate_search: expanded rollout node {} child has statistics of {:?}", rollout_node.get_id(), stats);
-                        payoff += Payoff { weight: stats.visits,
-                                           values: [stats.payoff.values[0],
-                                                    stats.payoff.values[1]], };
+                        let child_payoff = child.get_data().statistics.get();
+                        trace!("iterate_search: expanded rollout node {} child has payoff of {:?}", rollout_node.get_id(), child_payoff);
+                        payoff += child_payoff;
                     }
                     trace!("iterate_search: expanded rollout node {} has payoff total {:?}",
                            rollout_node.get_id(), payoff);
@@ -191,9 +190,7 @@ impl<R> SearchState<R> where R: Rng {
 
             for edge in backprop_edges.into_iter() {
                 trace!("iterate_search: backprop {:?} to edge {}", payoff, edge.get_id());
-                let mut stats = edge.get_data().statistics.get();
-                stats.increment_visit(payoff);
-                edge.get_data().statistics.set(stats);
+                edge.get_data().statistics.increment_visit(payoff);
             }
 
             if rollout_to_expanded {

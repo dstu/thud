@@ -35,6 +35,7 @@ pub struct EdgeUcbIter<'a, I> where I: 'a + Iterator<Item=Edge<'a>> {
     lifetime_marker: PhantomData<&'a ()>,
     log_parent_visits: f64,
     explore_bias: f64,
+    role: thud_game::Role,
     edges: I,
 }
 
@@ -74,6 +75,7 @@ impl<'a, I> EdgeUcbIter<'a, I> where I: 'a + Iterator<Item=Edge<'a>> {
             lifetime_marker: PhantomData,
             log_parent_visits: log_parent_visits,
             explore_bias: explore_bias,
+            role: role,
             edges: edges,
         }
     }
@@ -84,13 +86,15 @@ impl<'a, I> Iterator for EdgeUcbIter<'a, I> where I: 'a + Iterator<Item=Edge<'a>
 
     fn next(&mut self) -> Option<Result<UcbSuccess<'a>, UcbError>> {
         self.edges.next().map(
-            |e|
-            if e.get_data().statistics.get().visits == 0 {
-                Ok(UcbSuccess::Select(e))
-            } else {
-                Ok(child_score(self.log_parent_visits, self.explore_bias, e),)
+            |e| {
+                let payoff = e.get_data().statistics.get();
+                if payoff.weight == 0 {
+                    Ok(UcbSuccess::Select(e))
+                } else {
+                    Ok(child_score(self.log_parent_visits, self.explore_bias, e),)
+                }
             })
-    }
+        }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.edges.size_hint()
@@ -100,12 +104,12 @@ impl<'a, I> Iterator for EdgeUcbIter<'a, I> where I: 'a + Iterator<Item=Edge<'a>
 /// Returns the UCB policy result for the given values.
 pub fn child_score<'a>(log_parent_visits: f64, explore_bias: f64, child: Edge<'a>)
                        -> UcbSuccess<'a> {
-    let stats = child.get_data().statistics.get();
-    if stats.visits == 0 {
+    let payoff = child.get_data().statistics.get();
+    if payoff.weight == 0 {
         UcbSuccess::Select(child)
     } else {
-        let child_visits = stats.visits as f64;
-        let child_payoff = stats.payoff.score(child.get_source().get_label().active_role()) as f64;
+        let child_visits = payoff.weight as f64;
+        let child_payoff = payoff.score(child.get_source().get_label().active_role()) as f64;
         let ucb = child_payoff / child_visits
             + explore_bias * f64::sqrt(log_parent_visits / child_visits);
         UcbSuccess::Value(child, ucb)
@@ -126,9 +130,9 @@ pub fn child_score<'a>(log_parent_visits: f64, explore_bias: f64, child: Edge<'a
 /// just a tree), we want to know all of the parent edges which could have
 /// rolled out to a given child.
 pub fn is_best_child<'a>(e: &Edge<'a>, explore_bias: f64) -> bool {
-    let stats = e.get_data().statistics.get();
+    let payoff = e.get_data().statistics.get();
     // trace!("is_best_child: edge {} has {} visits", e.get_id(), stats.visits);
-    if stats.visits == 0 {
+    if payoff.weight == 0 {
         // Edge has been visited, but statistics aren't yet updated.
         // trace!("is_best_child: edge {} is a best child because stats.visits == 0", e.get_id());
         return true
@@ -144,7 +148,7 @@ pub fn is_best_child<'a>(e: &Edge<'a>, explore_bias: f64) -> bool {
     let log_parent_visits = {
         let mut parent_visits = 0;
         for child_edge in parent.get_child_list().iter() {
-            parent_visits += child_edge.get_data().statistics.get().visits;
+            parent_visits += child_edge.get_data().statistics.get().weight;
         }
         f64::ln(parent_visits as f64)
     };
@@ -275,7 +279,7 @@ pub fn find_best_child_edge_index<'a, R>(c: &ChildList<'a>, epoch: usize,
         let log_parent_visits = {
             let mut parent_visits = 0;
             for child in c.iter() {
-                parent_visits += child.get_data().statistics.get().visits;
+                parent_visits += child.get_data().statistics.get().weight;
             }
             if parent_visits == 0 {
                 // When we visit a vertex for the first time, it will have zero visits.
@@ -334,7 +338,7 @@ pub fn child_edge_ucb_scores<'a, R>(c: &ChildList<'a>, epoch: usize,
         let log_parent_visits = {
             let mut parent_visits = 0;
             for child in c.iter() {
-                parent_visits += child.get_data().statistics.get().visits;
+                parent_visits += child.get_data().statistics.get().weight;
             }
             if parent_visits == 0 {
                 // When we visit a vertex for the first time, it will have zero visits.
