@@ -1,5 +1,4 @@
 use std::cell::Cell;
-use std::cmp::{Ord, Ordering};
 use std::fmt;
 use std::sync::atomic;
 

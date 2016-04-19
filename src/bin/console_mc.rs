@@ -8,7 +8,6 @@ extern crate thud;
 extern crate thud_game;
 
 use clap::App;
-use thud_game::util;
 
 use std::default::Default;
 

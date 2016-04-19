@@ -1,4 +1,3 @@
-use ::thud_game;
 use super::base::*;
 use super::statistics::EdgeData;
 

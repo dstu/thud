@@ -298,7 +298,7 @@ impl Interactive {
                                             draw_cell(&mut cr, &props, captures[i as usize], board::Content::Empty);
                                         }
                                     },
-                                    // thud_game::Action::Concede => (),
+                                    x => panic!("can't yet draw action {:?}", x),
                                 }
                             }
                         }

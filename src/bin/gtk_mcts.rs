@@ -11,7 +11,6 @@ extern crate thud_game;
 use thud_game::board;
 use mcts::State;
 use thud::gtk_ui;
-use thud_game::util;
 
 use gtk::traits::*;
 use gtk::signal::Inhibit;

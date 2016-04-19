@@ -28,7 +28,7 @@ fn main() {
     board[coordinate_literal!(2, 7)] = board::Content::Occupied(board::Token::Dwarf);
     board[coordinate_literal!(1, 7)] = board::Content::Occupied(board::Token::Dwarf);
     board[coordinate_literal!(0, 7)] = board::Content::Occupied(board::Token::Dwarf);
-    thud::console_ui::write_board(&board);
+    console_ui::write_board(&board);
     let mut state = State::new(board);
     let mut i = 0u8;
     while i < 2 {

@@ -12,7 +12,7 @@ use ::clap::App;
 use ::rand::isaac::IsaacRng;
 use ::rand::SeedableRng;
 
-use thud_game::{board, util};
+use thud_game::board;
 
 fn main() {
     // Set up arg handling.
@@ -130,14 +130,6 @@ fn main() {
                                           simulation_count: simulation_count,
                                       }) {
                 Ok(stats) => {
-                    let toplevel_visits = {
-                        let mut count = 0;
-                        for &(_, stats, _) in stats.iter() {
-                            count += stats.visits;
-                        }
-                        count
-                    };
-                    // trace!("total visits at top level: {}", toplevel_visits);
                     // TODO: this commented-out block is only valid when we haven't
                     // propagated a multi-visit payoff upwards from conneting to an
                     // extant vertex.

@@ -3,7 +3,6 @@ use ::thud_game;
 use ::thud_game::board::format_board;
 
 use ::rand::Rng;
-use ::search_graph;
 
 use std::cmp::Ordering;
 use std::error::Error;
@@ -36,7 +35,6 @@ pub struct EdgeUcbIter<'a, I> where I: 'a + Iterator<Item=Edge<'a>> {
     lifetime_marker: PhantomData<&'a ()>,
     log_parent_visits: f64,
     explore_bias: f64,
-    role: thud_game::Role,
     edges: I,
 }
 
@@ -76,7 +74,6 @@ impl<'a, I> EdgeUcbIter<'a, I> where I: 'a + Iterator<Item=Edge<'a>> {
             lifetime_marker: PhantomData,
             log_parent_visits: log_parent_visits,
             explore_bias: explore_bias,
-            role: role,
             edges: edges,
         }
     }

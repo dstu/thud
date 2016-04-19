@@ -9,8 +9,10 @@ use std::error::Error;
 use std::fmt;
 use std::str::FromStr;
 
-#[macro_use] pub mod board;
+#[macro_use] pub mod coordinate;
+pub mod board;
 #[macro_use] pub mod actions;
+pub mod end;
 pub mod state;
 pub mod util;
 

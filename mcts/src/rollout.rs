@@ -4,9 +4,6 @@ use super::base::*;
 use super::ucb;
 use super::payoff::payoff;
 
-use ::thud_game;
-use ::thud_game::board::format_board;
-
 use std::convert::From;
 use std::error::Error;
 use std::fmt;

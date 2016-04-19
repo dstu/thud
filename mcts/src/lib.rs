@@ -21,7 +21,6 @@ pub use self::statistics::*;
 use ::rand::Rng;
 use ::thud_game as game;
 
-use std::cell::Cell;
 use std::convert::From;
 use std::error::Error;
 use std::fmt;
@@ -182,7 +181,7 @@ impl<R> SearchState<R> where R: Rng {
                     // Simulate playout from the rollout node and propagate the
                     // resulting statistics.
                     let mut payoff = Payoff::default();
-                    let mut state = rollout_node.get_label().clone();
+                    let state = rollout_node.get_label().clone();
                     for _ in 0..settings.simulation_count {
                         payoff += simulate::simulate(&mut state.clone(), &mut self.rng);
                     }

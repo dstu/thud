@@ -1,31 +1,17 @@
 use super::Role;
 use super::actions::{Action, ActionIterator};
 use super::board;
+use super::coordinate::Coordinate;
+use super::end;
 
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum EndProposal {
-    Neither,
-    Single(Role),
-    Both,
-}
-
-// impl EndProposal {
-//     fn advance(&mut self, role: Role) {
-//         *self = match *self {
-//             EndProposal::Single(r) if r != role => EndProposal::Both,
-//             EndProposal::Neither => EndProposal::Single(role),
-//             _ => *self,
-//         }
-//     }
-// }
-
 pub struct State<E> where E: board::CellEquivalence {
     board: board::Cells,
     active_role: Role,
-    end_proposal: EndProposal,
+    proposed_terminate: bool,
+    terminate_decision: Option<end::Decision>,
     equivalence_marker: PhantomData<E>,
 }
 
@@ -34,7 +20,8 @@ impl<E> State<E> where E: board::CellEquivalence {
         State {
             board: board,
             active_role: Role::Dwarf,
-            end_proposal: EndProposal::Neither,
+            proposed_terminate: false,
+            terminate_decision: None,
             equivalence_marker: PhantomData,
         }
     }
@@ -52,10 +39,13 @@ impl<E> State<E> where E: board::CellEquivalence {
     }
 
     pub fn role_actions<'s>(&'s self, r: Role) -> ActionIterator<'s> {
-        self.board.role_actions(r)
+        if self.proposed_terminate && self.terminate_decision.is_none() {
+            return ActionIterator::accept_or_decline_end()
+        }
+        self.board.role_actions(r, self.terminate_decision.is_none())
     }
 
-    pub fn position_actions<'s>(&'s self, position: board::Coordinate) -> ActionIterator<'s> {
+    pub fn position_actions<'s>(&'s self, position: Coordinate) -> ActionIterator<'s> {
         self.board.position_actions(position)
     }
 
@@ -81,29 +71,35 @@ impl<E> State<E> where E: board::CellEquivalence {
             i += 1;
         }
         self.active_role = convolved.active_role;
-        self.end_proposal = convolved.end_proposal;
+        self.proposed_terminate = convolved.proposed_terminate;
+        self.terminate_decision = convolved.terminate_decision;
     }
 
     pub fn do_action(&mut self, a: &Action) {
         match a {
-            // &Action::Concede => self.end_proposal.advance(self.active_role),
-            _ => self.board.do_action(a),
+            &Action::ProposeEnd => self.proposed_terminate = true,
+            &Action::HandleEndProposal(d) => self.terminate_decision = Some(d),
+            _ => {
+                self.proposed_terminate = false;
+                self.terminate_decision = None;
+                self.board.do_action(a)
+            },
         }
         self.toggle_active_role();
     }
 
     pub fn terminated(&self) -> bool {
-        self.end_proposal == EndProposal::Both
-            || self.board.role_actions(Role::Dwarf).count() == 0
-            || self.board.role_actions(Role::Troll).count() == 0
+        self.terminate_decision == Some(end::Decision::Accept)
+            || self.board.role_actions(Role::Dwarf, false).count() == 0
+            || self.board.role_actions(Role::Troll, false).count() == 0
     }
 
     pub fn board(&self) -> &board::Cells {
         &self.board
     }
 
-    pub fn end_proposal(&self) -> EndProposal {
-        self.end_proposal
+    pub fn opponent_proposed_end(&self) -> bool {
+        self.proposed_terminate
     }
 }
 
@@ -112,7 +108,8 @@ impl<E> Clone for State<E> where E: board::CellEquivalence {
         State {
             board: self.board.clone(),
             active_role: self.active_role,
-            end_proposal: self.end_proposal,
+            proposed_terminate: self.proposed_terminate,
+            terminate_decision: self.terminate_decision.clone(),
             equivalence_marker: PhantomData,
         }
     }
@@ -121,7 +118,8 @@ impl<E> Clone for State<E> where E: board::CellEquivalence {
 impl<E> PartialEq<State<E>> for State<E> where E: board::CellEquivalence {
     fn eq(&self, other: &State<E>) -> bool {
         if self.active_role != other.active_role
-            || self.end_proposal != other.end_proposal {
+            || self.proposed_terminate != other.proposed_terminate
+            || self.terminate_decision != other.terminate_decision {
                 return false
             }
         <E as board::CellEquivalence>::boards_equal(&self.board, &other.board)
@@ -133,7 +131,8 @@ impl<E> Eq for State<E> where E: board::CellEquivalence { }
 impl<E> Hash for State<E> where E: board::CellEquivalence {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.active_role.hash(state);
-        self.end_proposal.hash(state);
+        self.proposed_terminate.hash(state);
+        self.terminate_decision.hash(state);
         <E as board::CellEquivalence>::hash_board(&self.board, state);
     }
 }
@@ -142,7 +141,10 @@ impl<E> Hash for State<E> where E: board::CellEquivalence {
 mod test {
     use std::collections::HashMap;
 
+    use ::actions::Action;
     use ::board;
+    use ::board::format_board;
+    use ::end;
     use super::*;
 
     fn new_simple_state() -> State<board::SimpleEquivalence> {
@@ -208,6 +210,7 @@ mod test {
     #[test]
     fn transposed_move_equivalence() {
         let mut s1 = new_untransposing_state();
+        println!("new board = {}", format_board(s1.cells()));
         s1.do_action(&move_literal!((5, 0), (1, 5)));
         let mut s2 = new_untransposing_state();
         s2.do_action(&move_literal!((5, 0), (1, 5)));
@@ -217,6 +220,8 @@ mod test {
         s1.do_action(&move_literal!((5, 0), (1, 5)));
         s2 = new_untransposing_state();
         s2.do_action(&move_literal!((0, 5), (5, 1)));
+        println!("s1 = {}", format_board(s1.cells()));
+        println!("s2 = {}", format_board(s2.cells()));
         assert!(s1 == s2);
     }
 
@@ -269,5 +274,49 @@ mod test {
         let mut s2 = new_untransposing_state();
         s2.do_action(&move_literal!((0, 5), (9, 5)));
         assert!(s1 != s2);
+    }
+
+    #[test]
+    fn propose_end_ok() {
+        let state = new_simple_state();
+        assert!(!state.proposed_terminate);
+        assert_eq!(state.terminate_decision, None);
+        let available_actions: Vec<Action> = state.actions().collect();
+        assert!(available_actions.contains(&Action::ProposeEnd));
+    }
+
+    #[test]
+    fn no_propose_end_ok() {
+        let mut state = new_simple_state();
+        assert!(!state.proposed_terminate);
+        state.do_action(&Action::ProposeEnd);
+        assert!(state.proposed_terminate);
+        let available_actions: Vec<Action> = state.actions().collect();
+        assert_eq!(available_actions,
+                   vec!(Action::HandleEndProposal(end::Decision::Accept),
+                        Action::HandleEndProposal(end::Decision::Decline)));
+        assert!(!state.terminated());
+    }
+
+    #[test]
+    fn accept_terminate_ok() {
+        let mut state = new_simple_state();
+        state.do_action(&Action::ProposeEnd);
+        state.do_action(&Action::HandleEndProposal(end::Decision::Accept));
+        assert!(state.terminated());
+    }
+
+    #[test]
+    fn decline_terminate_ok() {
+        let mut state = new_simple_state();
+        state.do_action(&Action::ProposeEnd);
+        state.do_action(&Action::HandleEndProposal(end::Decision::Decline));
+        assert!(!state.terminated());
+        let mut available_actions: Vec<Action> = state.actions().collect();
+        assert!(!available_actions.contains(&Action::ProposeEnd));
+
+        state.do_action(&available_actions[0]);
+        available_actions = state.actions().collect();
+        assert!(available_actions.contains(&Action::ProposeEnd));
     }
 }
