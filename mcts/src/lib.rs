@@ -3,7 +3,7 @@ extern crate rand;
 extern crate search_graph;
 extern crate thud_game;
 
-mod base;
+pub mod base;
 pub mod backprop;
 pub mod expand;
 pub mod payoff;

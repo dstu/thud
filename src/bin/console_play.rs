@@ -2,62 +2,61 @@ extern crate chrono;
 extern crate clap;
 extern crate fern;
 #[macro_use] extern crate log;
+extern crate mcts;
 extern crate rand;
 extern crate thud;
+extern crate thud_game;
 
 use clap::App;
-use thud::game;
-use thud::mcts;
 use thud::console_ui;
-use thud::util;
 
 fn main() {
     // Set up arg handling.
     let matches = {
-        let app = util::set_common_args(
+        let app = thud::set_common_args(
             App::new("console_play")
                 .version("0.1.0")
                 .author("Stu Black <trurl@freeshell.org>")
                 .about("Play against Thud AI"),
-            &[util::ITERATION_COUNT_FLAG,
-              util::SIMULATION_COUNT_FLAG,
-              util::EXPLORATION_BIAS_FLAG,
-              util::INITIAL_BOARD_FLAG,
-              util::AI_PLAYER_FLAG,
-              util::LOG_LEVEL_FLAG]);
+            &[thud::ITERATION_COUNT_FLAG,
+              thud::SIMULATION_COUNT_FLAG,
+              thud::EXPLORATION_BIAS_FLAG,
+              thud::INITIAL_BOARD_FLAG,
+              thud::AI_PLAYER_FLAG,
+              thud::LOG_LEVEL_FLAG]);
         app.get_matches()
     };
     let iteration_count =
-        match matches.value_of(util::ITERATION_COUNT_FLAG).unwrap().parse::<usize>() {
+        match matches.value_of(thud::ITERATION_COUNT_FLAG).unwrap().parse::<usize>() {
             Ok(x) => x,
             Err(e) => panic!("Bad iteration count: {}", e),
         };
     let simulation_count =
-        match matches.value_of(util::SIMULATION_COUNT_FLAG).unwrap().parse::<usize>() {
+        match matches.value_of(thud::SIMULATION_COUNT_FLAG).unwrap().parse::<usize>() {
             Ok(x) => x,
             Err(e) => panic!("Bad simulation count: {}", e),
         };
     let exploration_bias =
-        match matches.value_of(util::EXPLORATION_BIAS_FLAG).unwrap().parse::<f64>() {
+        match matches.value_of(thud::EXPLORATION_BIAS_FLAG).unwrap().parse::<f64>() {
             Ok(x) => x,
             Err(e) => panic!("Bad exploration bias: {}", e),
         };
     let initial_cells =
-        match matches.value_of(util::INITIAL_BOARD_FLAG).map(|x| x.parse::<util::InitialBoard>()) {
-            None => game::board::Cells::default(),
+        match matches.value_of(thud::INITIAL_BOARD_FLAG).map(|x| x.parse::<thud::InitialBoard>()) {
+            None => thud_game::board::Cells::default(),
             Some(Ok(x)) => x.cells(),
             Some(Err(e)) => panic!("Bad initial board configuration: {}", e),
         };
-    let ai_role = match matches.value_of(util::AI_PLAYER_FLAG).map(|x| x.parse::<game::Role>()) {
-        None | Some(Ok(game::Role::Dwarf)) => game::Role::Dwarf,
-        Some(Ok(game::Role::Troll)) => game::Role::Troll,
+    let ai_role = match matches.value_of(thud::AI_PLAYER_FLAG).map(|x| x.parse::<thud_game::Role>()) {
+        None | Some(Ok(thud_game::Role::Dwarf)) => thud_game::Role::Dwarf,
+        Some(Ok(thud_game::Role::Troll)) => thud_game::Role::Troll,
         Some(Err(x)) => panic!("{}", x),
     };
     let human_role = ai_role.toggle();
     let logging_level =
-        match matches.value_of(::thud::util::LOG_LEVEL_FLAG).map(|x| x.parse::<log::LogLevelFilter>()) {
+        match matches.value_of(thud::LOG_LEVEL_FLAG).map(|x| x.parse::<log::LogLevelFilter>()) {
             Some(Ok(x)) => x,
-            Some(Err(_)) => panic!("Bad logging level '{}'", matches.value_of(::thud::util::LOG_LEVEL_FLAG).unwrap()),
+            Some(Err(_)) => panic!("Bad logging level '{}'", matches.value_of(thud::LOG_LEVEL_FLAG).unwrap()),
             None => log::LogLevelFilter::Info,
         };
 
@@ -82,7 +81,7 @@ fn main() {
         if state.active_role() == ai_role {
             println!("{:?} player's turn. Thinking...", ai_role);
             if graph.get_node(&state).is_none() {
-                util::initialize_search(state.clone(), &mut graph);
+                thud::initialize_search(state.clone(), &mut graph);
                 info!("Manually added current game state to graph");
             }
             let mut best_action = None;
@@ -148,7 +147,7 @@ fn main() {
             loop {
                 println!("{:?} player's turn. Enter coordinate of piece to move.", human_role);
                 let c = console_ui::prompt_for_piece(state.board(), human_role);
-                let piece_actions: Vec<game::Action> = state.position_actions(c).collect();
+                let piece_actions: Vec<thud_game::Action> = state.position_actions(c).collect();
                 if piece_actions.is_empty() {
                     println!("Piece at {:?} has no actions.", c);
                 } else {
@@ -156,7 +155,7 @@ fn main() {
                         let mut moved_state = state.clone();
                         moved_state.do_action(&action);
                         println!("After action, board: {}",
-                                 game::board::format_board(moved_state.board()));
+                                 thud_game::board::format_board(moved_state.board()));
                         println!("Is this okay?");
                         match console_ui::select_one(&["y", "n"]) {
                             Some(&"y") => {

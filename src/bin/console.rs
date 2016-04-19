@@ -1,10 +1,13 @@
 extern crate fern;
 extern crate log;
-#[macro_use(coordinate_literal)] extern crate thud;
 extern crate chrono;
+extern crate mcts;
+extern crate thud;
+#[macro_use(coordinate_literal)] extern crate thud_game;
 
-use thud::game::board;
-use thud::mcts::State;
+use thud::console_ui;
+use thud_game::board;
+use mcts::base::State;
 
 fn main() {
     let logger_config = fern::DispatchConfig {

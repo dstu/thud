@@ -3,15 +3,14 @@ use std::fmt;
 use std::io;
 use std::io::Write;
 
-use game::Role;
-use game::board::Cells;
-use game::board::Content;
-use game::board::Coordinate;
-use game::board::format_board;
+use ::thud_game::Role;
+use ::thud_game::board::Cells;
+use ::thud_game::board::Content;
+use ::thud_game::board::Coordinate;
+use ::thud_game::board::format_board;
 
 use ::mcts;
 use ::mcts::State;
-use ::search_graph;
 
 pub fn write_board(board: &Cells) {
     print!("{}", format_board(board));

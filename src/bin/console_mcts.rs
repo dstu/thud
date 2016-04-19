@@ -3,75 +3,75 @@ extern crate clap;
 extern crate fern;
 #[macro_use]
 extern crate log;
+extern crate mcts;
 extern crate rand;
 extern crate thud;
+extern crate thud_game;
 
 use ::clap::App;
 use ::rand::isaac::IsaacRng;
 use ::rand::SeedableRng;
 
-use ::thud::game;
-use ::thud::mcts;
-use ::thud::util;
+use thud_game::{board, util};
 
 fn main() {
     // Set up arg handling.
     let matches = {
-        let app = util::set_common_args(
+        let app = thud::set_common_args(
             App::new("console_mcts")
                 .version("0.1.0")
                 .author("Stu Black <trurl@freeshell.org>")
                 .about("Plays out Thud MCTS iterations"),
-            &[util::ITERATION_COUNT_FLAG,
-              util::SIMULATION_COUNT_FLAG,
-              util::EXPLORATION_BIAS_FLAG,
-              util::INITIAL_BOARD_FLAG,
-              util::INITIAL_PLAYER_FLAG,
-              util::LOG_LEVEL_FLAG,
-              util::MOVE_SELECTION_CRITERION_FLAG]);
+            &[thud::ITERATION_COUNT_FLAG,
+              thud::SIMULATION_COUNT_FLAG,
+              thud::EXPLORATION_BIAS_FLAG,
+              thud::INITIAL_BOARD_FLAG,
+              thud::INITIAL_PLAYER_FLAG,
+              thud::LOG_LEVEL_FLAG,
+              thud::MOVE_SELECTION_CRITERION_FLAG]);
         app.get_matches()
     };
     let iteration_count =
-        match matches.value_of(util::ITERATION_COUNT_FLAG).unwrap().parse::<usize>() {
+        match matches.value_of(thud::ITERATION_COUNT_FLAG).unwrap().parse::<usize>() {
             Ok(x) => x,
             Err(e) => panic!("Bad iteration count: {}", e),
         };
     let simulation_count =
-        match matches.value_of(util::SIMULATION_COUNT_FLAG).unwrap().parse::<usize>() {
+        match matches.value_of(thud::SIMULATION_COUNT_FLAG).unwrap().parse::<usize>() {
             Ok(x) => x,
             Err(e) => panic!("Bad simulation count: {}", e),
         };
     let exploration_bias =
-        match matches.value_of(util::EXPLORATION_BIAS_FLAG).unwrap().parse::<f64>() {
+        match matches.value_of(thud::EXPLORATION_BIAS_FLAG).unwrap().parse::<f64>() {
             Ok(x) => x,
             Err(e) => panic!("Bad exploration bias: {}", e),
         };
     let initial_cells =
-        match matches.value_of(util::INITIAL_BOARD_FLAG).map(|x| x.parse::<util::InitialBoard>()) {
+        match matches.value_of(thud::INITIAL_BOARD_FLAG).map(|x| x.parse::<thud::InitialBoard>()) {
             Some(Ok(x)) => x.cells(),
             Some(Err(e)) => panic!("Bad initial board configuration: {}", e),
-            None => game::board::Cells::default(),
+            None => board::Cells::default(),
         };
     let toggle_initial_player =
-        match matches.value_of(util::INITIAL_PLAYER_FLAG).map(|x| x.parse::<game::Role>()) {
-            None | Some(Ok(game::Role::Dwarf)) => false,
-            Some(Ok(game::Role::Troll)) => true,
+        match matches.value_of(thud::INITIAL_PLAYER_FLAG).map(|x| x.parse::<thud_game::Role>()) {
+            None | Some(Ok(thud_game::Role::Dwarf)) => false,
+            Some(Ok(thud_game::Role::Troll)) => true,
             Some(Err(x)) => panic!("{}", x),
         };
     let logging_level =
-        match matches.value_of(util::LOG_LEVEL_FLAG).map(|x| x.parse::<log::LogLevelFilter>()) {
+        match matches.value_of(thud::LOG_LEVEL_FLAG).map(|x| x.parse::<log::LogLevelFilter>()) {
             Some(Ok(x)) => x,
-            Some(Err(_)) => panic!("Bad logging level '{}'", matches.value_of(util::LOG_LEVEL_FLAG).unwrap()),
+            Some(Err(_)) => panic!("Bad logging level '{}'", matches.value_of(thud::LOG_LEVEL_FLAG).unwrap()),
             None => log::LogLevelFilter::Info,
         };
     let move_selection_criterion =
-        match matches.value_of(util::MOVE_SELECTION_CRITERION_FLAG).map(|x| x.parse::<util::MoveSelectionCriterion>()) {
+        match matches.value_of(thud::MOVE_SELECTION_CRITERION_FLAG).map(|x| x.parse::<thud::MoveSelectionCriterion>()) {
             Some(Ok(x)) => x,
             Some(Err(e)) => panic!("Bad move selection criterion: {}", e),
-            None => util::MoveSelectionCriterion::VisitCount,
+            None => thud::MoveSelectionCriterion::VisitCount,
         };
     let rng =
-        match matches.value_of(util::RNG_SEED_FLAG).map(|x| x.parse::<u32>()) {
+        match matches.value_of(thud::RNG_SEED_FLAG).map(|x| x.parse::<u32>()) {
             Some(Ok(x)) => IsaacRng::from_seed(&[x]),
             Some(Err(e)) => panic!("Bad RNG seed: {}", e),
             None => IsaacRng::new_unseeded(),
@@ -96,24 +96,24 @@ fn main() {
         state.toggle_active_role();
     }
     let mut graph = mcts::Graph::new();
-    util::initialize_search(state.clone(), &mut graph);
+    thud::initialize_search(state.clone(), &mut graph);
 
     let mut search_state = mcts::SearchState::new(rng, exploration_bias);
     let mut turn_number = 0;
     loop {
-        info!("begin turn {}; board: {}", turn_number, ::thud::game::board::format_board(state.board()));
+        info!("begin turn {}; board: {}", turn_number, board::format_board(state.board()));
         if graph.get_node(&state).is_none() {
             error!("board not found in playout graph; reinitializing");
-            util::initialize_search(state.clone(), &mut graph);
+            thud::initialize_search(state.clone(), &mut graph);
         }
 
         // {
         //     let mut available_actions: Vec<game::Action> =
         //         graph.get_node(&state).unwrap().get_child_list().iter()
         //         .map(|c| c.get_data().action).collect();
-        //     available_actions.sort_by(util::cmp_actions);
+        //     available_actions.sort_by(thud_game::util::cmp_actions);
         //     let mut state_actions: Vec<game::Action> = state.actions().collect();
-        //     state_actions.sort_by(util::cmp_actions);
+        //     state_actions.sort_by(thud_game::util::cmp_actions);
         //     debug!("Checking comparison of state_actions: {:?} vs. available actions: {:?}",
         //            state_actions, available_actions);
         //     assert_eq!(state_actions, available_actions);
@@ -163,11 +163,11 @@ fn main() {
                                   stats.payoff, stats.visits, ucb);
                             best_action = match (best_action, move_selection_criterion) {
                                 (None, _) => Some(action),
-                                (Some(_), util::MoveSelectionCriterion::VisitCount) if best_visits < stats.visits => {
+                                (Some(_), thud::MoveSelectionCriterion::VisitCount) if best_visits < stats.visits => {
                                     best_visits = stats.visits;
                                     Some(action)
                                 },
-                                (Some(_), util::MoveSelectionCriterion::Ucb) =>
+                                (Some(_), thud::MoveSelectionCriterion::Ucb) =>
                                     match ucb {
                                         Ok(mcts::UcbProxy::Value(x)) if best_ucb < x => {
                                             best_ucb = x;

@@ -1,13 +1,8 @@
 use super::base::*;
-use super::payoff::Payoff;
 use super::ucb;
 
-use ::search_graph;
 use ::thud_game;
-use ::rand::Rng;
 
-use std::collections::HashSet;
-use std::cmp;
 use std::iter::Iterator;
 
 /// Iterable view over parents of a graph node, which selects for those parents

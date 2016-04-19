@@ -1,15 +1,20 @@
-#[macro_use]
-extern crate clap;
+extern crate cairo;
+#[macro_use] extern crate clap;
+extern crate glib;
+extern crate gtk;
+extern crate gtk_sys;
+#[macro_use] extern crate log;
+extern crate fern;
+extern crate mcts;
+extern crate search_graph;
+extern crate thud_game;
 
-use ::game;
-use ::game::board;
+use ::thud_game::board;
 use ::clap::{App, Arg};
-use ::mcts;
 use ::mcts::expand;
 
-use std::cmp::{Ord, Ordering};
-
 pub mod console_ui;
+pub mod gtk_ui;
 
 pub const ITERATION_COUNT_FLAG: &'static str = "iterations";
 pub const SIMULATION_COUNT_FLAG: &'static str = "simulations";

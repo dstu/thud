@@ -3,14 +3,15 @@ extern crate fern;
 extern crate gtk;
 #[macro_use]
 extern crate log;
+extern crate mcts;
 extern crate rand;
 extern crate thud;
+extern crate thud_game;
 
-use thud::game::board;
-use thud::mcts;
-use thud::mcts::State;
+use thud_game::board;
+use mcts::State;
 use thud::gtk_ui;
-use thud::util;
+use thud_game::util;
 
 use gtk::traits::*;
 use gtk::signal::Inhibit;
@@ -31,7 +32,7 @@ fn main() {
     let state = State::new(board::Cells::default());
     let mut graph = mcts::Graph::new();
     let iteration_count = args().skip(1).next().unwrap().parse::<usize>().ok().unwrap();
-    util::initialize_search(state.clone(), &mut graph);
+    thud::initialize_search(state.clone(), &mut graph);
     let mut search_state = mcts::SearchState::new(rand::thread_rng(), 0.1);
     for iteration in 0..iteration_count {
         if iteration % 1000 == 0 {

@@ -1,5 +1,5 @@
-use ::game;
-use game::board;
+use ::thud_game;
+use thud_game::board;
 
 use ::gtk_ui::board_display::model;
 
@@ -85,7 +85,7 @@ impl Properties {
 
 enum Redraw {
     Full(model::Interactive),
-    Partial(board::Token, game::Action),
+    Partial(board::Token, thud_game::Action),
 }
 
 // Responsibility: draw board.
@@ -179,7 +179,7 @@ fn draw_selected_cell(cr: &mut cairo::Context, props: &Properties,
 }
 
 fn draw_targeted_cell(cr: &mut cairo::Context, props: &Properties,
-                      action: &game::Action, content: board::Content) {
+                      action: &thud_game::Action, content: board::Content) {
     cr.set_source_rgb(0.0, 0.5, 0.7);
     cr.set_line_width(props.border_width);
     if let Some(position) = action.target() {
@@ -283,22 +283,22 @@ impl Interactive {
                             &Redraw::Full(ref model) => draw_canvas_interactive(&mut cr, &props, &model.state, &model.action),
                             &Redraw::Partial(token, a) => {
                                 match a {
-                                    game::Action::Move(from, to) => {
+                                    thud_game::Action::Move(from, to) => {
                                         draw_cell(&mut cr, &props, from, board::Content::Empty);
                                         draw_cell(&mut cr, &props, to, board::Content::Occupied(token));
                                     },
-                                    game::Action::Hurl(from, to) => {
+                                    thud_game::Action::Hurl(from, to) => {
                                         draw_cell(&mut cr, &props, from, board::Content::Empty);
                                         draw_cell(&mut cr, &props, to, board::Content::Occupied(board::Token::Dwarf));
                                     },
-                                    game::Action::Shove(from, to, capture_len, captures) => {
+                                    thud_game::Action::Shove(from, to, capture_len, captures) => {
                                         draw_cell(&mut cr, &props, from, board::Content::Empty);
                                         draw_cell(&mut cr, &props, to, board::Content::Occupied(board::Token::Troll));
                                         for i in 0..capture_len {
                                             draw_cell(&mut cr, &props, captures[i as usize], board::Content::Empty);
                                         }
                                     },
-                                    // game::Action::Concede => (),
+                                    // thud_game::Action::Concede => (),
                                 }
                             }
                         }
@@ -320,11 +320,11 @@ impl Interactive {
         true
     }
 
-    pub fn queue_draw_action(&mut self, role: game::Role, action: game::Action) -> bool {
+    pub fn queue_draw_action(&mut self, role: thud_game::Role, action: thud_game::Action) -> bool {
         let mut queue = try_lock_bool!(self.queue);
         match role {
-            game::Role::Dwarf => queue.push_back(Redraw::Partial(board::Token::Dwarf, action)),
-            game::Role::Troll => queue.push_back(Redraw::Partial(board::Token::Troll, action)),
+            thud_game::Role::Dwarf => queue.push_back(Redraw::Partial(board::Token::Dwarf, action)),
+            thud_game::Role::Troll => queue.push_back(Redraw::Partial(board::Token::Troll, action)),
         }
         self.widget().queue_draw();
         true

@@ -1,5 +1,5 @@
-use ::game::Action;
-use ::game::board::{Coordinate};
+use ::thud_game::Action;
+use ::thud_game::board::{Coordinate};
 use ::mcts::State;
 
 use std::collections::HashMap;
