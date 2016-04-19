@@ -124,7 +124,7 @@ fn main() {
             }
             trace!("UCB selected action {:?} [UCB = {}]", actions[selected_action_index], best_ucb);
             for _ in 0..simulation_count {
-                let payoff = mcts::expand::simulate(&mut state.clone(), &mut rng);
+                let payoff = mcts::simulate::simulate(&mut state.clone(), &mut rng);
                 trace!("simulated payoff {:?}", payoff);
                 action_statistics[selected_action_index].increment_visit(payoff);
             }

@@ -1,5 +1,6 @@
 use ::mcts::base::{ChildList, Edge};
 use ::game;
+use ::game::board::format_board;
 
 use ::rand::Rng;
 use ::search_graph;
@@ -85,11 +86,13 @@ impl<'a, I> Iterator for EdgeUcbIter<'a, I> where I: 'a + Iterator<Item=Edge<'a>
     type Item = Result<UcbSuccess<'a>, UcbError>;
 
     fn next(&mut self) -> Option<Result<UcbSuccess<'a>, UcbError>> {
-        self.edges.next().map(|e| match e.get_target() {
-            search_graph::Target::Unexpanded(_) => Ok(UcbSuccess::Select(e)),
-            search_graph::Target::Expanded(_) =>
-                Ok(child_score(self.log_parent_visits, self.role, self.explore_bias, e),)
-        })
+        self.edges.next().map(
+            |e|
+            if e.get_data().statistics.get().visits == 0 {
+                Ok(UcbSuccess::Select(e))
+            } else {
+                Ok(child_score(self.log_parent_visits, self.explore_bias, e),)
+            })
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -98,14 +101,14 @@ impl<'a, I> Iterator for EdgeUcbIter<'a, I> where I: 'a + Iterator<Item=Edge<'a>
 }
 
 /// Returns the UCB policy result for the given values.
-pub fn child_score<'a>(log_parent_visits: f64, role: game::Role, explore_bias: f64, child: Edge<'a>)
+pub fn child_score<'a>(log_parent_visits: f64, explore_bias: f64, child: Edge<'a>)
                        -> UcbSuccess<'a> {
     let stats = child.get_data().statistics.get();
     if stats.visits == 0 {
         UcbSuccess::Select(child)
     } else {
         let child_visits = stats.visits as f64;
-        let child_payoff = stats.payoff.score(role) as f64;
+        let child_payoff = stats.payoff.score(child.get_source().get_label().active_role()) as f64;
         let ucb = child_payoff / child_visits
             + explore_bias * f64::sqrt(log_parent_visits / child_visits);
         UcbSuccess::Value(child, ucb)
@@ -125,7 +128,7 @@ pub fn child_score<'a>(log_parent_visits: f64, role: game::Role, explore_bias: f
 /// children. But when doing backpropagation on a full game state graph (not
 /// just a tree), we want to know all of the parent edges which could have
 /// rolled out to a given child.
-pub fn is_best_child<'a>(e: &Edge<'a>, role: game::Role, explore_bias: f64) -> bool {
+pub fn is_best_child<'a>(e: &Edge<'a>, explore_bias: f64) -> bool {
     let stats = e.get_data().statistics.get();
     // trace!("is_best_child: edge {} has {} visits", e.get_id(), stats.visits);
     if stats.visits == 0 {
@@ -150,7 +153,8 @@ pub fn is_best_child<'a>(e: &Edge<'a>, role: game::Role, explore_bias: f64) -> b
     };
     let mut edge_ucb = None;
     let mut best_ucb = ::std::f64::MIN;
-    let ucb_iter = EdgeUcbIter::new(log_parent_visits, explore_bias, role, siblings.iter());
+    let ucb_iter = EdgeUcbIter::new(
+        log_parent_visits, explore_bias, parent.get_label().active_role(), siblings.iter());
     // Scan through siblings to find the maximum UCB score. This is
     // short-circuited using a lazy iterator to ameliorate the O(n) running
     // time.
@@ -262,11 +266,13 @@ pub fn is_best_child<'a>(e: &Edge<'a>, role: game::Role, explore_bias: f64) -> b
     // }
 }
 
-pub fn find_best_child_edge_index<'a, R>(c: &ChildList<'a>, role: game::Role, epoch: usize,
+pub fn find_best_child_edge_index<'a, R>(c: &ChildList<'a>, epoch: usize,
                                          explore_bias: f64, rng: &mut R) -> Result<usize, UcbError>
     where R: Rng {
         if c.is_empty() {
-            error!("find_best_child_edge_index: no children for node {}", c.get_source_node().get_id());
+            error!("find_best_child_edge_index: no children for node {} with board: {}",
+                   c.get_source_node().get_id(),
+                   format_board(c.get_source_node().get_label().cells()));
             return Err(UcbError::NoChildren)
         }
         let log_parent_visits = {
@@ -285,7 +291,8 @@ pub fn find_best_child_edge_index<'a, R>(c: &ChildList<'a>, role: game::Role, ep
         let mut best_index = 0;
         let mut best_ucb = ::std::f64::MIN;
         let mut sampling_count = 0u32;
-        let ucb_iter = EdgeUcbIter::new(log_parent_visits, explore_bias, role, c.iter());
+        let ucb_iter = EdgeUcbIter::new(
+            log_parent_visits, explore_bias, c.get_source_node().get_label().active_role(), c.iter());
         for (index, ucb) in ucb_iter.enumerate() {
             match ucb {
                 Ok(UcbSuccess::Select(_)) => {
@@ -324,7 +331,7 @@ pub fn find_best_child_edge_index<'a, R>(c: &ChildList<'a>, role: game::Role, ep
         return Ok(best_index)
     }
 
-pub fn child_edge_ucb_scores<'a, R>(c: &ChildList<'a>, role: game::Role, epoch: usize,
+pub fn child_edge_ucb_scores<'a, R>(c: &ChildList<'a>, epoch: usize,
                                     explore_bias: f64, rng: &mut R) -> Vec<Result<UcbSuccess<'a>, UcbError>>
     where R: Rng {
         let log_parent_visits = {
@@ -340,5 +347,7 @@ pub fn child_edge_ucb_scores<'a, R>(c: &ChildList<'a>, role: game::Role, epoch: 
                 f64::ln(parent_visits as f64)
             }
         };
-        EdgeUcbIter::new(log_parent_visits, explore_bias, role, c.iter()).collect()
+        EdgeUcbIter::new(
+            log_parent_visits, explore_bias, c.get_source_node().get_label().active_role(), c.iter())
+            .collect()
     }

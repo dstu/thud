@@ -76,15 +76,16 @@ pub fn payoff(state: &State) -> Option<Payoff> {
 mod test {
     use super::{Payoff, payoff};
     use ::game;
-    use game::board;
+    use ::game::board;
+    use ::mcts;
 
     fn check_no_payoff(board: board::Cells) {
-        let state = game::State::<board::TranspositionalEquivalence>::new(board);
+        let state = mcts::State::new(board);
         assert_eq!(None, payoff(&state));
     }
 
     fn check_payoff(dwarf: usize, troll: usize, board: board::Cells) {
-        let state = game::State::<board::TranspositionalEquivalence>::new(board);
+        let state = mcts::State::new(board);
         assert_eq!(Some(Payoff { weight: 1, values: [dwarf, troll], }), payoff(&state));
     }
 

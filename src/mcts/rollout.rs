@@ -1,20 +1,22 @@
+use ::game;
+use ::game::board::format_board;
+
 use ::mcts::base::*;
 use ::mcts::ucb;
+use ::mcts::payoff::payoff;
 
-use ::search_graph::Target;
-use ::search_graph::search::Traversal;
 use ::rand::Rng;
 
+use std::convert::From;
 use std::error::Error;
 use std::fmt;
 
 pub enum RolloutError<'a> {
-    Cycle(SearchStack<'a>),
+    Cycle(Vec<Edge<'a>>),
     Ucb(ucb::UcbError),
 }
 
-pub type Result<'a> = ::std::result::Result<
-        Target<MutNode<'a>, EdgeExpander<'a>>, RolloutError<'a>>;
+pub type Result<'a> = ::std::result::Result<(Node<'a>, Vec<Edge<'a>>), RolloutError<'a>>;
 
 impl<'a> fmt::Debug for RolloutError<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -50,62 +52,59 @@ impl<'a> Error for RolloutError<'a> {
     }
 }
 
-pub fn rollout<'a, R: Rng>(node: MutNode<'a>, state: &mut State, explore_bias: f64,
-                           epoch: usize, rng: &mut R) -> Result<'a> {
-    let mut path = SearchStack::new(node);
-    loop {
-        if !path.is_head_expanded() {
-            match path.to_head() {
-                Target::Unexpanded(edge) => {
-                    let edge_id = edge.get_id();
-                    let source_id = edge.get_source().get_id();
-                    match edge.to_target() {
-                        Target::Unexpanded(expander) => {
-                            trace!("rollout: ended on edge {} (from node {})", edge_id, source_id);
-                            return Ok(Target::Unexpanded(expander))
-                        },
-                        _ => panic!("unexpanded search path head resolves to expanded edge"),
-                    }
-                },
-                _ => panic!("search path head should not be expanded but resolves as such"),
-            }
-        }
+impl<'a> From<ucb::UcbError> for RolloutError<'a> {
+    fn from(u: ucb::UcbError) -> RolloutError<'a> {
+        RolloutError::Ucb(u)
+    }
+}
 
-        if match path.head() {
-            Target::Expanded(ref n) => n.get_data().visited_in_rollout_epoch(epoch),
-            _ => panic!("expanded search path head resolves to unexpanded edge"),
-        } {
-            return Err(RolloutError::Cycle(path))
-        }
-
-        let mut no_children = false;
-        match path.push(|n| {
-            let index = try!(ucb::find_best_child_edge_index(
-                &n.get_child_list(), state.active_role(), epoch, explore_bias, rng));
-            trace!("rollout: select child {} of node {} (edge {} with statistics {:?}), outgoing play {:?} by {:?}",
-                   index, n.get_id(), n.get_child_list().get_edge(index).get_id(), n.get_child_list().get_edge(index).get_data().statistics.get(),
-                   n.get_child_list().get_edge(index).get_data().action, state.active_role());
-            Ok(Some(Traversal::Child(index)))
-        }) {
-            Ok(Some(selected_edge)) => {
-                trace!("rollout: performing action {:?} by {:?}",
-                       selected_edge.get_data().action, state.active_role());
-                state.do_action(&selected_edge.get_data().action)
-            },
-            Ok(None) => panic!("rollout: failed to select a child"),
-            Err(::search_graph::search::SearchError::SelectionError(ucb::UcbError::NoChildren)) =>
-                no_children = true,
-            Err(::search_graph::search::SearchError::SelectionError(e)) =>
-                return Err(RolloutError::Ucb(e)),
-            Err(e) =>
-                panic!("Internal error in rollout: {}", e),
-        }
-
-        if no_children {
-            match path.to_head() {
-                Target::Expanded(node) => return Ok(Target::Expanded(node)),
-                _ => panic!("Rollout found no children, but path is on an edge"),
+pub fn rollout<'a, R: Rng>(mut node: Node<'a>, explore_bias: f64, epoch: usize, rng: &mut R) -> Result<'a> {
+    // Downward scan to advance state and populate downward trace.
+    let mut downward_trace = Vec::new();
+    {
+        let mut done = false;
+        while !done {
+            if let Some(payoff) = payoff(node.get_label()) {
+                done = true;
+            } else {
+                let children = node.get_child_list();
+                let best_child_index =
+                    try!(ucb::find_best_child_edge_index(&children, epoch, explore_bias, rng));
+                trace!("rollout: best child index of node {} is {}", node.get_id(), best_child_index);
+                let best_child = children.get_edge(best_child_index);
+                if best_child.get_data().mark_visited_in_rollout_epoch(epoch) {
+                    return Err(RolloutError::Cycle(downward_trace))
+                }
+                done = !best_child.get_data().mark_visited();
+                node = best_child.get_target();
+                downward_trace.push(best_child);
             }
         }
     }
+    trace!("rollout: downward_trace has {} elements", downward_trace.len());
+    // Upward scan to do best-child backprop.
+    let mut upward_trace = Vec::new();
+    let mut frontier: Vec<Node<'a>> =
+        downward_trace.iter().map(|e| e.get_source()).collect();
+    loop {
+        match frontier.pop() {
+            Some(n) => {
+                for parent in n.get_parent_list().iter() {
+                    if !parent.get_data().visited_in_backtrace_epoch(epoch) {
+                        if ucb::is_best_child(&parent, explore_bias) {
+                            trace!("rollout: node {} is best child of parent node {}",
+                                   n.get_id(), parent.get_id());
+                            frontier.push(parent.get_source());
+                            upward_trace.push(parent);
+                        }
+                    }
+                }
+            },
+            _ => break,
+        }
+    }
+    trace!("rollout: upward_trace has {} elements", upward_trace.len());
+    downward_trace.extend(upward_trace.into_iter());
+    trace!("rollout: ended on node {}", node.get_id());
+    Ok((node, downward_trace))
 }

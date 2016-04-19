@@ -34,42 +34,19 @@ impl fmt::Debug for Statistics {
 
 #[derive(Debug)]
 pub struct NodeData {
-    backprop_epoch: atomic::AtomicUsize,
-    rollout_epoch: atomic::AtomicUsize,
+    expanded: atomic::AtomicBool,
     pub cycle: bool,
     pub known_payoff: Option<Payoff>,
 }
 
 impl NodeData {
-    pub fn visited_in_backprop_epoch(&self, epoch: usize) -> bool {
+    pub fn expanded(&self) -> bool {
+        self.expanded.load(atomic::Ordering::Acquire)
+    }
+
+    pub fn mark_expanded(&self) -> bool {
         // TODO: do we really need Ordering::SeqCst?
-        let data_epoch = self.backprop_epoch.swap(epoch, atomic::Ordering::AcqRel);
-        match data_epoch.cmp(&epoch) {
-            Ordering::Less => false,
-            Ordering::Equal => true,
-            Ordering::Greater =>
-                panic!("Node data has backprop epoch {}, but queried using epoch {}",
-                       data_epoch, epoch),
-        }
-    }
-
-    pub fn backprop_epoch(&self) -> usize {
-        self.backprop_epoch.load(atomic::Ordering::Acquire)
-    }
-
-    pub fn visited_in_rollout_epoch(&self, epoch: usize) -> bool {
-        let data_epoch = self.rollout_epoch.swap(epoch, atomic::Ordering::AcqRel);
-        match data_epoch.cmp(&epoch) {
-            Ordering::Less => false,
-            Ordering::Equal => true,
-            Ordering::Greater =>
-                panic!("Node data has rollout epoch {}, but queried using epoch {}",
-                       data_epoch, epoch),
-        }
-    }
-
-    pub fn rollout_epoch(&self) -> usize {
-        self.rollout_epoch.load(atomic::Ordering::Acquire)
+        self.expanded.swap(true, atomic::Ordering::AcqRel)
     }
 }
 
@@ -77,10 +54,8 @@ impl Clone for NodeData {
     fn clone(&self) -> Self {
         NodeData {
             // TODO: do we really need Ordering::SeqCst?
-            backprop_epoch: atomic::AtomicUsize::new(
-                self.backprop_epoch.load(atomic::Ordering::Acquire)),
-            rollout_epoch: atomic::AtomicUsize::new(
-                self.rollout_epoch.load(atomic::Ordering::Acquire)),
+            expanded: atomic::AtomicBool::new(
+                self.expanded.load(atomic::Ordering::Acquire)),
             cycle: self.cycle.clone(),
             known_payoff: self.known_payoff.clone(),
         }
@@ -90,27 +65,73 @@ impl Clone for NodeData {
 impl Default for NodeData {
     fn default() -> Self {
         NodeData {
-            backprop_epoch: atomic::AtomicUsize::new(0),
-            rollout_epoch: atomic::AtomicUsize::new(0),
+            expanded: atomic::AtomicBool::new(false),
             cycle: false,
             known_payoff: None,
         }
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct EdgeData {
+    rollout_epoch: atomic::AtomicUsize,
+    backtrace_epoch: atomic::AtomicUsize,
+    visited: atomic::AtomicBool,
     pub action: game::Action,
     pub statistics: Cell<Statistics>,
     pub known_payoff: Option<Payoff>,
 }
 
+impl Clone for EdgeData {
+    fn clone(&self) -> Self {
+        EdgeData {
+            // TODO: do we really need Ordering::SeqCst?
+            rollout_epoch: atomic::AtomicUsize::new(
+                self.rollout_epoch.load(atomic::Ordering::Acquire)),
+            backtrace_epoch: atomic::AtomicUsize::new(
+                self.backtrace_epoch.load(atomic::Ordering::Acquire)),
+            visited: atomic::AtomicBool::new(
+                self.visited.load(atomic::Ordering::Acquire)),
+            action: self.action.clone(),
+            statistics: self.statistics.clone(),
+            known_payoff: self.known_payoff.clone(),
+        }
+    }
+}
+
 impl EdgeData {
     pub fn new(action: game::Action) -> Self {
         EdgeData {
+            rollout_epoch: atomic::AtomicUsize::new(0),
+            backtrace_epoch: atomic::AtomicUsize::new(0),
+            visited: atomic::AtomicBool::new(false),
             action: action,
             statistics: Cell::new(Default::default()),
             known_payoff: None,
         }
+    }
+
+    // Returns true iff edge was not previously marked as visited.
+    pub fn mark_visited_in_rollout_epoch(&self, epoch: usize) -> bool {
+        // TODO: do we really need Ordering::SeqCst?
+        let previous_value = self.rollout_epoch.swap(epoch, atomic::Ordering::AcqRel);
+        assert!(previous_value <= epoch,
+                "Previous rollout epoch > current epoch ({} > {})", previous_value, epoch);
+        previous_value >= epoch
+    }
+
+    // Returns true iff edge was not previously marked as visited.
+    pub fn visited_in_backtrace_epoch(&self, epoch: usize) -> bool {
+        // TODO: do we really need Ordering::SeqCst?
+        let previous_value = self.backtrace_epoch.swap(epoch, atomic::Ordering::AcqRel);
+        assert!(previous_value <= epoch,
+                "Previous backtrace epoch > current epoch ({} > {})", previous_value, epoch);
+        previous_value >= epoch
+    }
+
+    // Returns true iff previously visited.
+    pub fn mark_visited(&self) -> bool {
+        // TODO: do we really need Ordering::SeqCst?
+        self.visited.swap(true, atomic::Ordering::AcqRel)
     }
 }

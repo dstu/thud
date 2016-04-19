@@ -38,7 +38,7 @@ fn main() {
             trace!("iteration: {} / {} = {}%", iteration, iteration_count,
                    ((10000.0 * (iteration as f64) / (iteration_count as f64)) as usize as f64) / 100.0);
         }
-        match search_state.search(&mut graph, state.clone(),
+        match search_state.search(&mut graph, &state,
                                   |_: usize| mcts::SearchSettings { simulation_count: 200, }) {
             Ok(_) => (),
             Err(e) => {
@@ -62,9 +62,7 @@ fn main() {
 
     let columns = [gtk_ui::search_table::Column::Id,
                    gtk_ui::search_table::Column::Action,
-                   gtk_ui::search_table::Column::Statistics,
-                   gtk_ui::search_table::Column::EdgeStatus,
-                   gtk_ui::search_table::Column::EdgeTarget];
+                   gtk_ui::search_table::Column::Statistics];
     let mut store = gtk_ui::search_table::Store::new(&columns);
     store.update(graph.get_node(&state).unwrap());
     let tree = gtk::TreeView::new_with_model(&store.model()).unwrap();

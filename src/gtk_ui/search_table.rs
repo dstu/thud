@@ -13,8 +13,6 @@ pub enum Column {
     Id,
     Statistics,
     Action,
-    EdgeStatus,
-    EdgeTarget,
 }
 
 impl Column {
@@ -27,8 +25,6 @@ impl Column {
             Column::Id => "Id",
             Column::Statistics => "Statistics",
             Column::Action => "Action",
-            Column::EdgeStatus => "Edge status",
-            Column::EdgeTarget => "Edge target",
         }
     }
 
@@ -42,10 +38,6 @@ impl Column {
                 Column::Statistics =>
                     v.set_string(""),
                 Column::Action =>
-                    v.set_string(""),
-                Column::EdgeStatus =>
-                    v.set_string(""),
-                Column::EdgeTarget =>
                     v.set_string(""),
             }
             v
@@ -63,22 +55,8 @@ impl Column {
                     v.set_string(format!("{:?}", e.get_data().statistics).as_str()),
                 Column::Action =>
                     v.set_string(format!("{:?}", e.get_data().action).as_str()),
-                Column::EdgeStatus =>
-                    v.set_string(match e.get_target() {
-                        search_graph::Target::Unexpanded(_) => "Unexpanded",
-                        search_graph::Target::Expanded(_) => "Expanded",
-                    }),
-                Column::EdgeTarget =>
-                    v.set_string(self.edge_target(e).as_str()),
             }
             v
-        }
-    }
-
-    fn edge_target<'a>(self, e: &mcts::Edge<'a>) -> String {
-        match e.get_target() {
-            search_graph::Target::Unexpanded(_) => String::new(),
-            search_graph::Target::Expanded(t) => format!("node:{}", t.get_id()),
         }
     }
 
@@ -118,14 +96,12 @@ impl Store {
             let (n, parent) = nodes.pop().unwrap();
             self.set_node_columns(&n, &parent);
             let children = n.get_child_list();
-            for c in 0..children.len() {
-                let e = children.get_edge(c);
-                let e_i = self.store.append(Some(&parent));
-                self.set_edge_columns(&e, &e_i);
-                if let search_graph::Target::Expanded(t) = e.get_target() {
-                    nodes.push((t, self.store.append(Some(&e_i))));
-                }
-            }
+            // for c in 0..children.len() {
+            //     let e = children.get_edge(c);
+            //     let e_i = self.store.append(Some(&parent));
+            //     self.set_edge_columns(&e, &e_i);
+            //     nodes.push((parent.get_target(), self.store.append(Some(&e_i))));
+            // }
         }
     }
 

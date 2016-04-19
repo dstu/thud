@@ -86,14 +86,9 @@ fn write_node_tree<'a>(n: &mcts::Node<'a>, indentation_level: usize, visited_nod
                 print!("-");
             }
             print!("{}: {:?}: {:?}--", e.get_id(), edge_data.action, edge_data.statistics);
-            match children.get_edge(i).get_target() {
-                search_graph::Target::Unexpanded(_) =>
-                    println!("Unexpanded"),
-                search_graph::Target::Expanded(target) => {
-                    println!("Expanded({})", target.get_id());
-                    write_node_tree(&target, indentation_level + 1, visited_nodes);
-                },
-            }
+            let target = children.get_edge(i).get_target();
+            println!("{}", target.get_id());
+            write_node_tree(&target, indentation_level + 1, visited_nodes);
         }
     } else {
         print!("+");

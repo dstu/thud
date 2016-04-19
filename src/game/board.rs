@@ -102,6 +102,20 @@ impl Coordinate {
                      index: compute_index(row, col), }
     }
 
+    pub fn convolved(&self, i: u8) -> Coordinate {
+        match i {
+            0 => *self,
+            1 => Coordinate::new_unchecked(14u8 - self.row(), self.col()),
+            2 => Coordinate::new_unchecked(self.row(), 14u8 - self.col()),
+            3 => Coordinate::new_unchecked(14u8 - self.row(), 14u8 - self.col()),
+            4 => Coordinate::new_unchecked(self.col(), self.row()),
+            5 => Coordinate::new_unchecked(14u8 - self.col(), self.row()),
+            6 => Coordinate::new_unchecked(self.col(), 14u8 - self.row()),
+            7 => Coordinate::new_unchecked(14u8 - self.col(), 14u8 - self.row()),
+            _ => panic!("Invalid convolution number {}", i),
+        }
+    }
+
     pub fn row(&self) -> u8 {
         (self.packed & ROW_MASK) / ROW_MULTIPLIER
     }

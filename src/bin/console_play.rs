@@ -91,8 +91,18 @@ fn main() {
                     info!("iteration: {} / {} = {:.02}%", iteration, iteration_count,
                           ((100 * iteration) as f64) / (iteration_count as f64));
                 }
+                if iteration == 0 {
+                    info!("initial root parents:");
+                    for parent in graph.get_node(&state).unwrap().get_parent_list().iter() {
+                        info!("{:?}", parent.get_data());
+                    }
+                    info!("initial root children:");
+                    for child in graph.get_node(&state).unwrap().get_child_list().iter() {
+                        info!("{:?}", child.get_data());
+                    }
+                }
                 match search_state.search(
-                    &mut graph, state.clone(),
+                    &mut graph, &state,
                     |_: usize| mcts::SearchSettings {
                         simulation_count: simulation_count,
                     }) {

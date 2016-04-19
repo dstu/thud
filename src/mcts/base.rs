@@ -14,5 +14,4 @@ pub type ParentListIter<'a> = search_graph::nav::ParentListIter<'a, State, NodeD
 pub type MutNode<'a> = search_graph::mutators::MutNode<'a, State, NodeData, EdgeData>;
 pub type MutChildList<'a> = search_graph::mutators::MutChildList<'a, State, NodeData, EdgeData>;
 pub type MutParentList<'a> = search_graph::mutators::MutParentList<'a, State, NodeData, EdgeData>;
-pub type EdgeExpander<'a> = search_graph::mutators::EdgeExpander<'a, State, NodeData, EdgeData>;
 pub type SearchStack<'a> = search_graph::search::Stack<'a, State, NodeData, EdgeData>;

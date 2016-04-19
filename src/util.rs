@@ -2,6 +2,7 @@ use ::game;
 use ::game::board;
 use ::clap::{App, Arg};
 use ::mcts;
+use ::mcts::expand;
 
 use std::cmp::{Ord, Ordering};
 
@@ -185,11 +186,7 @@ pub fn set_common_args<'a, 'b>(app: App<'a, 'b>, flags: &[&str]) -> App<'a, 'b> 
 }
 
 pub fn initialize_search(state: mcts::State, graph: &mut mcts::Graph) {
-    let actions: Vec<game::Action> = state.role_actions(state.active_role()).collect();
-    let mut children = graph.add_root(state, Default::default()).to_child_list();
-    for a in actions.into_iter() {
-        children.add_child(mcts::EdgeData::new(a));
-    }
+    expand::expand(graph.add_root(state.clone(), Default::default()));
 }
 
 pub fn cmp_actions(a: &game::Action, b: &game::Action) -> Ordering {

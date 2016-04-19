@@ -96,21 +96,36 @@ fn main() {
         state.toggle_active_role();
     }
     let mut graph = mcts::Graph::new();
+    util::initialize_search(state.clone(), &mut graph);
 
     let mut search_state = mcts::SearchState::new(rng, exploration_bias);
     let mut turn_number = 0;
     loop {
         info!("begin turn {}; board: {}", turn_number, ::thud::game::board::format_board(state.board()));
         if graph.get_node(&state).is_none() {
+            error!("board not found in playout graph; reinitializing");
             util::initialize_search(state.clone(), &mut graph);
         }
+
+        // {
+        //     let mut available_actions: Vec<game::Action> =
+        //         graph.get_node(&state).unwrap().get_child_list().iter()
+        //         .map(|c| c.get_data().action).collect();
+        //     available_actions.sort_by(util::cmp_actions);
+        //     let mut state_actions: Vec<game::Action> = state.actions().collect();
+        //     state_actions.sort_by(util::cmp_actions);
+        //     debug!("Checking comparison of state_actions: {:?} vs. available actions: {:?}",
+        //            state_actions, available_actions);
+        //     assert_eq!(state_actions, available_actions);
+        // }
+
         let mut best_action = None;
         for iteration in 0..iteration_count {
             if iteration % 100 == 0 {
                 info!("iteration: {} / {} = {}%", iteration, iteration_count,
                       ((10000.0 * (iteration as f64) / (iteration_count as f64)) as usize as f64) / 100.0);
             }
-            match search_state.search(&mut graph, state.clone(),
+            match search_state.search(&mut graph, &state,
                                       |_: usize| mcts::SearchSettings {
                                           simulation_count: simulation_count,
                                       }) {
@@ -122,7 +137,7 @@ fn main() {
                         }
                         count
                     };
-                    trace!("total visits at top level: {}", toplevel_visits);
+                    // trace!("total visits at top level: {}", toplevel_visits);
                     // TODO: this commented-out block is only valid when we haven't
                     // propagated a multi-visit payoff upwards from conneting to an
                     // extant vertex.
@@ -176,8 +191,10 @@ fn main() {
         match best_action {
             Some(action) => {
                 info!("turn {}: performing best action {:?}", turn_number, action);
-                state.do_action(&action);
-                graph.retain_reachable_from(&[&state]);
+                let mut canonical_state = graph.get_node(&state).unwrap().get_label().clone();
+                canonical_state.do_action(&action);
+                state.set_from_convolved(&canonical_state);
+                graph.retain_reachable_from(&[&canonical_state]);
                 turn_number += 1;
             },
             None => {

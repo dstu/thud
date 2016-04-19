@@ -102,6 +102,10 @@ impl<E> State<E> where E: board::CellEquivalence {
         self.active_role
     }
 
+    pub fn actions<'s>(&'s self) -> actions::ActionIterator<'s> {
+        self.role_actions(self.active_role())
+    }
+
     pub fn role_actions<'s>(&'s self, r: Role) -> actions::ActionIterator<'s> {
         self.board.role_actions(r)
     }
@@ -112,6 +116,27 @@ impl<E> State<E> where E: board::CellEquivalence {
 
     pub fn toggle_active_role(&mut self) {
         self.active_role = self.active_role.toggle()
+    }
+
+    pub fn set_from_convolved(&mut self, convolved: &Self) {
+        use game::board::CellEquivalence;
+
+        let mut i = 0u8;
+        loop {
+            let mut scratch_cells = board::Cells::new();
+            for (coordinate, content) in convolved.board.cells_iter() {
+                scratch_cells[coordinate.convolved(i)] = content;
+            }
+            if board::SimpleEquivalence::boards_equal(&convolved.board, &scratch_cells) {
+                for (coordinate, content) in scratch_cells.cells_iter() {
+                    self.board[coordinate.convolved(i)] = content;
+                }
+                break
+            }
+            i += 1;
+        }
+        self.active_role = convolved.active_role;
+        self.end_proposal = convolved.end_proposal;
     }
 
     pub fn do_action(&mut self, a: &actions::Action) {
