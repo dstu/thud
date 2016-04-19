@@ -1,6 +1,7 @@
-use ::game;
-use ::game::board;
-use ::mcts::base::State;
+use ::thud_game;
+use thud_game::board;
+use super::base::State;
+
 use std::fmt;
 use std::ops::{Add, AddAssign};
 
@@ -11,7 +12,7 @@ pub struct Payoff {
 }
 
 impl Payoff {
-    pub fn score(&self, role: game::Role) -> isize {
+    pub fn score(&self, role: thud_game::Role) -> isize {
         (self.values[role.index()] as isize) - (self.values[role.toggle().index()] as isize)
     }
 }
@@ -45,10 +46,10 @@ impl fmt::Debug for Payoff {
     }
 }
 
-fn role_payoff(r: game::Role) -> usize {
+fn role_payoff(r: thud_game::Role) -> usize {
     match r {
-        game::Role::Dwarf => 1,
-        game::Role::Troll => 4,
+        thud_game::Role::Dwarf => 1,
+        thud_game::Role::Troll => 4,
     }
 }
 
@@ -75,17 +76,16 @@ pub fn payoff(state: &State) -> Option<Payoff> {
 #[cfg(test)]
 mod test {
     use super::{Payoff, payoff};
-    use ::game;
-    use ::game::board;
-    use ::mcts;
+    use ::thud_game;
+    use ::thud_game::board;
 
     fn check_no_payoff(board: board::Cells) {
-        let state = mcts::State::new(board);
+        let state = ::State::new(board);
         assert_eq!(None, payoff(&state));
     }
 
     fn check_payoff(dwarf: usize, troll: usize, board: board::Cells) {
-        let state = mcts::State::new(board);
+        let state = ::State::new(board);
         assert_eq!(Some(Payoff { weight: 1, values: [dwarf, troll], }), payoff(&state));
     }
 

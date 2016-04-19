@@ -1,6 +1,6 @@
-use ::game;
-use ::mcts::base::*;
-use ::mcts::statistics::EdgeData;
+use ::thud_game;
+use super::base::*;
+use super::statistics::EdgeData;
 
 use std::collections::HashSet;
 use std::default::Default;

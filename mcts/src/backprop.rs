@@ -1,9 +1,9 @@
-use ::mcts::base::*;
-use ::game;
-use ::mcts::payoff::Payoff;
-use ::mcts::ucb;
+use super::base::*;
+use super::payoff::Payoff;
+use super::ucb;
 
 use ::search_graph;
+use ::thud_game;
 use ::rand::Rng;
 
 use std::collections::HashSet;
@@ -14,12 +14,12 @@ use std::iter::Iterator;
 /// for which this node is a best child.
 struct ParentSelectionIter<'a> {
     parents: ::std::iter::Enumerate<ParentListIter<'a>>,
-    role: game::Role,
+    role: thud_game::Role,
     explore_bias: f64,
 }
 
 impl<'a> ParentSelectionIter<'a> {
-    pub fn new(parents: ParentList<'a>, role: game::Role, explore_bias: f64) -> Self {
+    pub fn new(parents: ParentList<'a>, role: thud_game::Role, explore_bias: f64) -> Self {
         ParentSelectionIter {
             parents: parents.iter().enumerate(), role: role, explore_bias: explore_bias,
         }
@@ -46,7 +46,7 @@ impl<'a> Iterator for ParentSelectionIter<'a> {
 }
 
 // pub fn backprop_payoff<'a, R: Rng>(node: Node<'a>, epoch: usize, payoff: Payoff,
-//                                    role: game::Role, explore_bias: f64, rng: &mut R) {
+//                                    role: thud_game::Role, explore_bias: f64, rng: &mut R) {
 //     let mut to_visit = vec![(role, node)];
 //     while !to_visit.is_empty() {
 //         let (player, node) = to_visit.pop().unwrap();

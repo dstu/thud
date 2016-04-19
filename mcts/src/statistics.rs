@@ -3,8 +3,8 @@ use std::cmp::{Ord, Ordering};
 use std::fmt;
 use std::sync::atomic;
 
-use ::mcts::payoff::Payoff;
-use ::game;
+use ::thud_game;
+use super::payoff::Payoff;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Statistics {
@@ -77,7 +77,7 @@ pub struct EdgeData {
     rollout_epoch: atomic::AtomicUsize,
     backtrace_epoch: atomic::AtomicUsize,
     visited: atomic::AtomicBool,
-    pub action: game::Action,
+    pub action: thud_game::Action,
     pub statistics: Cell<Statistics>,
     pub known_payoff: Option<Payoff>,
 }
@@ -100,7 +100,7 @@ impl Clone for EdgeData {
 }
 
 impl EdgeData {
-    pub fn new(action: game::Action) -> Self {
+    pub fn new(action: thud_game::Action) -> Self {
         EdgeData {
             rollout_epoch: atomic::AtomicUsize::new(0),
             backtrace_epoch: atomic::AtomicUsize::new(0),

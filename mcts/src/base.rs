@@ -1,8 +1,8 @@
-use ::game;
-use ::mcts::statistics::{NodeData, EdgeData};
+use ::thud_game;
+use ::statistics::{NodeData, EdgeData};
 use ::search_graph;
 
-pub type State = game::State<game::board::TranspositionalEquivalence>;
+pub type State = thud_game::state::State<thud_game::board::TranspositionalEquivalence>;
 pub type Edge<'a> = search_graph::nav::Edge<'a, State, NodeData, EdgeData>;
 pub type MutEdge<'a> = search_graph::mutators::MutEdge<'a, State, NodeData, EdgeData>;
 pub type Graph = search_graph::Graph<State, NodeData, EdgeData>;

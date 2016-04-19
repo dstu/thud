@@ -1,3 +1,8 @@
+#[macro_use] extern crate log;
+extern crate rand;
+extern crate search_graph;
+extern crate thud_game;
+
 mod base;
 pub mod backprop;
 pub mod expand;
@@ -14,7 +19,7 @@ pub use self::base::*;
 pub use self::statistics::*;
 
 use ::rand::Rng;
-use ::game;
+use ::thud_game as game;
 
 use std::cell::Cell;
 use std::convert::From;

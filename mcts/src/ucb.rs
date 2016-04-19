@@ -1,6 +1,6 @@
-use ::mcts::base::{ChildList, Edge};
-use ::game;
-use ::game::board::format_board;
+use super::base::{ChildList, Edge};
+use ::thud_game;
+use ::thud_game::board::format_board;
 
 use ::rand::Rng;
 use ::search_graph;
@@ -36,7 +36,7 @@ pub struct EdgeUcbIter<'a, I> where I: 'a + Iterator<Item=Edge<'a>> {
     lifetime_marker: PhantomData<&'a ()>,
     log_parent_visits: f64,
     explore_bias: f64,
-    role: game::Role,
+    role: thud_game::Role,
     edges: I,
 }
 
@@ -71,7 +71,7 @@ impl<'a, I> EdgeUcbIter<'a, I> where I: 'a + Iterator<Item=Edge<'a>> {
     ///    scores. This should usually be a list of child edges which share a
     ///    parent vertex.
     pub fn new(
-        log_parent_visits: f64, explore_bias: f64, role: game::Role, edges: I) -> Self {
+        log_parent_visits: f64, explore_bias: f64, role: thud_game::Role, edges: I) -> Self {
         EdgeUcbIter {
             lifetime_marker: PhantomData,
             log_parent_visits: log_parent_visits,
