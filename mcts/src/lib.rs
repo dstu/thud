@@ -1,3 +1,4 @@
+extern crate itertools;
 #[macro_use] extern crate log;
 extern crate rand;
 extern crate search_graph;
@@ -167,7 +168,7 @@ impl<R> SearchState<R> where R: Rng {
                     }
                     trace!("iterate_search: expanded rollout node {} is expanded; propagating statistics from {} children",
                            rollout_node.get_id(), rollout_node.get_child_list().len());
-                    let mut payoff = Payoff::default();
+                    let mut payoff = Payoff::zero();
                     for child in rollout_node.get_child_list().iter() {
                         let child_payoff = child.get_data().statistics.get();
                         trace!("iterate_search: expanded rollout node {} child has payoff of {:?}", rollout_node.get_id(), child_payoff);
@@ -179,7 +180,7 @@ impl<R> SearchState<R> where R: Rng {
                 } else {
                     // Simulate playout from the rollout node and propagate the
                     // resulting statistics.
-                    let mut payoff = Payoff::default();
+                    let mut payoff = Payoff::zero();
                     let state = rollout_node.get_label().clone();
                     for _ in 0..settings.simulation_count {
                         payoff += simulate::simulate(&mut state.clone(), &mut self.rng);

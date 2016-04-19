@@ -12,6 +12,13 @@ pub struct Payoff {
 }
 
 impl Payoff {
+    pub fn zero() -> Self {
+        Payoff{
+            weight: 0,
+            values: [0, 0],
+        }
+    }
+
     pub fn score(&self, role: thud_game::Role) -> isize {
         (self.values[role.index()] as isize) - (self.values[role.toggle().index()] as isize)
     }
@@ -34,12 +41,6 @@ impl AddAssign for Payoff {
     }
 }
 
-impl Default for Payoff {
-    fn default() -> Self {
-        Payoff { weight: 1, values: [0; 2], }
-    }
-}
-
 impl fmt::Debug for Payoff {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "[{}, {}]@{}", self.values[0], self.values[1], self.weight)
@@ -55,7 +56,8 @@ fn role_payoff(r: thud_game::Role) -> u32 {
 
 pub fn payoff(state: &State) -> Option<Payoff> {
     if state.terminated() {
-        let mut payoff: Payoff = Default::default();
+        let mut payoff: Payoff = Payoff::zero();
+        payoff.weight = 1;
         let mut i = state.board().cells_iter();
         loop {
             match i.next() {
