@@ -102,7 +102,7 @@ fn main() {
 
     let mut search_state = mcts::SearchState::new(rng, exploration_bias);
     let mut turn_number = 0;
-    loop {
+    while !state.terminated() {
         info!("begin turn {}; board: {}", turn_number, board::format_board(state.board()));
         if graph.get_node(&state).is_none() {
             error!("board not found in playout graph; reinitializing");
@@ -200,5 +200,5 @@ fn main() {
             }
         }
     }
-    // console_ui::write_search_graph(&graph, &state);
+    info!("game over. final board state: {}", board::format_board(state.cells()));
 }
