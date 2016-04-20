@@ -28,7 +28,8 @@ fn main() {
               thud::INITIAL_BOARD_FLAG,
               thud::INITIAL_PLAYER_FLAG,
               thud::LOG_LEVEL_FLAG,
-              thud::MOVE_SELECTION_CRITERION_FLAG]);
+              thud::MOVE_SELECTION_CRITERION_FLAG,
+              thud::COMPACT_SEARCH_GRAPH_FLAG,]);
         app.get_matches()
     };
     let iteration_count =
@@ -76,11 +77,7 @@ fn main() {
             Some(Err(e)) => panic!("Bad RNG seed: {}", e),
             None => IsaacRng::new_unseeded(),
         };
-    let compact_graph =
-        match matches.value_of(thud::COMPACT_SEARCH_GRAPH_FLAG) {
-            Some(_) => true,
-            None => false,
-        };
+    let compact_graph = matches.is_present(thud::COMPACT_SEARCH_GRAPH_FLAG);
 
     // Set up logging.
     let logger_config = fern::DispatchConfig {
@@ -192,6 +189,8 @@ fn main() {
                     debug!("collecting garbage and compacting search graph");
                     graph.retain_reachable_from(&[&canonical_state]);
                     debug!("done compacting search graph");
+                } else {
+                    debug!("potential memory leak: not compatcing search graph");
                 }
                 turn_number += 1;
             },
