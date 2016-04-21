@@ -4,8 +4,11 @@ use super::actions::{Action, ActionIterator,
                      TrollCoordinateConsumer, TrollDirectionConsumer};
 use super::coordinate::{Coordinate, Convolution, Direction};
 
+#[cfg(test)] use ::quickcheck::{Arbitrary, Gen};
+
 use std::clone::Clone;
 use std::default::Default;
+use std::fmt;
 use std::ops::{Index, IndexMut};
 use std::hash::{Hash, Hasher, SipHasher};
 
@@ -435,10 +438,40 @@ pub fn format_board(board: &Cells) -> String {
     s
 }
 
+impl fmt::Debug for Cells {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", format_board(self))
+    }
+}
+
+#[cfg(test)]
+impl Arbitrary for Cells {
+    fn arbitrary<G: Gen>(g: &mut G) -> Self {
+        let dwarf_count: u8 = g.gen_range(0, 32);
+        let troll_count: u8 = g.gen_range(0, 8);
+        let mut cells = Cells::new();
+        cells[coordinate_literal!(7, 7)] = Content::Occupied(Token::Stone);
+        let mut coordinates: Vec<Coordinate> =
+            Coordinate::all().iter().filter(|&&x| x != coordinate_literal!(7, 7))
+            .map(|&x| x).collect();
+        g.shuffle(&mut coordinates);
+        let mut i = coordinates.into_iter();
+        for _ in 0..dwarf_count {
+            cells[i.next().unwrap()]  = Content::Occupied(Token::Dwarf);
+        }
+        for _ in 0..troll_count {
+            cells[i.next().unwrap()] = Content::Occupied(Token::Troll);
+        }
+        cells
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use ::coordinate::Coordinate;
-    use super::{Cells, decode_board};
+    use ::actions::Action;
+    use ::coordinate::{Coordinate, Direction};
+    use super::{Content, Cells, Token, decode_board};
+    use ::util;
 
     #[test]
     fn decode_board_ok() {
@@ -468,5 +501,161 @@ d_____________d
                 }
             }
         }
+    }
+
+    #[quickcheck]
+    fn dwarf_can_move(cells: Cells) -> bool {
+        for start in Coordinate::all().iter() {
+            if let Content::Occupied(Token::Dwarf) = cells[*start] {
+                let mut available_moves: Vec<Action> =
+                    cells.position_actions(*start)
+                    .filter(|x| x.is_move())
+                    .collect();
+                let mut generated_moves = Vec::new();
+                for d in Direction::all() {
+                    let mut next = start.to_direction(*d);
+                    loop {
+                        match next {
+                            None => break,
+                            Some(end) if cells[end].is_occupied() => break,
+                            Some(end) => {
+                                generated_moves.push(Action::Move(*start, end));
+                                next = end.to_direction(*d);
+                            },
+                        }
+                    }
+                }
+                available_moves.sort_by(util::cmp_actions);
+                generated_moves.sort_by(util::cmp_actions);
+                if available_moves != generated_moves {
+                    return false
+                }
+            }
+        }
+        true
+    }
+
+    #[quickcheck]
+    fn dwarf_can_capture(cells: Cells) -> bool {
+        for start in Coordinate::all().iter() {
+            if let Content::Occupied(Token::Dwarf) = cells[*start] {
+                let mut available_captures: Vec<Action> =
+                    cells.position_actions(*start)
+                    .filter(|x| x.is_hurl())
+                    .collect();
+                let mut generated_moves = Vec::new();
+                for forward in Direction::all() {
+                    let backward = forward.reverse();
+                    let mut next_backward = Some(*start);
+                    let mut next_forward = start.to_direction(*forward);
+                    loop {
+                        match (next_backward, next_forward) {
+                            (Some(line_start), Some(end)) if cells[line_start].is_dwarf() => {
+                                match cells[end] {
+                                    Content::Occupied(Token::Troll) => {
+                                        generated_moves.push(Action::Hurl(*start, end));
+                                        break
+                                    },
+                                    Content::Empty => {
+                                        next_backward = line_start.to_direction(backward);
+                                        next_forward = end.to_direction(*forward);
+                                    },
+                                    _ => break
+                                }
+                            },
+                            _ => break,
+                        }
+                    }
+                }
+                available_captures.sort_by(util::cmp_actions);
+                generated_moves.sort_by(util::cmp_actions);
+                if available_captures != generated_moves {
+                    return false
+                }
+            }
+        }
+        true
+    }
+
+    #[quickcheck]
+    fn troll_can_move(cells: Cells) -> bool {
+        for start in Coordinate::all().iter() {
+            if let Content::Occupied(Token::Troll) = cells[*start] {
+                let mut available_moves: Vec<Action> =
+                    cells.position_actions(*start)
+                    .filter(|x| x.is_move())
+                    .collect();
+                let mut generated_moves = Vec::new();
+                for d in Direction::all() {
+                    if let Some(end) = start.to_direction(*d) {
+                        if cells[end].is_empty() {
+                            generated_moves.push(Action::Move(*start, end));
+                        }
+                    }
+                }
+                generated_moves.sort_by(util::cmp_actions);
+                available_moves.sort_by(util::cmp_actions);
+                if available_moves != generated_moves {
+                    return false
+                }
+            }
+        }
+        true
+    }
+
+    #[quickcheck]
+    fn troll_can_capture(cells: Cells) -> bool {
+        for start in Coordinate::all().iter() {
+            if let Content::Occupied(Token::Troll) = cells[*start] {
+                let mut available_captures: Vec<Action> =
+                    cells.position_actions(*start)
+                    .filter(|x| x.is_shove())
+                    .collect();
+                let mut generated_moves = Vec::new();
+                for forward in Direction::all() {
+                    let backward = forward.reverse();
+                    let mut next_backward = Some(*start);
+                    let mut next_forward = start.to_direction(*forward);
+                    loop {
+                        match (next_backward, next_forward) {
+                            (Some(line_start), Some(end)) if cells[line_start].is_troll() => {
+                                match cells[end] {
+                                    Content::Empty => {
+                                        let captures: Vec<Coordinate> =
+                                            Direction::all().iter()
+                                            .filter_map(|&x| end.to_direction(x))
+                                            .filter_map(|c| match cells[c] {
+                                                Content::Occupied(Token::Dwarf) => Some(c),
+                                                _ => None,
+                                            }).collect();
+                                        if captures.len() > 0 {
+                                            let mut captures_array =
+                                                [coordinate_literal!(7, 7); 7];
+                                            for (i, c) in captures.iter().enumerate() {
+                                                captures_array[i] = *c;
+                                            }
+                                            generated_moves.push(
+                                                Action::Shove(*start, end,
+                                                              captures.len() as u8,
+                                                              captures_array));
+                                        }
+                                        next_backward = line_start.to_direction(backward);
+                                        next_forward = end.to_direction(*forward);
+                                    },
+                                    _ => break,
+                                }
+                            },
+                            _ => break,
+                        }
+                    }
+                }
+                available_captures.sort_by(util::cmp_actions);
+                generated_moves.sort_by(util::cmp_actions);
+                if available_captures != generated_moves {
+                    return false
+                }
+            }
+        }
+        true
     }
 }

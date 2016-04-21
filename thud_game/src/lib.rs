@@ -1,14 +1,14 @@
 #![feature(associated_type_defaults)]
 #![feature(const_fn)]
+#![feature(custom_attribute)]
 #![feature(fn_traits)]
 #![feature(unboxed_closures)]
+#![cfg_attr(test, feature(plugin))]
+#![cfg_attr(test, plugin(quickcheck_macros))]
+
+#[cfg(test)] extern crate quickcheck;
 
 #[macro_use] extern crate log;
-
-use std::error::Error;
-use std::fmt;
-use std::str::FromStr;
-
 #[macro_use] pub mod coordinate;
 pub mod board;
 #[macro_use] pub mod actions;
@@ -17,6 +17,10 @@ pub mod state;
 pub mod util;
 
 pub use actions::Action;
+
+use std::error::Error;
+use std::fmt;
+use std::str::FromStr;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Role {

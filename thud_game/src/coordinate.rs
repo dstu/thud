@@ -1,3 +1,5 @@
+#[cfg(test)] use ::quickcheck::{Arbitrary, Gen};
+
 use std::fmt;
 
 const COL_MULTIPLIER: u8 = 0x10u8;
@@ -2058,6 +2060,7 @@ impl Direction {
     }
 }
 
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Convolution {
     i: u8
 }
@@ -2105,6 +2108,61 @@ const ALL_CONVOLUTIONS: &'static [Convolution; 8] =
       Convolution { i: 5, },
       Convolution { i: 6, },
       Convolution { i: 7, },];
+
+#[cfg(test)]
+impl Arbitrary for Coordinate {
+    fn arbitrary<G: Gen>(g: &mut G) -> Self {
+        *g.choose(Coordinate::all()).unwrap()
+    }
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CoordinateLineSegment {
+    pub start: Coordinate,
+    pub direction: Direction,
+    pub length: u8,
+}
+
+#[cfg(test)]
+impl Arbitrary for Direction {
+    fn arbitrary<G: Gen>(g: &mut G) -> Self {
+        *g.choose(Direction::all()).unwrap()
+    }
+}
+
+#[cfg(test)]
+impl Arbitrary for CoordinateLineSegment {
+    fn arbitrary<G: Gen>(g: &mut G) -> Self {
+        loop {
+            let start = Coordinate::arbitrary(g);
+            let direction = Direction::arbitrary(g);
+            if start.to_direction(direction).is_none() {
+                continue
+            }
+
+            let mut length = 1u8;
+            let mut next = start.to_direction(direction);
+            loop {
+                match next {
+                    None => break,
+                    Some(n) => {
+                        if g.gen_weighted_bool(length as u32) {
+                            break
+                        }
+                        next = n.to_direction(direction);
+                        length += 1;
+                    },
+                }
+            }
+            return CoordinateLineSegment {
+                start: start,
+                direction: direction,
+                length: length,
+            }
+        }
+    }
+}
 
 #[cfg(test)]
 mod test {
