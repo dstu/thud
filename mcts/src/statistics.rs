@@ -1,5 +1,5 @@
 use ::thud_game;
-use super::payoff::Payoff;
+use super::payoff::ThudPayoff;
 
 use std::fmt;
 use std::sync::atomic;
@@ -7,7 +7,7 @@ use std::sync::atomic;
 use ::syncbox::atomic::AtomicU64;
 use ::thud_game::Role;
 
-pub struct Statistics {
+pub struct ThudStatistics {
     packed: AtomicU64,
 }
 
@@ -18,24 +18,24 @@ const DWARF_SCORE_MASK: u64  // Middle 22 bits.
 const TROLL_SCORE_MASK: u64  // Lower 22 bits.
     = 0x00000000003FFFFF;
 
-impl Statistics {
+impl ThudStatistics {
     pub fn new() -> Self {
-        Statistics { packed: AtomicU64::new(0), }
+        ThudStatistics { packed: AtomicU64::new(0), }
     }
 
-    pub fn get(&self) -> Payoff {
+    pub fn as_payoff(&self) -> ThudPayoff {
         // TODO: do we really need Ordering::SeqCst?
         let packed = self.packed.load(atomic::Ordering::Acquire);
         let mut values = [0u32, 0u32];
         values[Role::Dwarf.index()] = ((packed & DWARF_SCORE_MASK) >> 22) as u32;
         values[Role::Troll.index()] = (packed & TROLL_SCORE_MASK) as u32;
-        Payoff {
+        ThudPayoff {
             weight: ((packed & VISITS_MASK) >> 44) as u32,
             values: values,
         }
     }
 
-    pub fn increment_visit(&self, p: Payoff) {
+    pub fn increment(&self, p: ThudPayoff) {
         // TODO: Is this valid on big- and little-endian machines?
         let increment =
             (((p.weight as u64) << 44) & VISITS_MASK)
@@ -46,22 +46,22 @@ impl Statistics {
     }
 }
 
-impl Clone for Statistics {
+impl Clone for ThudStatistics {
     fn clone(&self) -> Self {
         // TODO: do we really need Ordering::SeqCst?
-        Statistics { packed: AtomicU64::new(self.packed.load(atomic::Ordering::AcqRel)), }
+        ThudStatistics { packed: AtomicU64::new(self.packed.load(atomic::Ordering::AcqRel)), }
     }
 }
 
-impl Default for Statistics {
+impl Default for ThudStatistics {
     fn default() -> Self {
-        Statistics::new()
+        ThudStatistics::new()
     }
 }
 
-impl fmt::Debug for Statistics {
+impl fmt::Debug for ThudStatistics {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        let value = self.get();
+        let value = self.as_payoff();
         write!(f, "Statistics(visits: {}, dwarf: {}, troll: {})",
                value.weight, value.score(Role::Dwarf), value.score(Role::Troll))
     }
@@ -71,7 +71,7 @@ impl fmt::Debug for Statistics {
 pub struct NodeData {
     expanded: atomic::AtomicBool,
     pub cycle: bool,
-    pub known_payoff: Option<Payoff>,
+    pub known_payoff: Option<ThudPayoff>,
 }
 
 impl NodeData {
@@ -113,8 +113,8 @@ pub struct EdgeData {
     backtrace_epoch: atomic::AtomicUsize,
     visited: atomic::AtomicBool,
     pub action: thud_game::Action,
-    pub statistics: Statistics,
-    pub known_payoff: Option<Payoff>,
+    pub statistics: ThudStatistics,
+    pub known_payoff: Option<ThudPayoff>,
 }
 
 impl Clone for EdgeData {
@@ -173,49 +173,49 @@ impl EdgeData {
 
 #[cfg(test)]
 mod test {
-    use super::Statistics;
-    use ::payoff::Payoff;
+    use super::ThudStatistics;
+    use ::payoff::ThudPayoff;
 
     #[test]
     fn new_statistics_zero_ok() {
-        let stats = Statistics::new();
-        assert_eq!(stats.get(), Payoff { weight: 0, values: [0, 0], });
+        let stats = ThudStatistics::new();
+        assert_eq!(stats.as_payoff(), ThudPayoff { weight: 0, values: [0, 0], });
     }
 
     #[test]
     fn statistics_sum_visits_ok() {
-        let stats = Statistics::new();
-        let payoff = Payoff { weight: 1, values: [0, 0], };
-        stats.increment_visit(payoff);
-        assert_eq!(stats.get(), payoff);
+        let stats = ThudStatistics::new();
+        let payoff = ThudPayoff { weight: 1, values: [0, 0], };
+        stats.increment(payoff);
+        assert_eq!(stats.as_payoff(), payoff);
     }
 
     #[test]
     fn statistics_sum_dwarf_ok() {
-        let stats = Statistics::new();
-        let payoff = Payoff { weight: 0, values: [3, 0], };
-        stats.increment_visit(payoff);
-        assert_eq!(stats.get(), payoff);
+        let stats = ThudStatistics::new();
+        let payoff = ThudPayoff { weight: 0, values: [3, 0], };
+        stats.increment(payoff);
+        assert_eq!(stats.as_payoff(), payoff);
     }
 
     #[test]
     fn statistics_sum_payoff_ok() {
-        let stats = Statistics::new();
-        let payoff = Payoff { weight: 5, values: [100, 50000], };
-        stats.increment_visit(payoff);
-        assert_eq!(stats.get(), payoff);
+        let stats = ThudStatistics::new();
+        let payoff = ThudPayoff { weight: 5, values: [100, 50000], };
+        stats.increment(payoff);
+        assert_eq!(stats.as_payoff(), payoff);
     }
 
     #[test]
     fn statistics_sum_truncate_ok() {
-        let stats = Statistics::new();
-        let payoff = Payoff {
+        let stats = ThudStatistics::new();
+        let payoff = ThudPayoff {
             weight: ::std::u32::MAX,
             values: [::std::u32::MAX, ::std::u32::MAX],
         };
-        stats.increment_visit(payoff);
-        assert_eq!(stats.get(),
-                   Payoff {
+        stats.increment(payoff);
+        assert_eq!(stats.as_payoff(),
+                   ThudPayoff {
                        weight: 0xFFFFF,  // 20 bits.
                        values: [0x3FFFFF, 0x3FFFFF],  // 22 bits.
                    });

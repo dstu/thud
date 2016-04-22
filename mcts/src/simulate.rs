@@ -6,7 +6,7 @@ use super::payoff::*;
 
 use ::rand::Rng;
 
-pub fn simulate<R>(state: &mut State, rng: &mut R) -> Payoff where R: Rng {
+pub fn simulate<R>(state: &mut ThudState, rng: &mut R) -> ThudPayoff where R: Rng {
     loop {
         let action = match payoff(&state) {
             None => {

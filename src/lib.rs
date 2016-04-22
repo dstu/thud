@@ -201,6 +201,6 @@ pub fn set_common_args<'a, 'b>(app: App<'a, 'b>, flags: &[&str]) -> App<'a, 'b> 
     app.args(&populated_flags)
 }
 
-pub fn initialize_search(state: mcts::State, graph: &mut mcts::Graph) {
+pub fn initialize_search(state: mcts::ThudState, graph: &mut mcts::ThudGraph) {
     expand::expand(graph.add_root(state.clone(), Default::default()));
 }

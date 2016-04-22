@@ -9,7 +9,7 @@ extern crate thud;
 extern crate thud_game;
 
 use thud_game::board;
-use mcts::State;
+use mcts::ThudState;
 use thud::gtk_ui;
 
 use gtk::traits::*;
@@ -28,8 +28,8 @@ fn main() {
     if let Err(e) = fern::init_global_logger(logger_config, log::LogLevelFilter::Trace) {
         panic!("Failed to initialize global logger: {}", e);
     }
-    let state = State::new(board::Cells::default());
-    let mut graph = mcts::Graph::new();
+    let state = ThudState::new(board::Cells::default());
+    let mut graph = mcts::ThudGraph::new();
     let iteration_count = args().skip(1).next().unwrap().parse::<usize>().ok().unwrap();
     thud::initialize_search(state.clone(), &mut graph);
     let mut search_state = mcts::SearchState::new(rand::thread_rng(), 0.1);

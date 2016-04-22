@@ -7,6 +7,7 @@ extern crate thud_game;
 
 pub mod base;
 pub mod backprop;
+mod game;
 pub mod expand;
 pub mod payoff;
 pub mod rollout;
@@ -18,10 +19,10 @@ use self::backprop::*;
 use self::payoff::*;
 
 pub use self::base::*;
+pub use self::game::{Payoff, State, Statistics};
 pub use self::statistics::*;
 
 use ::rand::Rng;
-use ::thud_game as game;
 
 use std::convert::From;
 use std::error::Error;
@@ -37,21 +38,21 @@ pub enum SearchError {
 }
 
 #[derive(Debug)]
-pub enum UcbProxy {
+pub enum UcbValue {
     Select,
     Value(f64),
 }
 
-impl UcbProxy {
+impl UcbValue {
     pub fn from_success<'a>(success: &ucb::UcbSuccess<'a>) -> Self {
         match success {
-            &ucb::UcbSuccess::Select(_) => UcbProxy::Select,
-            &ucb::UcbSuccess::Value(_, v) => UcbProxy::Value(v),
+            &ucb::UcbSuccess::Select(_) => UcbValue::Select,
+            &ucb::UcbSuccess::Value(_, v) => UcbValue::Value(v),
         }
     }
 }
 
-pub type ActionStatistics = Vec<(game::Action, Payoff, ::std::result::Result<UcbProxy, ucb::UcbError>)>;
+pub type ActionStatistics = Vec<(thud_game::Action, ThudPayoff, ::std::result::Result<UcbValue, ucb::UcbError>)>;
 
 pub type Result = ::std::result::Result<ActionStatistics, SearchError>;
 
@@ -122,7 +123,7 @@ impl<R> SearchState<R> where R: Rng {
         }
     }
 
-    pub fn search<F>(&mut self, graph: &mut Graph, root_state: &State, mut settings_fn: F) -> Result
+    pub fn search<F>(&mut self, graph: &mut ThudGraph, root_state: &ThudState, mut settings_fn: F) -> Result
         where F: FnMut(usize)-> SearchSettings {
             {
                 let current_epoch = self.epoch;
@@ -135,14 +136,14 @@ impl<R> SearchState<R> where R: Rng {
             let mut root_stats = Vec::new();
             for child_edge in children.iter() {
                 root_stats.push((child_edge.get_data().action,
-                                 child_edge.get_data().statistics.get(),
-                                 child_ucb_results.next().unwrap().map(|s| UcbProxy::from_success(&s))));
+                                 child_edge.get_data().statistics.as_payoff(),
+                                 child_ucb_results.next().unwrap().map(|s| UcbValue::from_success(&s))));
             }
             assert!(child_ucb_results.next().is_none());
             Ok(root_stats)
         }
 
-    fn iterate_search<'a>(&mut self, state: &State, graph: &mut Graph, settings: &SearchSettings)
+    fn iterate_search<'a>(&mut self, state: &ThudState, graph: &mut ThudGraph, settings: &SearchSettings)
                           -> ::std::result::Result<(), SearchError> {
         let rollout_state_option = {
             let mut node = match graph.get_node(state) {
@@ -168,9 +169,9 @@ impl<R> SearchState<R> where R: Rng {
                     }
                     trace!("iterate_search: expanded rollout node {} is expanded; propagating statistics from {} children",
                            rollout_node.get_id(), rollout_node.get_child_list().len());
-                    let mut payoff = Payoff::zero();
+                    let mut payoff = ThudPayoff::default();
                     for child in rollout_node.get_child_list().iter() {
-                        let child_payoff = child.get_data().statistics.get();
+                        let child_payoff = child.get_data().statistics.as_payoff();
                         trace!("iterate_search: expanded rollout node {} child has payoff of {:?}", rollout_node.get_id(), child_payoff);
                         payoff += child_payoff;
                     }
@@ -180,7 +181,7 @@ impl<R> SearchState<R> where R: Rng {
                 } else {
                     // Simulate playout from the rollout node and propagate the
                     // resulting statistics.
-                    let mut payoff = Payoff::zero();
+                    let mut payoff = ThudPayoff::default();
                     let state = rollout_node.get_label().clone();
                     for _ in 0..settings.simulation_count {
                         payoff += simulate::simulate(&mut state.clone(), &mut self.rng);
@@ -191,7 +192,7 @@ impl<R> SearchState<R> where R: Rng {
 
             for edge in backprop_edges.into_iter() {
                 trace!("iterate_search: backprop {:?} to edge {}", payoff, edge.get_id());
-                edge.get_data().statistics.increment_visit(payoff);
+                edge.get_data().statistics.increment(payoff);
             }
 
             if rollout_to_expanded {

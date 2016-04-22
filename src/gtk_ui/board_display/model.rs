@@ -1,23 +1,23 @@
 use ::thud_game::Action;
 use ::thud_game::coordinate::Coordinate;
-use ::mcts::State;
+use ::mcts::ThudState;
 
 use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct Passive {
-    pub state: State,
+    pub state: ThudState,
 }
 
 #[derive(Clone)]
 pub struct Interactive {
-    pub state: State,
+    pub state: ThudState,
     pub mouse_down: Option<Coordinate>,
     pub action: ActionState,
 }
 
 impl Interactive {
-    pub fn new(state: State) -> Self {
+    pub fn new(state: ThudState) -> Self {
         Interactive { state: state,
                       mouse_down: None,
                       action: ActionState::Inactive, }

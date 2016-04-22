@@ -7,7 +7,7 @@ extern crate thud;
 
 use thud::console_ui;
 use thud_game::board;
-use mcts::base::State;
+use mcts::ThudState;
 
 fn main() {
     let logger_config = fern::DispatchConfig {
@@ -29,7 +29,7 @@ fn main() {
     board[coordinate_literal!(1, 7)] = board::Content::Occupied(board::Token::Dwarf);
     board[coordinate_literal!(0, 7)] = board::Content::Occupied(board::Token::Dwarf);
     console_ui::write_board(&board);
-    let mut state = State::new(board);
+    let mut state = ThudState::new(board);
     let mut i = 0u8;
     while i < 2 {
         {

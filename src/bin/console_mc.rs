@@ -89,7 +89,7 @@ fn main() {
             info!("No actions available. Exiting.");
             return
         }
-        let action_statistics: Vec<mcts::Statistics> = {
+        let action_statistics: Vec<mcts::ThudStatistics> = {
             let mut v = Vec::with_capacity(actions.len());
             for _ in 0..actions.len() {
                 v.push(Default::default());
@@ -105,7 +105,7 @@ fn main() {
             let mut selected_action_index = 0;
             let mut best_ucb = std::f64::MIN;
             for (i, stats) in action_statistics.iter().enumerate() {
-                let payoff = stats.get();
+                let payoff = stats.as_payoff();
                 if payoff.weight == 0 {
                     selected_action_index = i;
                     best_ucb = std::f64::MAX;
@@ -126,7 +126,7 @@ fn main() {
             for _ in 0..simulation_count {
                 let payoff = mcts::simulate::simulate(&mut state.clone(), &mut rng);
                 trace!("simulated payoff {:?}", payoff);
-                action_statistics[selected_action_index].increment_visit(payoff);
+                action_statistics[selected_action_index].increment(payoff);
             }
             log_iteration = f64::ln((iteration + 1) as f64);
         }
@@ -134,7 +134,7 @@ fn main() {
         let mut most_visited_index = std::usize::MIN;
         let mut most_visits = 0;
         for (i, stats) in action_statistics.iter().enumerate() {
-            let payoff = stats.get();
+            let payoff = stats.as_payoff();
             info!("Action {:?} gets {:?}", actions[i], payoff);
             // TODO tie-breaking.
             if payoff.weight > most_visits {

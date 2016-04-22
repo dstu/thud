@@ -4,7 +4,7 @@ use super::statistics::EdgeData;
 use std::collections::HashSet;
 use std::default::Default;
 
-pub fn expand<'a>(mut node: MutNode<'a>) {
+pub fn expand<'a>(mut node: ThudMutNode<'a>) {
     let state = node.get_label().clone();
     trace!("expand: expanding moves at node {} for {:?}", node.get_id(), state.active_role());
     let mut child_states = HashSet::new();

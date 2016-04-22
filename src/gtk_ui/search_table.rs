@@ -28,7 +28,7 @@ impl Column {
         }
     }
 
-    pub fn node_value<'a>(self, n: &mcts::Node<'a>) -> glib::Value {
+    pub fn node_value<'a>(self, n: &mcts::ThudNode<'a>) -> glib::Value {
         unsafe {
             let mut v = glib::Value::new();
             v.init(self.glib_type());
@@ -44,7 +44,7 @@ impl Column {
         }
     }
         
-    pub fn edge_value<'a>(self, e: &mcts::Edge<'a>) -> glib::Value {
+    pub fn edge_value<'a>(self, e: &mcts::ThudEdge<'a>) -> glib::Value {
         unsafe {
             let mut v = glib::Value::new();
             v.init(self.glib_type());
@@ -88,7 +88,7 @@ impl Store {
         self.columns.as_slice()
     }
 
-    pub fn update<'a>(&mut self, root: mcts::Node<'a>) {
+    pub fn update<'a>(&mut self, root: mcts::ThudNode<'a>) {
         self.store.clear();
 
         let mut nodes = vec![(root, self.store.append(None))];
@@ -105,13 +105,13 @@ impl Store {
         }
     }
 
-    fn set_node_columns<'a>(&self, n: &mcts::Node<'a>, i: &gtk::TreeIter) {
+    fn set_node_columns<'a>(&self, n: &mcts::ThudNode<'a>, i: &gtk::TreeIter) {
         for (col_number, col) in self.columns.iter().enumerate() {
             self.store.set_value(i, col_number as i32, &col.node_value(n));
         }
     }
 
-    fn set_edge_columns<'a>(&self, e: &mcts::Edge<'a>, i: &gtk::TreeIter) {
+    fn set_edge_columns<'a>(&self, e: &mcts::ThudEdge<'a>, i: &gtk::TreeIter) {
         for (col_number, col) in self.columns.iter().enumerate() {
             self.store.set_value(i, col_number as i32, &col.edge_value(e));
         }

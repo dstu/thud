@@ -10,7 +10,7 @@ use ::thud_game::coordinate::Coordinate;
 use ::thud_game::board::format_board;
 
 use ::mcts;
-use ::mcts::State;
+use ::mcts::ThudState;
 
 pub fn write_board(board: &Cells) {
     print!("{}", format_board(board));
@@ -63,7 +63,7 @@ pub fn read_coordinate() -> Coordinate {
     }
 }
 
-pub fn write_search_graph(graph: &mcts::Graph, state: &State) {
+pub fn write_search_graph(graph: &mcts::ThudGraph, state: &ThudState) {
     println!("to play: {:?}", state.active_role());
     match graph.get_node(state) {
         None => println!("no matching node for game state"),
@@ -74,7 +74,7 @@ pub fn write_search_graph(graph: &mcts::Graph, state: &State) {
     }
 }
 
-fn write_node_tree<'a>(n: &mcts::Node<'a>, indentation_level: usize, visited_nodes: &mut HashSet<usize>) {
+fn write_node_tree<'a>(n: &mcts::ThudNode<'a>, indentation_level: usize, visited_nodes: &mut HashSet<usize>) {
     if visited_nodes.insert(n.get_id()) {
         let children = n.get_child_list();
         for i in 0..children.len() {

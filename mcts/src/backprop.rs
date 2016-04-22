@@ -6,13 +6,13 @@ use std::iter::Iterator;
 /// Iterable view over parents of a graph node, which selects for those parents
 /// for which this node is a best child.
 pub struct ParentSelectionIter<'a> {
-    parents: ParentListIter<'a>,
+    parents: ThudParentListIter<'a>,
     explore_bias: f64,
     epoch: usize,
 }
 
 impl<'a> ParentSelectionIter<'a> {
-    pub fn new(parents: ParentList<'a>, explore_bias: f64, epoch: usize) -> Self {
+    pub fn new(parents: ThudParentList<'a>, explore_bias: f64, epoch: usize) -> Self {
         ParentSelectionIter {
             parents: parents.iter(),
             explore_bias: explore_bias,
@@ -22,9 +22,9 @@ impl<'a> ParentSelectionIter<'a> {
 }
 
 impl<'a> Iterator for ParentSelectionIter<'a> {
-    type Item = Edge<'a>;
+    type Item = ThudEdge<'a>;
 
-    fn next(&mut self) -> Option<Edge<'a>> {
+    fn next(&mut self) -> Option<ThudEdge<'a>> {
         loop {
             match self.parents.next() {
                 None => return None,

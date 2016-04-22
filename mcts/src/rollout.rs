@@ -11,11 +11,11 @@ use std::error::Error;
 use std::fmt;
 
 pub enum RolloutError<'a> {
-    Cycle(Vec<Edge<'a>>),
+    Cycle(Vec<ThudEdge<'a>>),
     Ucb(ucb::UcbError),
 }
 
-pub type Result<'a> = ::std::result::Result<(Node<'a>, Vec<Edge<'a>>), RolloutError<'a>>;
+pub type Result<'a> = ::std::result::Result<(ThudNode<'a>, Vec<ThudEdge<'a>>), RolloutError<'a>>;
 
 impl<'a> fmt::Debug for RolloutError<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -57,7 +57,7 @@ impl<'a> From<ucb::UcbError> for RolloutError<'a> {
     }
 }
 
-pub fn rollout<'a, R: Rng>(mut node: Node<'a>, explore_bias: f64, epoch: usize, rng: &mut R) -> Result<'a> {
+pub fn rollout<'a, R: Rng>(mut node: ThudNode<'a>, explore_bias: f64, epoch: usize, rng: &mut R) -> Result<'a> {
     // Downward scan to advance state and populate downward trace.
     let mut downward_trace = Vec::new();
     {
@@ -84,7 +84,7 @@ pub fn rollout<'a, R: Rng>(mut node: Node<'a>, explore_bias: f64, epoch: usize, 
            downward_trace.iter().map(|e| e.get_id()).join(", "));
     // Upward scan to do best-child backprop.
     let mut upward_trace = Vec::new();
-    let mut frontier: Vec<Node<'a>> =
+    let mut frontier: Vec<ThudNode<'a>> =
         downward_trace.iter().map(|e| e.get_source()).collect();
     loop {
         match frontier.pop() {

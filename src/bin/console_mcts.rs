@@ -93,11 +93,11 @@ fn main() {
     }
 
     // Play game.
-    let mut state = mcts::State::new(initial_cells);
+    let mut state = mcts::ThudState::new(initial_cells);
     if toggle_initial_player {
         state.toggle_active_role();
     }
-    let mut graph = mcts::Graph::new();
+    let mut graph = mcts::ThudGraph::new();
     thud::initialize_search(state.clone(), &mut graph);
 
     let mut search_state = mcts::SearchState::new(rng, exploration_bias);
@@ -160,7 +160,7 @@ fn main() {
                                 },
                                 (Some(_), thud::MoveSelectionCriterion::Ucb) =>
                                     match ucb {
-                                        Ok(mcts::UcbProxy::Value(x)) if best_ucb < x => {
+                                        Ok(mcts::UcbValue::Value(x)) if best_ucb < x => {
                                             best_ucb = x;
                                             Some(action)
                                         },

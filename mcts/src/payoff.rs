@@ -1,47 +1,50 @@
 use ::thud_game;
 use thud_game::board;
-use super::base::State;
+use super::base::ThudState;
 
+use std::default::Default;
 use std::fmt;
 use std::ops::{Add, AddAssign};
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-pub struct Payoff {
+pub struct ThudPayoff {
     pub weight: u32,
     pub values: [u32; 2],
 }
 
-impl Payoff {
-    pub fn zero() -> Self {
-        Payoff{
-            weight: 0,
-            values: [0, 0],
-        }
-    }
-
+impl ThudPayoff {
     pub fn score(&self, role: thud_game::Role) -> isize {
         (self.values[role.index()] as isize) - (self.values[role.toggle().index()] as isize)
     }
 }
 
-impl Add for Payoff {
-    type Output = Payoff;
+impl Default for ThudPayoff {
+    fn default() -> Self {
+        ThudPayoff{
+            weight: 0,
+            values: [0, 0],
+        }
+    }
+}
 
-    fn add(self, other: Payoff) -> Payoff {
-        Payoff { weight: self.weight + other.weight,
+impl Add for ThudPayoff {
+    type Output = ThudPayoff;
+
+    fn add(self, other: ThudPayoff) -> ThudPayoff {
+        ThudPayoff { weight: self.weight + other.weight,
                  values: [self.values[0] + other.values[0], self.values[1] + other.values[1]], }
     }
 }
 
-impl AddAssign for Payoff {
-    fn add_assign(&mut self, other: Payoff) {
+impl AddAssign for ThudPayoff {
+    fn add_assign(&mut self, other: ThudPayoff) {
         self.weight += other.weight;
         self.values[0] += other.values[0];
         self.values[1] += other.values[1];
     }
 }
 
-impl fmt::Debug for Payoff {
+impl fmt::Debug for ThudPayoff {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(f, "[{}, {}]@{}", self.values[0], self.values[1], self.weight)
     }
@@ -54,9 +57,9 @@ fn role_payoff(r: thud_game::Role) -> u32 {
     }
 }
 
-pub fn payoff(state: &State) -> Option<Payoff> {
+pub fn payoff(state: &ThudState) -> Option<ThudPayoff> {
     if state.terminated() {
-        let mut payoff: Payoff = Payoff::zero();
+        let mut payoff = ThudPayoff::default();
         payoff.weight = 1;
         let mut i = state.board().cells_iter();
         loop {
@@ -77,18 +80,19 @@ pub fn payoff(state: &State) -> Option<Payoff> {
 
 #[cfg(test)]
 mod test {
-    use super::{Payoff, payoff};
+    use super::{ThudPayoff, payoff};
     use ::thud_game;
     use ::thud_game::board;
+    use ::ThudState;
 
     fn check_no_payoff(board: board::Cells) {
-        let state = ::State::new(board);
+        let state = ThudState::new(board);
         assert_eq!(None, payoff(&state));
     }
 
     fn check_payoff(dwarf: u32, troll: u32, board: board::Cells) {
-        let state = ::State::new(board);
-        assert_eq!(Some(Payoff { weight: 1, values: [dwarf, troll], }), payoff(&state));
+        let state = ThudState::new(board);
+        assert_eq!(Some(ThudPayoff { weight: 1, values: [dwarf, troll], }), payoff(&state));
     }
 
     #[test]

@@ -73,8 +73,8 @@ fn main() {
         panic!("Failed to initialize global logger: {}", e);
     }
 
-    let mut state = mcts::State::new(initial_cells);
-    let mut graph = mcts::Graph::new();
+    let mut state = mcts::ThudState::new(initial_cells);
+    let mut graph = mcts::ThudGraph::new();
     let mut search_state = mcts::SearchState::new(rand::thread_rng(), exploration_bias);
     loop {
         console_ui::write_board(state.board());
