@@ -2,6 +2,7 @@ use ::itertools::Itertools;
 use ::rand::Rng;
 
 use super::base::*;
+use super::backprop;
 use super::ucb;
 use super::payoff::payoff;
 
@@ -88,15 +89,10 @@ pub fn rollout<'a, R: Rng>(mut node: Node<'a>, explore_bias: f64, epoch: usize, 
     loop {
         match frontier.pop() {
             Some(n) => {
-                for parent in n.get_parent_list().iter() {
-                    if !parent.get_data().visited_in_backtrace_epoch(epoch) {
-                        if ucb::is_best_child(&parent, explore_bias) {
-                            trace!("rollout: node {} is best child of parent node {}",
-                                   n.get_id(), parent.get_id());
-                            frontier.push(parent.get_source());
-                            upward_trace.push(parent);
-                        }
-                    }
+                let parents = n.get_parent_list();
+                for parent in backprop::ParentSelectionIter::new(parents, explore_bias, epoch) {
+                    frontier.push(parent.get_source());
+                    upward_trace.push(parent);
                 }
             },
             _ => break,

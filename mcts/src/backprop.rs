@@ -1,37 +1,41 @@
 use super::base::*;
 use super::ucb;
 
-use ::thud_game;
-
 use std::iter::Iterator;
 
 /// Iterable view over parents of a graph node, which selects for those parents
 /// for which this node is a best child.
-struct ParentSelectionIter<'a> {
-    parents: ::std::iter::Enumerate<ParentListIter<'a>>,
-    role: thud_game::Role,
+pub struct ParentSelectionIter<'a> {
+    parents: ParentListIter<'a>,
     explore_bias: f64,
+    epoch: usize,
 }
 
 impl<'a> ParentSelectionIter<'a> {
-    pub fn new(parents: ParentList<'a>, role: thud_game::Role, explore_bias: f64) -> Self {
+    pub fn new(parents: ParentList<'a>, explore_bias: f64, epoch: usize) -> Self {
         ParentSelectionIter {
-            parents: parents.iter().enumerate(), role: role, explore_bias: explore_bias,
+            parents: parents.iter(),
+            explore_bias: explore_bias,
+            epoch: epoch,
         }
     }
 }
 
 impl<'a> Iterator for ParentSelectionIter<'a> {
-    type Item = usize;
+    type Item = Edge<'a>;
 
-    fn next(&mut self) -> Option<usize> {
+    fn next(&mut self) -> Option<Edge<'a>> {
         loop {
             match self.parents.next() {
                 None => return None,
-                Some((i, ref e)) => {
-                    if ucb::is_best_child(e, self.explore_bias) {
+                Some(e) => {
+                    if e.get_data().visited_in_backtrace_epoch(self.epoch) {
+                        trace!("ParentSelectionIter::next: edge {} (from node {}) was already visited in backtrace epoch {}", e.get_id(), e.get_source().get_id(), self.epoch);
+                        continue
+                    }
+                    if ucb::is_best_child(&e, self.explore_bias) {
                         trace!("ParentSelectionIter::next: edge {} (from node {}) is a best child", e.get_id(), e.get_source().get_id());
-                        return Some(i)
+                        return Some(e)
                     }
                     trace!("ParentSelectionIter::next: edge {} (data {:?}) is not a best child", e.get_id(), e.get_data());
                 },
