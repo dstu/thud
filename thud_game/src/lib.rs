@@ -2,6 +2,7 @@
 #![feature(const_fn)]
 #![feature(custom_attribute)]
 #![feature(fn_traits)]
+#![feature(reflect_marker)]
 #![feature(unboxed_closures)]
 #![cfg_attr(test, feature(plugin))]
 #![cfg_attr(test, plugin(quickcheck_macros))]

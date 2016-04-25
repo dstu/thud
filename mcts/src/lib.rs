@@ -4,26 +4,20 @@ extern crate itertools;
 #[macro_use] extern crate log;
 extern crate rand;
 extern crate search_graph;
-extern crate syncbox;
 
-// pub mod base;
 pub mod backprop;
 mod game;
 mod graph;
 pub mod expand;
-// pub mod payoff;
 pub mod rollout;
 pub mod simulate;
-// mod statistics;
 pub mod ucb;
 
 // use self::backprop::*;
 // use self::payoff::*;
 
-// pub use self::base::*;
 pub use self::game::{Game, Payoff, State, Statistics};
 pub use self::graph::{EdgeData, VertexData};
-// pub use self::statistics::*;
 
 use ::rand::Rng;
 

@@ -7,8 +7,10 @@ use super::coordinate::{Coordinate, Convolution, Direction};
 #[cfg(test)] use ::quickcheck::{Arbitrary, Gen};
 
 use std::clone::Clone;
+use std::cmp::{Eq, PartialEq};
 use std::default::Default;
 use std::fmt;
+use std::marker::Reflect;
 use std::ops::{Index, IndexMut};
 use std::hash::{Hash, Hasher, SipHasher};
 
@@ -292,11 +294,12 @@ impl<'a> Iterator for OccupiedCellsIter<'a> {
     }
 }
 
-pub trait CellEquivalence {
+pub trait CellEquivalence: Clone + Eq + Hash + PartialEq + Reflect + fmt::Debug {
     fn hash_board<H>(board: &Cells, state: &mut H) where H: Hasher;
     fn boards_equal(b1: &Cells, b2: &Cells) -> bool;
 }
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SimpleEquivalence;
 
 impl CellEquivalence for SimpleEquivalence {
@@ -324,6 +327,7 @@ impl CellEquivalence for SimpleEquivalence {
     }
 }
 
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct TranspositionalEquivalence;
 
 impl CellEquivalence for TranspositionalEquivalence {

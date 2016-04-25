@@ -30,12 +30,12 @@ impl<E> State<E> where E: board::CellEquivalence {
         &self.board
     }
 
-    pub fn active_role(&self) -> Role {
-        self.active_role
+    pub fn active_role(&self) -> &Role {
+        &self.active_role
     }
 
     pub fn actions<'s>(&'s self) -> ActionIterator<'s> {
-        self.role_actions(self.active_role())
+        self.role_actions(*self.active_role())
     }
 
     pub fn role_actions<'s>(&'s self, r: Role) -> ActionIterator<'s> {
