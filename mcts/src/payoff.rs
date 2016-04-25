@@ -1,6 +1,7 @@
 use ::thud_game;
 use thud_game::board;
 use super::base::ThudState;
+use super::Payoff;
 
 use std::default::Default;
 use std::fmt;
@@ -57,42 +58,47 @@ fn role_payoff(r: thud_game::Role) -> u32 {
     }
 }
 
-pub fn payoff(state: &ThudState) -> Option<ThudPayoff> {
-    if state.terminated() {
-        let mut payoff = ThudPayoff::default();
-        payoff.weight = 1;
-        let mut i = state.board().cells_iter();
-        loop {
-            match i.next() {
-                Some((_, board::Content::Occupied(t))) =>
-                    if let Some(r) = t.role() {
-                        payoff.values[r.index()] += role_payoff(r)
-                    },
-                None => break,
-                _ => (),
+impl Payoff for ThudPayoff {
+    type State = ThudState;
+
+    fn from_state(state: &Self::State) -> Option<Self> {
+        if state.terminated() {
+            let mut payoff = ThudPayoff::default();
+            payoff.weight = 1;
+            let mut i = state.board().cells_iter();
+            loop {
+                match i.next() {
+                    Some((_, board::Content::Occupied(t))) =>
+                        if let Some(r) = t.role() {
+                            payoff.values[r.index()] += role_payoff(r)
+                        },
+                    None => break,
+                    _ => (),
+                }
             }
+            Some(payoff)
+        } else {
+            None
         }
-        Some(payoff)
-    } else {
-        None
     }
 }
 
 #[cfg(test)]
 mod test {
-    use super::{ThudPayoff, payoff};
+    use super::ThudPayoff;
+    use ::Payoff;
+    use ::ThudState;
     use ::thud_game;
     use ::thud_game::board;
-    use ::ThudState;
 
     fn check_no_payoff(board: board::Cells) {
         let state = ThudState::new(board);
-        assert_eq!(None, payoff(&state));
+        assert_eq!(None, ThudPayoff::from_state(&state));
     }
 
     fn check_payoff(dwarf: u32, troll: u32, board: board::Cells) {
         let state = ThudState::new(board);
-        assert_eq!(Some(ThudPayoff { weight: 1, values: [dwarf, troll], }), payoff(&state));
+        assert_eq!(Some(ThudPayoff { weight: 1, values: [dwarf, troll], }), Payoff::from_state(&state));
     }
 
     #[test]

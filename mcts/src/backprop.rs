@@ -1,48 +1,55 @@
-use super::base::*;
+// use super::base::*;
+use super::Game;
+use super::{EdgeData, VertexData};
 use super::ucb;
+use ::search_graph;
 
 use std::iter::Iterator;
+use std::marker::PhantomData;
 
 /// Iterable view over parents of a graph node, which selects for those parents
 /// for which this node is a best child.
-pub struct ParentSelectionIter<'a> {
-    parents: ThudParentListIter<'a>,
+pub struct ParentSelectionIter<'a, G, I> where G: 'a + Game, I: Iterator<Item=search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G::Statistics, G::Action>>> {
+    parents: I,
     explore_bias: f64,
     epoch: usize,
+    game_type: PhantomData<&'a G>,
 }
 
-impl<'a> ParentSelectionIter<'a> {
-    pub fn new(parents: ThudParentList<'a>, explore_bias: f64, epoch: usize) -> Self {
+impl<'a, G, I> ParentSelectionIter<'a, G, I> where G: 'a + Game, I: Iterator<Item=search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G::Statistics, G::Action>>>{
+    pub fn new(parents: I, explore_bias: f64, epoch: usize) -> Self {
         ParentSelectionIter {
-            parents: parents.iter(),
+            parents: parents,
             explore_bias: explore_bias,
             epoch: epoch,
+            game_type: PhantomData,
         }
     }
 }
 
-impl<'a> Iterator for ParentSelectionIter<'a> {
-    type Item = ThudEdge<'a>;
+impl<'a, G, I> Iterator for ParentSelectionIter<'a, G, I>
+    where G: 'a + Game, I: Iterator<Item=search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G::Statistics, G::Action>>> {
+        type Item = search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G::Statistics, G::Action>>;
 
-    fn next(&mut self) -> Option<ThudEdge<'a>> {
-        loop {
-            match self.parents.next() {
-                None => return None,
-                Some(e) => {
-                    if e.get_data().visited_in_backtrace_epoch(self.epoch) {
-                        trace!("ParentSelectionIter::next: edge {} (from node {}) was already visited in backtrace epoch {}", e.get_id(), e.get_source().get_id(), self.epoch);
-                        continue
-                    }
-                    if ucb::is_best_child(&e, self.explore_bias) {
-                        trace!("ParentSelectionIter::next: edge {} (from node {}) is a best child", e.get_id(), e.get_source().get_id());
-                        return Some(e)
-                    }
-                    trace!("ParentSelectionIter::next: edge {} (data {:?}) is not a best child", e.get_id(), e.get_data());
-                },
+        fn next(&mut self) -> Option<search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G::Statistics, G::Action>>> {
+            loop {
+                match self.parents.next() {
+                    None => return None,
+                    Some(e) => {
+                        if e.get_data().visited_in_backtrace_epoch(self.epoch) {
+                            trace!("ParentSelectionIter::next: edge {} (from node {}) was already visited in backtrace epoch {}", e.get_id(), e.get_source().get_id(), self.epoch);
+                            continue
+                        }
+                        if ucb::is_best_child::<G>(&e, self.explore_bias) {
+                            trace!("ParentSelectionIter::next: edge {} (from node {}) is a best child", e.get_id(), e.get_source().get_id());
+                            return Some(e)
+                        }
+                        trace!("ParentSelectionIter::next: edge {} (data {:?}) is not a best child", e.get_id(), e.get_data());
+                    },
+                }
             }
         }
     }
-}
 
 // pub fn backprop_payoff<'a, R: Rng>(node: Node<'a>, epoch: usize, payoff: Payoff,
 //                                    role: thud_game::Role, explore_bias: f64, rng: &mut R) {
