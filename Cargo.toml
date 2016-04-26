@@ -14,9 +14,11 @@ fern = "0.3.5"
 log = "0.3.5"
 rand = "0.3.12"
 search-graph = { git = "https://github.com/dstu/search-graph.git", branch = "master" }
-thud-ai = { path = "./thud_ai" }
-thud-game = { path = "./thud_game" }
 mcts = { path = "./mcts" }
+
+[dependencies.thud-game]
+path = "./thud_game"
+features = ["ai"]
 
 [profile.release]
 lto = true

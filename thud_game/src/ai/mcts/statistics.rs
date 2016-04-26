@@ -1,7 +1,8 @@
-use super::Payoff;
+use super::payoff::Payoff;
 
+use ::board;
 use ::mcts;
-use ::thud_game;
+use ::Role;
 
 use std::clone::Clone;
 use std::fmt;
@@ -10,7 +11,7 @@ use std::sync::atomic;
 
 use syncbox::atomic::AtomicU64;
 
-pub struct Statistics<E> where E: thud_game::board::CellEquivalence {
+pub struct Statistics<E> where E: board::CellEquivalence {
     packed: AtomicU64,
     cell_equivalence: PhantomData<E>,
 }
@@ -22,14 +23,14 @@ const DWARF_SCORE_MASK: u64  // Middle 22 bits.
 const TROLL_SCORE_MASK: u64  // Lower 22 bits.
     = 0x00000000003FFFFF;
 
-impl<E> Statistics<E> where E: thud_game::board::CellEquivalence {
+impl<E> Statistics<E> where E: board::CellEquivalence {
     pub fn new() -> Self {
         Statistics { packed: AtomicU64::new(0),
                      cell_equivalence: PhantomData, }
     }
 }
 
-impl<E> Clone for Statistics<E> where E: thud_game::board::CellEquivalence {
+impl<E> Clone for Statistics<E> where E: board::CellEquivalence {
     fn clone(&self) -> Self {
         // TODO: do we really need Ordering::SeqCst?
         Statistics { packed: AtomicU64::new(self.packed.load(atomic::Ordering::AcqRel)),
@@ -37,23 +38,23 @@ impl<E> Clone for Statistics<E> where E: thud_game::board::CellEquivalence {
     }
 }
 
-impl<E> Default for Statistics<E> where E: thud_game::board::CellEquivalence {
+impl<E> Default for Statistics<E> where E: board::CellEquivalence {
     fn default() -> Self {
         Statistics::new()
     }
 }
 
-impl<E> fmt::Debug for Statistics<E> where E: thud_game::board::CellEquivalence {
+impl<E> fmt::Debug for Statistics<E> where E: board::CellEquivalence {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         use mcts::{Payoff, Statistics};
         let value = self.as_payoff();
         write!(f, "Statistics(visits: {}, dwarf: {}, troll: {})",
-               value.weight, value.score(&thud_game::Role::Dwarf), value.score(&thud_game::Role::Troll))
+               value.weight, value.score(&Role::Dwarf), value.score(&Role::Troll))
     }
 }
 
-impl<E> mcts::Statistics for Statistics<E> where E: thud_game::board::CellEquivalence {
-    type Payoff = ::Payoff<E>;
+impl<E> mcts::Statistics for Statistics<E> where E: board::CellEquivalence {
+    type Payoff = super::payoff::Payoff<E>;
 
     fn as_payoff(&self) -> Self::Payoff {
         // TODO: do we really need Ordering::SeqCst?
@@ -67,8 +68,8 @@ impl<E> mcts::Statistics for Statistics<E> where E: thud_game::board::CellEquiva
         // TODO: Is this valid on big- and little-endian machines?
         let increment =
             (((p.weight as u64) << 44) & VISITS_MASK)
-            | (((p.values[thud_game::Role::Dwarf.index()] as u64) << 22) & DWARF_SCORE_MASK)
-            | ((p.values[thud_game::Role::Troll.index()] as u64) & TROLL_SCORE_MASK);
+            | (((p.values[Role::Dwarf.index()] as u64) << 22) & DWARF_SCORE_MASK)
+            | ((p.values[Role::Troll.index()] as u64) & TROLL_SCORE_MASK);
         // TODO: do we really need Ordering::SeqCst?
         self.packed.fetch_add(increment, atomic::Ordering::AcqRel);
     }
@@ -78,8 +79,8 @@ impl<E> mcts::Statistics for Statistics<E> where E: thud_game::board::CellEquiva
 mod test {
     use ::thud_game;
     use ::mcts::Statistics;
-    type ThudPayoff = ::Payoff<thud_game::board::TranspositionalEquivalence>;
-    type ThudStatistics = ::Statistics<thud_game::board::TranspositionalEquivalence>;
+    type ThudPayoff = ::Payoff<board::TranspositionalEquivalence>;
+    type ThudStatistics = ::Statistics<board::TranspositionalEquivalence>;
 
     #[test]
     fn new_statistics_zero_ok() {

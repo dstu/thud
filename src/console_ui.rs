@@ -10,7 +10,7 @@ use ::thud_game::coordinate::Coordinate;
 use ::thud_game::board::format_board;
 
 use ::mcts;
-use ::thud_ai::State as ThudState;
+use ::ThudState;
 
 pub fn write_board(board: &Cells) {
     print!("{}", format_board(board));

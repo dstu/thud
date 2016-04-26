@@ -3,8 +3,16 @@ name = "thud-game"
 version = "0.1.0"
 authors = ["Stu Black"]
 
+[features]
+default = []
+ai = ["ai-mcts"]
+ai-mcts = ["mcts", "rand", "syncbox"]
+
 [dependencies]
 log = "0.3.5"
+mcts = { path = "../mcts", optional = true }
+rand = { version = "0.3.12", optional = true }
+syncbox = { version = "0.2.4", optional = true }
 
 [dev-dependencies]
 quickcheck = "0.2"

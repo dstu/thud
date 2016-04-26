@@ -3,7 +3,6 @@ extern crate log;
 extern crate chrono;
 extern crate mcts;
 extern crate thud;
-extern crate thud_ai;
 #[macro_use(coordinate_literal)] extern crate thud_game;
 
 use thud::console_ui;
@@ -33,12 +32,12 @@ fn main() {
     let mut i = 0u8;
     while i < 2 {
         {
-            println!("Moves for {:?}:", state.wrapped.active_role());
-            for a in state.wrapped.role_actions(*state.wrapped.active_role()) {
+            println!("Moves for {:?}:", state.active_role());
+            for a in state.role_actions(*state.active_role()) {
                 println!("  {:?}", a);
             }
         }
-        state.wrapped.toggle_active_role();
+        state.toggle_active_role();
         i += 1;
     }
 }

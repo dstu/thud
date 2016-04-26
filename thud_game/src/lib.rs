@@ -7,13 +7,16 @@
 #![cfg_attr(test, feature(plugin))]
 #![cfg_attr(test, plugin(quickcheck_macros))]
 
+#[cfg(feature = "ai-mcts")] extern crate mcts;
 #[cfg(test)] extern crate quickcheck;
+#[cfg(feature = "ai-mcts")] extern crate syncbox;
 
 #[macro_use] extern crate log;
 #[macro_use] pub mod coordinate;
 pub mod board;
 #[macro_use] pub mod actions;
 pub mod end;
+#[cfg(any(feature = "ai", feature = "ai-mcts"))] pub mod ai;
 pub mod state;
 pub mod util;
 

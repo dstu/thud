@@ -4,6 +4,7 @@ use super::board;
 use super::coordinate::{Coordinate, Convolution};
 use super::end;
 
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 
@@ -116,6 +117,12 @@ impl<E> Clone for State<E> where E: board::CellEquivalence {
             terminate_decision: self.terminate_decision.clone(),
             equivalence_marker: PhantomData,
         }
+    }
+}
+
+impl<E> fmt::Debug for State<E> where E: board::CellEquivalence {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fmt::Debug::fmt(&self.board, f)
     }
 }
 
