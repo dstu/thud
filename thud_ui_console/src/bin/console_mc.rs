@@ -1,11 +1,9 @@
-extern crate chrono;
 extern crate clap;
-extern crate fern;
-extern crate mcts;
 #[macro_use] extern crate log;
+extern crate mcts;
 extern crate rand;
-extern crate thud;
 extern crate thud_game;
+extern crate thud_ui_common;
 
 use clap::App;
 use mcts::{Statistics, Payoff};
@@ -15,68 +13,59 @@ use std::default::Default;
 fn main() {
     // Set up arg handling.
     let matches = {
-        let app = thud::set_common_args(
+        let app = thud_ui_common::set_args(
             App::new("console_mc")
                 .version("0.1.0")
                 .author("Stu Black <trurl@freeshell.org>")
                 .about("Play out Thud Monte Carlo iterations"),
-            &[thud::ITERATION_COUNT_FLAG,
-              thud::SIMULATION_COUNT_FLAG,
-              thud::EXPLORATION_BIAS_FLAG,
-              thud::INITIAL_BOARD_FLAG,
-              thud::INITIAL_PLAYER_FLAG,
-              thud::LOG_LEVEL_FLAG]);
+            &[thud_ui_common::ITERATION_COUNT_FLAG,
+              thud_ui_common::SIMULATION_COUNT_FLAG,
+              thud_ui_common::EXPLORATION_BIAS_FLAG,
+              thud_ui_common::INITIAL_BOARD_FLAG,
+              thud_ui_common::INITIAL_PLAYER_FLAG,
+              thud_ui_common::LOG_LEVEL_FLAG]);
         app.get_matches()
     };
 
     let iteration_count =
-        match matches.value_of(thud::ITERATION_COUNT_FLAG).unwrap().parse::<usize>() {
+        match matches.value_of(thud_ui_common::ITERATION_COUNT_FLAG).unwrap().parse::<usize>() {
             Ok(x) => x,
             Err(e) => panic!("Bad iteration count: {}", e),
         };
     let simulation_count =
-        match matches.value_of(thud::SIMULATION_COUNT_FLAG).unwrap().parse::<usize>() {
+        match matches.value_of(thud_ui_common::SIMULATION_COUNT_FLAG).unwrap().parse::<usize>() {
             Ok(x) => x,
             Err(e) => panic!("Bad simulation count: {}", e),
         };
     let exploration_bias =
-        match matches.value_of(thud::EXPLORATION_BIAS_FLAG).unwrap().parse::<f64>() {
+        match matches.value_of(thud_ui_common::EXPLORATION_BIAS_FLAG).unwrap().parse::<f64>() {
             Ok(x) => x,
             Err(e) => panic!("Bad exploration bias: {}", e),
         };
     let initial_cells =
-        match matches.value_of(thud::INITIAL_BOARD_FLAG).map(|x| x.parse::<thud::InitialBoard>()) {
+        match matches.value_of(thud_ui_common::INITIAL_BOARD_FLAG).map(|x| x.parse::<thud_ui_common::InitialBoard>()) {
             None => thud_game::board::Cells::default(),
             Some(Ok(x)) => x.cells(),
             Some(Err(e)) => panic!("Bad initial board configuration: {}", e),
         };
     let toggle_initial_player =
-        match matches.value_of(thud::INITIAL_PLAYER_FLAG).map(|x| x.parse::<thud_game::Role>()) {
+        match matches.value_of(thud_ui_common::INITIAL_PLAYER_FLAG).map(|x| x.parse::<thud_game::Role>()) {
             None | Some(Ok(thud_game::Role::Dwarf)) => false,
             Some(Ok(thud_game::Role::Troll)) => true,
             Some(Err(x)) => panic!("{}", x),
         };
     let logging_level =
-        match matches.value_of(thud::LOG_LEVEL_FLAG).map(|x| x.parse::<log::LogLevelFilter>()) {
+        match matches.value_of(thud_ui_common::LOG_LEVEL_FLAG).map(|x| x.parse::<log::LogLevelFilter>()) {
             Some(Ok(x)) => x,
-            Some(Err(_)) => panic!("Bad logging level '{}'", matches.value_of(thud::LOG_LEVEL_FLAG).unwrap()),
+            Some(Err(_)) => panic!("Bad logging level '{}'",
+                                   matches.value_of(thud_ui_common::LOG_LEVEL_FLAG).unwrap()),
             None => log::LogLevelFilter::Info,
         };
 
     // Set up logging.
-    let logger_config = fern::DispatchConfig {
-        format: Box::new(|msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
-            format!("[{}][{}] {}",
-                    chrono::Local::now().format("%Y-%m-%d %T%.3f%z").to_string(), level, msg)
-        }),
-        output: vec![fern::OutputConfig::stdout()],
-        level: logging_level,
-    };
-    if let Err(e) = fern::init_global_logger(logger_config, log::LogLevelFilter::Trace) {
-        panic!("Failed to initialize global logger: {}", e);
-    }
+    thud_ui_common::init_logger(logging_level);
 
-    let mut state = thud_game::state::State::<thud_game::board::TranspositionalEquivalence>::new(initial_cells);
+    let mut state = <thud_ui_common::ThudGame as mcts::Game>::State::new(initial_cells);
     if toggle_initial_player {
         state.toggle_active_role();
     }
@@ -84,13 +73,13 @@ fn main() {
     let mut rng = rand::thread_rng();
     let mut turn_number = 0;
     loop {
-        info!("begin turn {}; board: {}", turn_number, thud_game::board::format_board(state.board()));
+        info!("begin turn {}; board: {:?}", turn_number, state);
         let actions: Vec<thud_game::Action> = state.role_actions(*state.active_role()).collect();
         if actions.is_empty() {
             info!("No actions available. Exiting.");
             return
         }
-        let action_statistics: Vec<thud::ThudStatistics> = {
+        let action_statistics: Vec<thud_ui_common::ThudStatistics> = {
             let mut v = Vec::with_capacity(actions.len());
             for _ in 0..actions.len() {
                 v.push(Default::default());
@@ -125,7 +114,7 @@ fn main() {
             }
             trace!("UCB selected action {:?} [UCB = {}]", actions[selected_action_index], best_ucb);
             for _ in 0..simulation_count {
-                let payoff = mcts::simulate::simulate::<rand::ThreadRng, thud::ThudGame>(
+                let payoff = mcts::simulate::simulate::<rand::ThreadRng, thud_ui_common::ThudGame>(
                     &mut state.clone(), &mut rng);
                 trace!("simulated payoff {:?}", payoff);
                 action_statistics[selected_action_index].increment(&payoff);

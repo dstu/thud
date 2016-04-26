@@ -2,14 +2,14 @@ use ::thud_game;
 use thud_game::board;
 use thud_game::coordinate::Coordinate;
 
-use ::gtk_ui::board_display::model;
+use super::model;
 
 use cairo;
 use gtk;
 use gtk::traits::*;
 use gtk::signal::Inhibit;
 use ::gtk_sys::gtk_widget_add_events;
-use ::thud_ai::State as ThudState;
+use thud_ui_common::ThudState;
 
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -58,14 +58,14 @@ pub struct Properties {
 impl Properties {
     pub fn new() -> Self {
         Properties {
-            margin_left: 30.0,
+            margin_left: 10.0,
             margin_right: 10.0,
-            margin_top: 30.0,
+            margin_top: 10.0,
             margin_bottom: 10.0,
             border_width: 2.0,
             cell_dimension: 40.0,
-            token_height: 20.0,
-            token_width: 20.0,
+            token_height: 26.0,
+            token_width: 26.0,
         }
     }
 
@@ -222,24 +222,24 @@ fn draw_cells_passive<'a>(cr: &mut cairo::Context, props: &Properties, contents:
 }
 
 fn draw_cells_interactive<'a>(cr: &mut cairo::Context, props: &Properties,
-                              contents: board::ContentsIter<'a>, action_state: &model::ActionState) {
+                              contents: board::ContentsIter<'a>, action_state: &model::InputMode) {
     let mut selected_content = None;
     let mut targeted_content = None;
     for (position, content) in contents {
         match action_state {
-            &model::ActionState::Selected { from, .. } if  from == position =>
+            &model::InputMode::Selected { from, .. } if  from == position =>
                 selected_content = Some(content),
-            &model::ActionState::Targeted { from, .. } if from == position =>
+            &model::InputMode::Targeted { from, .. } if from == position =>
                 selected_content = Some(content),
-            &model::ActionState::Targeted { to, .. } if to == position =>
+            &model::InputMode::Targeted { to, .. } if to == position =>
                 targeted_content = Some(content),
             _ => draw_cell(cr, props, position, content),
         }
     }
     match (action_state, selected_content, targeted_content) {
-        (&model::ActionState::Selected { from: position, .. }, Some(selected), None) =>
+        (&model::InputMode::Selected { from: position, .. }, Some(selected), None) =>
             draw_selected_cell(cr, props, position, selected),
-        (&model::ActionState::Targeted { from: position, action: ref action, .. }, Some(selected), Some(targeted)) => {
+        (&model::InputMode::Targeted { from: position, action: ref action, .. }, Some(selected), Some(targeted)) => {
             draw_selected_cell(cr, props, position, selected);
             draw_targeted_cell(cr, props, action, targeted);
         },
@@ -247,7 +247,7 @@ fn draw_cells_interactive<'a>(cr: &mut cairo::Context, props: &Properties,
     }
 }
 
-fn draw_canvas_interactive(cr: &mut cairo::Context, props: &Properties, state: &ThudState, action_state: &model::ActionState) {
+fn draw_canvas_interactive(cr: &mut cairo::Context, props: &Properties, state: &ThudState, action_state: &model::InputMode) {
     draw_board_decorations(cr, props);
     draw_cells_interactive(cr, props, state.cells().cells_iter(), action_state);
 }

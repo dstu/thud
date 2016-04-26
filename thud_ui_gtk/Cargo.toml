@@ -1,0 +1,26 @@
+[package]
+name = "thud-ui-gtk"
+version = "0.1.0"
+authors = ["Stu Black"]
+
+[dependencies]
+cairo-rs = "0.0.8"
+clap = "2.2.*"
+glib = "0.0.8"
+gtk = "0.0.7"
+gtk-sys = "0.3.0"
+log = "0.3.5"
+mcts = { path = "../mcts" }
+rand = "0.3.12"
+thud-game = { path = "../thud_game" }
+thud-ui-common = { path = "../thud_ui_common" }
+
+[profile.release]
+lto = true
+
+[profile.dev]
+opt-level = 3
+debug = true
+rpath = false
+lto = false
+debug-assertions = false

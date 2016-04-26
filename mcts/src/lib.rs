@@ -13,7 +13,6 @@ pub mod rollout;
 pub mod simulate;
 pub mod ucb;
 
-// use self::backprop::*;
 // use self::payoff::*;
 
 pub use self::game::{Game, Payoff, State, Statistics};

@@ -1,109 +1,95 @@
-extern crate chrono;
 extern crate clap;
-extern crate fern;
 #[macro_use] extern crate log;
 extern crate mcts;
 extern crate rand;
-extern crate thud;
 extern crate thud_game;
+extern crate thud_ui_common;
 
 use clap::App;
 use mcts::Payoff;
 use rand::isaac::IsaacRng;
 use rand::SeedableRng;
 
-use thud_game::board;
-
 fn main() {
     // Set up arg handling.
     let matches = {
-        let app = thud::set_common_args(
+        let app = thud_ui_common::set_args(
             App::new("console_mcts")
                 .version("0.1.0")
                 .author("Stu Black <trurl@freeshell.org>")
                 .about("Plays out Thud MCTS iterations"),
-            &[thud::ITERATION_COUNT_FLAG,
-              thud::SIMULATION_COUNT_FLAG,
-              thud::EXPLORATION_BIAS_FLAG,
-              thud::INITIAL_BOARD_FLAG,
-              thud::INITIAL_PLAYER_FLAG,
-              thud::LOG_LEVEL_FLAG,
-              thud::MOVE_SELECTION_CRITERION_FLAG,
-              thud::COMPACT_SEARCH_GRAPH_FLAG,]);
+            &[thud_ui_common::ITERATION_COUNT_FLAG,
+              thud_ui_common::SIMULATION_COUNT_FLAG,
+              thud_ui_common::EXPLORATION_BIAS_FLAG,
+              thud_ui_common::INITIAL_BOARD_FLAG,
+              thud_ui_common::INITIAL_PLAYER_FLAG,
+              thud_ui_common::LOG_LEVEL_FLAG,
+              thud_ui_common::MOVE_SELECTION_CRITERION_FLAG,
+              thud_ui_common::COMPACT_SEARCH_GRAPH_FLAG,]);
         app.get_matches()
     };
     let iteration_count =
-        match matches.value_of(thud::ITERATION_COUNT_FLAG).unwrap().parse::<usize>() {
+        match matches.value_of(thud_ui_common::ITERATION_COUNT_FLAG).unwrap().parse::<usize>() {
             Ok(x) => x,
             Err(e) => panic!("Bad iteration count: {}", e),
         };
     let simulation_count =
-        match matches.value_of(thud::SIMULATION_COUNT_FLAG).unwrap().parse::<usize>() {
+        match matches.value_of(thud_ui_common::SIMULATION_COUNT_FLAG).unwrap().parse::<usize>() {
             Ok(x) => x,
             Err(e) => panic!("Bad simulation count: {}", e),
         };
     let exploration_bias =
-        match matches.value_of(thud::EXPLORATION_BIAS_FLAG).unwrap().parse::<f64>() {
+        match matches.value_of(thud_ui_common::EXPLORATION_BIAS_FLAG).unwrap().parse::<f64>() {
             Ok(x) => x,
             Err(e) => panic!("Bad exploration bias: {}", e),
         };
     let initial_cells =
-        match matches.value_of(thud::INITIAL_BOARD_FLAG).map(|x| x.parse::<thud::InitialBoard>()) {
+        match matches.value_of(thud_ui_common::INITIAL_BOARD_FLAG).map(|x| x.parse::<thud_ui_common::InitialBoard>()) {
             Some(Ok(x)) => x.cells(),
             Some(Err(e)) => panic!("Bad initial board configuration: {}", e),
-            None => board::Cells::default(),
+            None => thud_game::board::Cells::default(),
         };
     let toggle_initial_player =
-        match matches.value_of(thud::INITIAL_PLAYER_FLAG).map(|x| x.parse::<thud_game::Role>()) {
+        match matches.value_of(thud_ui_common::INITIAL_PLAYER_FLAG).map(|x| x.parse::<thud_game::Role>()) {
             None | Some(Ok(thud_game::Role::Dwarf)) => false,
             Some(Ok(thud_game::Role::Troll)) => true,
             Some(Err(x)) => panic!("{}", x),
         };
     let logging_level =
-        match matches.value_of(thud::LOG_LEVEL_FLAG).map(|x| x.parse::<log::LogLevelFilter>()) {
+        match matches.value_of(thud_ui_common::LOG_LEVEL_FLAG).map(|x| x.parse::<log::LogLevelFilter>()) {
             Some(Ok(x)) => x,
-            Some(Err(_)) => panic!("Bad logging level '{}'", matches.value_of(thud::LOG_LEVEL_FLAG).unwrap()),
+            Some(Err(_)) => panic!("Bad logging level '{}'", matches.value_of(thud_ui_common::LOG_LEVEL_FLAG).unwrap()),
             None => log::LogLevelFilter::Info,
         };
     let move_selection_criterion =
-        match matches.value_of(thud::MOVE_SELECTION_CRITERION_FLAG).map(|x| x.parse::<thud::MoveSelectionCriterion>()) {
+        match matches.value_of(thud_ui_common::MOVE_SELECTION_CRITERION_FLAG).map(|x| x.parse::<thud_ui_common::MoveSelectionCriterion>()) {
             Some(Ok(x)) => x,
             Some(Err(e)) => panic!("Bad move selection criterion: {}", e),
-            None => thud::MoveSelectionCriterion::VisitCount,
+            None => thud_ui_common::MoveSelectionCriterion::VisitCount,
         };
     let rng =
-        match matches.value_of(thud::RNG_SEED_FLAG).map(|x| x.parse::<u32>()) {
+        match matches.value_of(thud_ui_common::RNG_SEED_FLAG).map(|x| x.parse::<u32>()) {
             Some(Ok(x)) => IsaacRng::from_seed(&[x]),
             Some(Err(e)) => panic!("Bad RNG seed: {}", e),
             None => IsaacRng::new_unseeded(),
         };
-    let compact_graph = matches.is_present(thud::COMPACT_SEARCH_GRAPH_FLAG);
+    let compact_graph = matches.is_present(thud_ui_common::COMPACT_SEARCH_GRAPH_FLAG);
 
     // Set up logging.
-    let logger_config = fern::DispatchConfig {
-        format: Box::new(|msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
-            format!("[{}][{}] {}",
-                    chrono::Local::now().format("%Y-%m-%d %T%.3f%z").to_string(), level, msg)
-        }),
-        output: vec![fern::OutputConfig::stdout()],
-        level: logging_level,
-    };
-    if let Err(e) = fern::init_global_logger(logger_config, log::LogLevelFilter::Trace) {
-        panic!("Failed to initialize global logger: {}", e);
-    }
+    thud_ui_common::init_logger(logging_level);
 
     // Play game.
-    let mut state = thud::ThudState::new(initial_cells);
+    let mut state = thud_ui_common::ThudState::new(initial_cells);
     if toggle_initial_player {
         state.toggle_active_role();
     }
-    let mut graph = mcts::new_search_graph::<thud::ThudGame>();
+    let mut graph = mcts::new_search_graph::<thud_ui_common::ThudGame>();
 
-    let mut search_state = mcts::SearchState::<IsaacRng, thud::ThudGame>::new(rng, exploration_bias);
+    let mut search_state = mcts::SearchState::<IsaacRng, thud_ui_common::ThudGame>::new(rng, exploration_bias);
     search_state.initialize(&mut graph, &state);
     let mut turn_number = 0;
     while !state.terminated() {
-        info!("begin turn {}; board: {}", turn_number, board::format_board(state.board()));
+        info!("begin turn {}; board: {:?}", turn_number, state);
         if graph.get_node(&state).is_none() {
             error!("board not found in playout graph; reinitializing");
             search_state.initialize(&mut graph, &state);
@@ -152,15 +138,15 @@ fn main() {
                         let mut best_ucb = ::std::f64::MIN;
                         for actions in stats.into_iter() {
                             info!("{:?}: {:?}; UCB = {:?}", actions.action, actions.payoff, actions.ucb);
-                            let payoff_ref: &thud::ThudPayoff = &actions.payoff;
+                            let payoff_ref: &thud_ui_common::ThudPayoff = &actions.payoff;
                             let payoff_visits = payoff_ref.visits();
                             best_action = match (best_action, move_selection_criterion) {
                                 (None, _) => Some(actions.action),
-                                (Some(_), thud::MoveSelectionCriterion::VisitCount) if best_visits < payoff_visits => {
+                                (Some(_), thud_ui_common::MoveSelectionCriterion::VisitCount) if best_visits < payoff_visits => {
                                     best_visits = payoff_visits;
                                     Some(actions.action)
                                 },
-                                (Some(_), thud::MoveSelectionCriterion::Ucb) =>
+                                (Some(_), thud_ui_common::MoveSelectionCriterion::Ucb) =>
                                     match actions.ucb {
                                         Ok(mcts::UcbValue::Value(x)) if best_ucb < x => {
                                             best_ucb = x;
@@ -202,5 +188,5 @@ fn main() {
             }
         }
     }
-    info!("game over. final board state: {}", board::format_board(state.cells()));
+    info!("game over. final board state: {:?}", state);
 }

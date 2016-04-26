@@ -1,19 +1,11 @@
-// extern crate cairo;
+extern crate chrono;
 #[macro_use] extern crate clap;
-// extern crate glib;
-// extern crate gtk;
-// extern crate gtk_sys;
 #[macro_use] extern crate log;
 extern crate fern;
-extern crate mcts;
-extern crate search_graph;
 extern crate thud_game;
 
-use ::thud_game::board;
-use ::clap::{App, Arg};
-
-pub mod console_ui;
-// pub mod gtk_ui;
+use clap::{App, Arg};
+use thud_game::board;
 
 pub const ITERATION_COUNT_FLAG: &'static str = "iterations";
 pub const SIMULATION_COUNT_FLAG: &'static str = "simulations";
@@ -132,7 +124,7 @@ _dd_________dd_
 .....d___d.....
 "#;
 
-pub fn set_common_args<'a, 'b>(app: App<'a, 'b>, flags: &[&str]) -> App<'a, 'b> where 'a: 'b {
+pub fn set_args<'a, 'b>(app: App<'a, 'b>, flags: &[&str]) -> App<'a, 'b> where 'a: 'b {
     let populated_flags: Vec<Arg<'static, 'static>> = flags.iter().map(|f| match *f {
         x if x == ITERATION_COUNT_FLAG =>
             Arg::with_name(ITERATION_COUNT_FLAG)
@@ -203,4 +195,18 @@ pub fn set_common_args<'a, 'b>(app: App<'a, 'b>, flags: &[&str]) -> App<'a, 'b> 
         x => panic!("Unrecognized flag identifier '{}'", x),
     }).collect();
     app.args(&populated_flags)
+}
+
+pub fn init_logger(logging_level: log::LogLevelFilter) {
+    let config = fern::DispatchConfig {
+        format: Box::new(|msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
+            let time = chrono::Local::now().format("%Y-%m-%d %T%.3f%z").to_string();
+            format!("[{}][{}] {}", time, level, msg)
+        }),
+        output: vec![fern::OutputConfig::stdout()],
+        level: logging_level,
+    };
+    if let Err(e) = fern::init_global_logger(config, log::LogLevelFilter::Trace) {
+        panic!("Filed to initialize global logger: {}", e);
+    }
 }

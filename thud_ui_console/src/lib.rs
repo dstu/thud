@@ -1,20 +1,14 @@
-use std::collections::HashSet;
+#[macro_use] extern crate log;
+extern crate thud_game;
+
 use std::fmt;
 use std::io;
 use std::io::Write;
 
-use ::thud_game::Role;
-use ::thud_game::board::Cells;
-use ::thud_game::board::Content;
-use ::thud_game::coordinate::Coordinate;
-use ::thud_game::board::format_board;
-
-use ::mcts;
-use ::ThudState;
-
-pub fn write_board(board: &Cells) {
-    print!("{}", format_board(board));
-}
+use thud_game::Role;
+use thud_game::board::Cells;
+use thud_game::board::Content;
+use thud_game::coordinate::Coordinate;
 
 pub fn prompt_for_piece(board: &Cells, role: Role) -> Coordinate {
     loop {
