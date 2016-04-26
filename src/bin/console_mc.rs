@@ -8,6 +8,7 @@ extern crate thud;
 extern crate thud_game;
 
 use clap::App;
+use mcts::{Statistics, Payoff};
 
 use std::default::Default;
 
@@ -84,12 +85,12 @@ fn main() {
     let mut turn_number = 0;
     loop {
         info!("begin turn {}; board: {}", turn_number, thud_game::board::format_board(state.board()));
-        let actions: Vec<thud_game::Action> = state.role_actions(state.active_role()).collect();
+        let actions: Vec<thud_game::Action> = state.role_actions(*state.active_role()).collect();
         if actions.is_empty() {
             info!("No actions available. Exiting.");
             return
         }
-        let action_statistics: Vec<mcts::ThudStatistics> = {
+        let action_statistics: Vec<thud::ThudStatistics> = {
             let mut v = Vec::with_capacity(actions.len());
             for _ in 0..actions.len() {
                 v.push(Default::default());
@@ -106,12 +107,12 @@ fn main() {
             let mut best_ucb = std::f64::MIN;
             for (i, stats) in action_statistics.iter().enumerate() {
                 let payoff = stats.as_payoff();
-                if payoff.weight == 0 {
-                    selected_action_index = i;
-                    best_ucb = std::f64::MAX;
-                    break
+                if payoff.visits() == 0 {
+                        selected_action_index = i;
+                        best_ucb = std::f64::MAX;
+                        break
                 } else {
-                    let child_visits = payoff.weight as f64;
+                    let child_visits = payoff.visits() as f64;
                     let child_payoff = payoff.score(state.active_role()) as f64;
                     let ucb = child_payoff / child_visits
                         + exploration_bias * f64::sqrt(log_iteration / child_visits);
@@ -124,9 +125,10 @@ fn main() {
             }
             trace!("UCB selected action {:?} [UCB = {}]", actions[selected_action_index], best_ucb);
             for _ in 0..simulation_count {
-                let payoff = mcts::simulate::simulate(&mut state.clone(), &mut rng);
+                let payoff = mcts::simulate::simulate::<rand::ThreadRng, thud::ThudGame>(
+                    &mut thud::ThudState { wrapped: state.clone(), }, &mut rng);
                 trace!("simulated payoff {:?}", payoff);
-                action_statistics[selected_action_index].increment(payoff);
+                action_statistics[selected_action_index].increment(&payoff);
             }
             log_iteration = f64::ln((iteration + 1) as f64);
         }
@@ -137,9 +139,9 @@ fn main() {
             let payoff = stats.as_payoff();
             info!("Action {:?} gets {:?}", actions[i], payoff);
             // TODO tie-breaking.
-            if payoff.weight > most_visits {
+            if payoff.visits() > most_visits {
                 most_visited_index = i;
-                most_visits = payoff.weight;
+                most_visits = payoff.visits();
             }
         }
         info!("Performing move {:?} with {:?}",

@@ -8,6 +8,12 @@ pub struct State<E> where E: thud_game::board::CellEquivalence {
     pub wrapped: thud_game::state::State<E>,
 }
 
+impl<E> State<E> where E: thud_game::board::CellEquivalence {
+    pub fn new(cells: thud_game::board::Cells) -> Self {
+        State { wrapped: thud_game::state::State::<E>::new(cells), }
+    }
+}
+
 impl<E> fmt::Debug for State<E>
     where E: thud_game::board::CellEquivalence {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

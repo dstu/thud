@@ -9,7 +9,7 @@ use gtk;
 use gtk::traits::*;
 use gtk::signal::Inhibit;
 use ::gtk_sys::gtk_widget_add_events;
-use ::mcts::ThudState;
+use ::thud_ai::State as ThudState;
 
 use std::collections::VecDeque;
 use std::sync::Arc;

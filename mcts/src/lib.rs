@@ -105,6 +105,11 @@ impl<'a> From<ucb::UcbError> for SearchError {
     }
 }
 
+pub fn new_search_graph<G>() -> search_graph::Graph<G::State, VertexData, EdgeData<G::Statistics, G::Action>>
+     where G: Game {
+         search_graph::Graph::<G::State, VertexData, EdgeData<G::Statistics, G::Action>>::new()
+     }
+
 #[derive(Clone, Copy, Debug)]
 pub struct SearchSettings {
     pub simulation_count: usize,
@@ -124,6 +129,13 @@ impl<R, G> SearchState<R, G> where R: Rng, G: Game {
             rng: rng,
             explore_bias: explore_bias,
             game_type: PhantomData,
+        }
+    }
+
+    pub fn initialize(&self, graph: &mut search_graph::Graph<G::State, VertexData, EdgeData<G::Statistics, G::Action>>, root_state: &G::State) {
+        let node = graph.add_root(root_state.clone(), Default::default());
+        if node.get_child_list().is_empty() {
+            expand::expand::<G>(node);
         }
     }
 

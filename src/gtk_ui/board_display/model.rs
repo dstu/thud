@@ -1,6 +1,6 @@
 use ::thud_game::Action;
 use ::thud_game::coordinate::Coordinate;
-use ::mcts::ThudState;
+use ::thud_ai::State as ThudState;
 
 use std::collections::HashMap;
 

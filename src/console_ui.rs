@@ -10,7 +10,7 @@ use ::thud_game::coordinate::Coordinate;
 use ::thud_game::board::format_board;
 
 use ::mcts;
-use ::mcts::ThudState;
+use ::thud_ai::State as ThudState;
 
 pub fn write_board(board: &Cells) {
     print!("{}", format_board(board));
@@ -63,40 +63,40 @@ pub fn read_coordinate() -> Coordinate {
     }
 }
 
-pub fn write_search_graph(graph: &mcts::ThudGraph, state: &ThudState) {
-    println!("to play: {:?}", state.active_role());
-    match graph.get_node(state) {
-        None => println!("no matching node for game state"),
-        Some(node) => {
-            write_board(state.cells());
-            write_node_tree(&node, 0, &mut HashSet::new());
-        },
-    }
-}
+// pub fn write_search_graph(graph: &mcts::ThudGraph, state: &ThudState) {
+//     println!("to play: {:?}", state.active_role());
+//     match graph.get_node(state) {
+//         None => println!("no matching node for game state"),
+//         Some(node) => {
+//             write_board(state.cells());
+//             write_node_tree(&node, 0, &mut HashSet::new());
+//         },
+//     }
+// }
 
-fn write_node_tree<'a>(n: &mcts::ThudNode<'a>, indentation_level: usize, visited_nodes: &mut HashSet<usize>) {
-    if visited_nodes.insert(n.get_id()) {
-        let children = n.get_child_list();
-        for i in 0..children.len() {
-            let e = children.get_edge(i);
-            let edge_data = e.get_data();
-            print!("+");
-            for _ in 0..(indentation_level + 1) {
-                print!("-");
-            }
-            print!("{}: {:?}: {:?}--", e.get_id(), edge_data.action, edge_data.statistics);
-            let target = children.get_edge(i).get_target();
-            println!("{}", target.get_id());
-            write_node_tree(&target, indentation_level + 1, visited_nodes);
-        }
-    } else {
-        print!("+");
-        for _ in 0..(indentation_level + 1) {
-            print!("-");
-        }
-        println!("Printed ({})", n.get_id());
-    }
-}
+// fn write_node_tree<'a>(n: &mcts::ThudNode<'a>, indentation_level: usize, visited_nodes: &mut HashSet<usize>) {
+//     if visited_nodes.insert(n.get_id()) {
+//         let children = n.get_child_list();
+//         for i in 0..children.len() {
+//             let e = children.get_edge(i);
+//             let edge_data = e.get_data();
+//             print!("+");
+//             for _ in 0..(indentation_level + 1) {
+//                 print!("-");
+//             }
+//             print!("{}: {:?}: {:?}--", e.get_id(), edge_data.action, edge_data.statistics);
+//             let target = children.get_edge(i).get_target();
+//             println!("{}", target.get_id());
+//             write_node_tree(&target, indentation_level + 1, visited_nodes);
+//         }
+//     } else {
+//         print!("+");
+//         for _ in 0..(indentation_level + 1) {
+//             print!("-");
+//         }
+//         println!("Printed ({})", n.get_id());
+//     }
+// }
 
 pub fn select_one<'a, T>(items: &'a [T]) -> Option<&'a T> where T: fmt::Debug {
     let stdin = io::stdin();

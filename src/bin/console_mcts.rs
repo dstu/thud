@@ -1,16 +1,17 @@
 extern crate chrono;
 extern crate clap;
 extern crate fern;
-#[macro_use]
-extern crate log;
+#[macro_use] extern crate log;
 extern crate mcts;
 extern crate rand;
 extern crate thud;
+extern crate thud_ai;
 extern crate thud_game;
 
-use ::clap::App;
-use ::rand::isaac::IsaacRng;
-use ::rand::SeedableRng;
+use clap::App;
+use mcts::Payoff;
+use rand::isaac::IsaacRng;
+use rand::SeedableRng;
 
 use thud_game::board;
 
@@ -93,20 +94,21 @@ fn main() {
     }
 
     // Play game.
-    let mut state = mcts::ThudState::new(initial_cells);
+    let mut state = thud::ThudState::new(initial_cells);
     if toggle_initial_player {
-        state.toggle_active_role();
+        state.wrapped.toggle_active_role();
     }
-    let mut graph = mcts::ThudGraph::new();
-    thud::initialize_search(state.clone(), &mut graph);
+    let mut graph =
+        mcts::new_search_graph::<thud_ai::Game<thud_game::board::TranspositionalEquivalence>>();
 
-    let mut search_state = mcts::SearchState::new(rng, exploration_bias);
+    let mut search_state = mcts::SearchState::<IsaacRng, thud::ThudGame>::new(rng, exploration_bias);
+    search_state.initialize(&mut graph, &state);
     let mut turn_number = 0;
-    while !state.terminated() {
-        info!("begin turn {}; board: {}", turn_number, board::format_board(state.board()));
+    while !state.wrapped.terminated() {
+        info!("begin turn {}; board: {}", turn_number, board::format_board(state.wrapped.board()));
         if graph.get_node(&state).is_none() {
             error!("board not found in playout graph; reinitializing");
-            thud::initialize_search(state.clone(), &mut graph);
+            search_state.initialize(&mut graph, &state);
         }
 
         // {
@@ -150,19 +152,21 @@ fn main() {
                         info!("root stats:");
                         let mut best_visits = ::std::u32::MIN;
                         let mut best_ucb = ::std::f64::MIN;
-                        for (action, payoff, ucb) in stats.into_iter() {
-                            info!("{:?}: {:?}; UCB = {:?}", action, payoff, ucb);
+                        for actions in stats.into_iter() {
+                            info!("{:?}: {:?}; UCB = {:?}", actions.action, actions.payoff, actions.ucb);
+                            let payoff_ref: &thud::ThudPayoff = &actions.payoff;
+                            let payoff_visits = payoff_ref.visits();
                             best_action = match (best_action, move_selection_criterion) {
-                                (None, _) => Some(action),
-                                (Some(_), thud::MoveSelectionCriterion::VisitCount) if best_visits < payoff.weight => {
-                                    best_visits = payoff.weight;
-                                    Some(action)
+                                (None, _) => Some(actions.action),
+                                (Some(_), thud::MoveSelectionCriterion::VisitCount) if best_visits < payoff_visits => {
+                                    best_visits = payoff_visits;
+                                    Some(actions.action)
                                 },
                                 (Some(_), thud::MoveSelectionCriterion::Ucb) =>
-                                    match ucb {
+                                    match actions.ucb {
                                         Ok(mcts::UcbValue::Value(x)) if best_ucb < x => {
                                             best_ucb = x;
-                                            Some(action)
+                                            Some(actions.action)
                                         },
                                         _ => best_action,
                                     },
@@ -183,8 +187,8 @@ fn main() {
             Some(action) => {
                 info!("turn {}: performing best action {:?}", turn_number, action);
                 let mut canonical_state = graph.get_node(&state).unwrap().get_label().clone();
-                canonical_state.do_action(&action);
-                state.set_from_convolved(&canonical_state);
+                canonical_state.wrapped.do_action(&action);
+                state.wrapped.set_from_convolved(&canonical_state.wrapped);
                 if compact_graph {
                     debug!("collecting garbage and compacting search graph");
                     graph.retain_reachable_from(&[&canonical_state]);
@@ -200,5 +204,5 @@ fn main() {
             }
         }
     }
-    info!("game over. final board state: {}", board::format_board(state.cells()));
+    info!("game over. final board state: {}", board::format_board(state.wrapped.cells()));
 }

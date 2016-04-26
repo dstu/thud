@@ -1,20 +1,20 @@
-extern crate cairo;
+// extern crate cairo;
 #[macro_use] extern crate clap;
-extern crate glib;
-extern crate gtk;
-extern crate gtk_sys;
+// extern crate glib;
+// extern crate gtk;
+// extern crate gtk_sys;
 #[macro_use] extern crate log;
 extern crate fern;
 extern crate mcts;
 extern crate search_graph;
+extern crate thud_ai;
 extern crate thud_game;
 
 use ::thud_game::board;
 use ::clap::{App, Arg};
-use ::mcts::expand;
 
 pub mod console_ui;
-pub mod gtk_ui;
+// pub mod gtk_ui;
 
 pub const ITERATION_COUNT_FLAG: &'static str = "iterations";
 pub const SIMULATION_COUNT_FLAG: &'static str = "simulations";
@@ -26,6 +26,11 @@ pub const LOG_LEVEL_FLAG: &'static str = "log_level";
 pub const MOVE_SELECTION_CRITERION_FLAG: &'static str = "move_selection_criterion";
 pub const RNG_SEED_FLAG: &'static str = "rng_seed";
 pub const COMPACT_SEARCH_GRAPH_FLAG: &'static str = "compact_search_graph";
+
+pub use thud_ai::allow_transpositions::Game as ThudGame;
+pub use thud_ai::allow_transpositions::Payoff as ThudPayoff;
+pub use thud_ai::allow_transpositions::State as ThudState;
+pub use thud_ai::allow_transpositions::Statistics as ThudStatistics;
 
 arg_enum! {
     #[derive(Debug)]
@@ -199,8 +204,4 @@ pub fn set_common_args<'a, 'b>(app: App<'a, 'b>, flags: &[&str]) -> App<'a, 'b> 
         x => panic!("Unrecognized flag identifier '{}'", x),
     }).collect();
     app.args(&populated_flags)
-}
-
-pub fn initialize_search(state: mcts::ThudState, graph: &mut mcts::ThudGraph) {
-    expand::expand(graph.add_root(state.clone(), Default::default()));
 }

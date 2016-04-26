@@ -1,12 +1,8 @@
-#![feature(const_fn)]
-
 #[macro_use] extern crate log;
 extern crate mcts;
 extern crate rand;
 extern crate syncbox;
 extern crate thud_game;
-
-use std::marker::PhantomData;
 
 mod payoff;
 mod state;
@@ -15,15 +11,11 @@ mod statistics;
 pub use payoff::Payoff;
 pub use state::State;
 pub use statistics::Statistics;
+use std::marker::PhantomData;
+
 
 pub struct Game<E> where E: thud_game::board::CellEquivalence {
     cell_equivalence: PhantomData<E>,
-}
-
-impl<E> Game<E> where E: thud_game::board::CellEquivalence {
-    pub const fn new() -> Self {
-        Game { cell_equivalence: PhantomData, }
-    }
 }
 
 impl<E> mcts::Game for Game<E> where E: thud_game::board::CellEquivalence {
@@ -34,7 +26,16 @@ impl<E> mcts::Game for Game<E> where E: thud_game::board::CellEquivalence {
     type Statistics = ::Statistics<E>;
 }
 
-pub const TRANSPOSITIONS_IGNORED: &'static Game<thud_game::board::TranspositionalEquivalence>
-    = &Game::new();
+pub mod allow_transpositions {
+    pub type Game = ::Game<::thud_game::board::TranspositionalEquivalence>;
+    pub type Payoff = ::Payoff<::thud_game::board::TranspositionalEquivalence>;
+    pub type State = ::State<::thud_game::board::TranspositionalEquivalence>;
+    pub type Statistics = ::Statistics<::thud_game::board::TranspositionalEquivalence>;
+}
 
-pub const TRANSPOSITIONS_ALLOWED: &'static Game<thud_game::board::SimpleEquivalence> = &Game::new();
+pub mod deconvolve_transpositions {
+    pub type Game = ::Game<::thud_game::board::TranspositionalEquivalence>;
+    pub type Payoff = ::Payoff<::thud_game::board::TranspositionalEquivalence>;
+    pub type State = ::State<::thud_game::board::TranspositionalEquivalence>;
+    pub type Statistics = ::Statistics<::thud_game::board::TranspositionalEquivalence>;
+}
