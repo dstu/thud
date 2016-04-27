@@ -64,20 +64,21 @@ impl Properties {
 }
 
 pub struct Interactive {
-    drawing_area: gtk::DrawingArea,
+    drawing_area: Arc<Mutex<gtk::DrawingArea>>,
     data: Arc<Mutex<model::Interactive>>,
     properties: Arc<Mutex<Properties>>,
 }
 
 impl Interactive {
     pub fn new(data: model::Interactive, properties: Properties) -> Self {
-        let data = Arc::new(Mutex::new(data));
-        let properties = Arc::new(Mutex::new(properties));
         let drawing_area = gtk::DrawingArea::new();
+        let data = Arc::new(Mutex::new(data));
         let mut events = gdk_sys::GdkEventMask::empty();
         events.insert(gdk_sys::GDK_BUTTON_PRESS_MASK);
         events.insert(gdk_sys::GDK_BUTTON_RELEASE_MASK);
         events.insert(gdk_sys::GDK_POINTER_MOTION_MASK);
+        drawing_area.set_size_request(
+            properties.board_width() as i32, properties.board_height() as i32);
         drawing_area.add_events(events.bits() as i32);
         drawing_area.connect_draw(|_, mut cr| {
             println!("drawing interactive area");
@@ -97,14 +98,18 @@ impl Interactive {
         });
 
         Interactive {
-            drawing_area: drawing_area,
+            drawing_area: Arc::new(Mutex::new(drawing_area)),
             data: data,
-            properties: properties,
+            properties: Arc::new(Mutex::new(properties)),
         }
     }
 
-    pub fn widget(&self) -> &gtk::DrawingArea {
-        &self.drawing_area
+    pub fn with_widget<F, T>(&self, f: F) -> T
+        where F: FnOnce(&gtk::DrawingArea) -> T{
+        match self.drawing_area.lock() {
+            Ok(guard) => f(&guard),
+            Err(e) => panic!("Unable to acquire lock on drawing area widget: {}", e),
+        }
     }
 }
 
