@@ -107,7 +107,7 @@ impl Interactive {
                 let properties = properties.lock().ok().unwrap();
                 // draw_board_decorations(&properties, cr);
                 draw_cells_interactive(&properties, cr,
-                                       data.visible_state.cells().cells_iter(),
+                                       data.state.cells().cells_iter(),
                                        &data.input_mode);
                 gtk::Inhibit(true)
             });

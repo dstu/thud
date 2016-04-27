@@ -27,16 +27,6 @@ impl<E> State<E> where E: board::CellEquivalence {
         }
     }
 
-    pub fn clone_with_equivalence<SE>(&self) -> State<SE> where SE: board::CellEquivalence {
-        State {
-            board: self.board.clone(),
-            active_role: self.active_role,
-            proposed_terminate: self.proposed_terminate,
-            terminate_decision: self.terminate_decision.clone(),
-            equivalence_marker: PhantomData,
-        }
-    }
-
     pub fn cells(&self) -> &board::Cells {
         &self.board
     }

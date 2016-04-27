@@ -69,10 +69,10 @@ pub mod interactive {
 
     /// User clicked on the board square `from`.
     fn select_from(widget: &gtk::DrawingArea, from: Coordinate, data: &mut model::Interactive) {
-        match data.visible_state.cells()[from].role() {
-            Some(r) if r == *data.visible_state.active_player() => {
+        match data.state.cells()[from].role() {
+            Some(r) if r == *data.state.active_player() => {
                 let mut actions: HashMap<Coordinate, Action> = HashMap::new();
-                for a in data.visible_state.actions() {
+                for a in data.state.position_actions(from) {
                     if let Some(t) = a.target() {
                         match actions.entry(t) {
                             Entry::Occupied(ref mut e) if a.is_shove() && e.get().is_move() =>
@@ -98,8 +98,8 @@ pub mod interactive {
     /// side on the board square `from`.
     fn select_target(widget: &gtk::DrawingArea, from: Coordinate, to: Coordinate,
                      actions: HashMap<Coordinate, Action>, data: &mut model::Interactive) {
-        match data.visible_state.cells()[from].role() {
-            Some(r) if r != *data.visible_state.active_player() => {
+        match data.state.cells()[from].role() {
+            Some(r) if r != *data.state.active_player() => {
                 if let Some(action) = actions.get(&to) {
                     data.input_mode = model::InputMode::Targeted {
                         from: from, to: to, action: *action, from_actions: actions.clone(),
@@ -115,8 +115,7 @@ pub mod interactive {
     fn do_action(widget: &gtk::DrawingArea, action: Action, data: &mut model::Interactive) {
         println!("do_action: {:?}", action);
         data.state.do_action(&action);
-        data.visible_state.do_action(&action);
-        if data.interactive_roles.is_interactive(data.visible_state.active_role()) {
+        if data.interactive_roles.is_interactive(data.state.active_role()) {
             data.input_mode = model::InputMode::Waiting;
         } else {
             data.input_mode = model::InputMode::Inactive;

@@ -24,8 +24,6 @@ impl InteractiveRoles {
 pub struct Interactive {
     /// Game state, as seen by AI.
     pub state: ThudState,
-    /// Board state, as displayed to human user.
-    pub visible_state: ViewThudState,
     /// Most recent board coordinate where user pressed mouse button.
     pub mouse_down: Option<Coordinate>,
     /// State of user input.
@@ -57,10 +55,8 @@ impl Interactive {
             } else {
                 InputMode::Inactive
             };
-        let visible_state = state.clone_with_equivalence::<board::SimpleEquivalence>();
         Interactive {
             state: state,
-            visible_state: visible_state,
             mouse_down: None,
             input_mode: initial_input_mode,
             interactive_roles: interactive_roles,
