@@ -20,7 +20,7 @@ fn main() {
         board_display::model::Interactive::new(thud_ui_common::ThudState::new(Default::default()),
                                                board_display::model::InteractiveRoles::Both),
         board_display::view::Properties::new());
-    main_container.attach(main_board.widget(), 0, 0, 1, 1);
+    main_board.with_widget(|w| main_container.attach(w, 0, 0, 1, 1));
 
     let window = gtk::Window::new(gtk::WindowType::Toplevel);
     window.set_title("Thud");
