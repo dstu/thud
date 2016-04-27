@@ -10,13 +10,11 @@ pub mod interactive {
     use std::sync::{Arc, Mutex};
 
     pub fn mouse_down(widget: &gtk::DrawingArea, coordinate: &Coordinate, data: &mut model::Interactive) {
-        println!("mouse_down @ {:?}", coordinate);
         data.mouse_down = Some(*coordinate);
         widget.queue_draw();
     }
 
     pub fn mouse_up(widget: &gtk::DrawingArea, up_coordinate: &Coordinate, mut data: &mut model::Interactive) {
-        println!("mouse_up @ {:?}", up_coordinate);
         let down_coordinate = match data.mouse_down {
             Some(c) => c,
             None => return,
@@ -28,6 +26,10 @@ pub mod interactive {
         match data.input_mode.clone() {
             model::InputMode::Waiting =>
                 select_from(widget, *up_coordinate, &mut data),
+            model::InputMode::Selected { from, actions: _ } if from == down_coordinate => {
+                data.input_mode = model::InputMode::Waiting;
+                widget.queue_draw();
+            },
             model::InputMode::Selected { from, actions } =>
                 select_target(widget, from, *up_coordinate, actions, &mut data),
             model::InputMode::Targeted { from: _, to: _, action, from_actions: _ } =>
@@ -37,7 +39,6 @@ pub mod interactive {
     }
 
     pub fn cell_focused(widget: &gtk::DrawingArea, coordinate: &Coordinate, mut data: &mut model::Interactive) {
-        println!("cell_focused @ {:?}", coordinate);
         match data.input_mode.clone() {
             model::InputMode::Targeted { from, to, action, ref from_actions} if to != *coordinate => {
                 if let Some(new_action) = from_actions.get(coordinate) {
@@ -113,7 +114,6 @@ pub mod interactive {
 
     /// User confirmed that they want to perform `action`.
     fn do_action(widget: &gtk::DrawingArea, action: Action, data: &mut model::Interactive) {
-        println!("do_action: {:?}", action);
         data.state.do_action(&action);
         if data.interactive_roles.is_interactive(data.state.active_role()) {
             data.input_mode = model::InputMode::Waiting;
