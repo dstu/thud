@@ -5,10 +5,17 @@ macro_rules! try_lock {
     });
 }
 
+macro_rules! try_lock_or_return {
+    ($x:expr, $retval:expr) => (match $x.try_lock() {
+        ::std::result::Result::Ok(guard) => guard,
+        _ => return $retval,
+    });
+}
+
 pub mod interactive {
     use super::super::model;
     use ::gtk;
-    use ::gtk::WidgetExt;
+    use ::gtk::prelude::*;
     use ::mcts::State;
     use ::thud_game::Action;
     use ::thud_game::coordinate::Coordinate;
@@ -43,6 +50,14 @@ pub mod interactive {
                 do_action(widget, action, &mut data),
             _ => (),
         }
+    }
+
+    pub fn ai_ready(widget: &gtk::DrawingArea, action: Action,
+                    data: Arc<Mutex<model::Interactive>>) {
+        // TODO: repeat this until success, instead of discarding the AI action
+        // if we can't get a lock.
+        let mut data = try_lock!(data);
+        do_action(widget, action, &mut data);
     }
 
     /// User clicked on the board square `from`.
