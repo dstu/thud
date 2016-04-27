@@ -54,10 +54,10 @@ impl<E> mcts::Game for Game<E> where E: board::CellEquivalence {
 }
 
 pub mod allow_transpositions {
-    pub type Game = super::Game<::board::TranspositionalEquivalence>;
-    pub type Payoff = super::Payoff<::board::TranspositionalEquivalence>;
-    pub type State = ::state::State<::board::TranspositionalEquivalence>;
-    pub type Statistics = super::Statistics<::board::TranspositionalEquivalence>;
+    pub type Game = super::Game<::board::SimpleEquivalence>;
+    pub type Payoff = super::Payoff<::board::SimpleEquivalence>;
+    pub type State = ::state::State<::board::SimpleEquivalence>;
+    pub type Statistics = super::Statistics<::board::SimpleEquivalence>;
 }
 
 pub mod deconvolve_transpositions {

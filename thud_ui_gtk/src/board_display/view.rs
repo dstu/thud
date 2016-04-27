@@ -1,12 +1,17 @@
+use super::controller;
+#[macro_use] use super::macros;
 use super::model;
 
-// use ::cairo;
+use ::cairo;
+use ::gdk;
 use ::gdk_sys;
 use ::gtk;
 use ::gtk::WidgetExt;
 use ::gtk::WidgetSignals;
-// use ::thud_game::board;
+use ::thud_game;
+use ::thud_game::board;
 use ::thud_game::coordinate::Coordinate;
+use ::thud_ui_common;
 
 use std::sync::{Arc, Mutex};
 
@@ -48,6 +53,18 @@ impl Properties {
         }
     }
 
+    fn coordinate_of(&self, mouse_x: f64, mouse_y: f64) -> Option<Coordinate> {
+        let margin_adjusted_x = mouse_x - self.margin_left;
+        let margin_adjusted_y = mouse_y - self.margin_top;
+        let cell_increment = self.cell_dimension;
+        let row = margin_adjusted_y / cell_increment;
+        let col = margin_adjusted_x / cell_increment;
+        if row >= 15.0 || col >= 15.0 {
+            return None
+        }
+        Coordinate::new(row as u8, col as u8)
+    }
+
     fn bounds_of(&self, position: Coordinate) -> BoxBounds {
         BoxBounds::new(self.margin_left + (position.col() as f64) * self.cell_dimension,
                        self.margin_top + (position.row() as f64) * self.cell_dimension,
@@ -77,30 +94,81 @@ impl Interactive {
         events.insert(gdk_sys::GDK_BUTTON_PRESS_MASK);
         events.insert(gdk_sys::GDK_BUTTON_RELEASE_MASK);
         events.insert(gdk_sys::GDK_POINTER_MOTION_MASK);
+        drawing_area.add_events(events.bits() as i32);
         drawing_area.set_size_request(
             properties.board_width() as i32, properties.board_height() as i32);
-        drawing_area.add_events(events.bits() as i32);
-        drawing_area.connect_draw(|_, mut cr| {
-            println!("drawing interactive area");
-            gtk::Inhibit(true)
-        });
-        drawing_area.connect_motion_notify_event(|_, evt| {
-            println!("motion notify event");
-            gtk::Inhibit(true)
-        });
-        drawing_area.connect_button_press_event(|_, evt| {
-            println!("button press event");
-            gtk::Inhibit(true)
-        });
-        drawing_area.connect_button_release_event(|_, evt| {
-            println!("button release event");
-            gtk::Inhibit(true)
-        });
+
+        let properties = Arc::new(Mutex::new(properties));
+        {
+            let data = data.clone();
+            let properties = properties.clone();
+            drawing_area.connect_draw(move |widget, cr| {
+                let data = try_lock_or_return!(data, gtk::Inhibit(true));
+                let properties = properties.lock().ok().unwrap();
+                // draw_board_decorations(&properties, cr);
+                draw_cells_interactive(&properties, cr,
+                                       data.visible_state.cells().cells_iter(),
+                                       &data.input_mode);
+                gtk::Inhibit(true)
+            });
+        }
+
+        {
+            // Handle button press events.
+            let data = data.clone();
+            let properties = properties.clone();
+            drawing_area.connect_button_press_event(move |widget, evt| {
+                // if !evt.get_state().contains(gdk::enums::modifier_type::Button1Mask) {
+                //     println!("bad button mask");
+                //     return gtk::Inhibit(true)
+                // }
+                let mut data = try_lock_or_return!(data, gtk::Inhibit(true));
+                let properties = try_lock_or_return!(properties, gtk::Inhibit(true));
+                let (x, y) = evt.get_position();
+                if let Some(down_coordinate) = properties.coordinate_of(x, y) {
+                    controller::interactive::mouse_down(widget, &down_coordinate, &mut data);
+                }
+                gtk::Inhibit(true)
+            });
+        }
+
+        {
+            // Handle button release events.
+            let data = data.clone();
+            let properties = properties.clone();
+            drawing_area.connect_button_release_event(move |widget, evt| {
+                if !evt.get_state().contains(gdk::enums::modifier_type::Button1Mask) {
+                    return gtk::Inhibit(true)
+                }
+                let mut data = try_lock_or_return!(data, gtk::Inhibit(true));
+                let properties = try_lock_or_return!(properties, gtk::Inhibit(true));
+                let (x, y) = evt.get_position();
+                if let Some(up_coordinate) = properties.coordinate_of(x, y) {
+                    controller::interactive::mouse_up(widget, &up_coordinate, &mut data);
+                }
+                gtk::Inhibit(true)
+            });
+        }
+
+        {
+            // Handle mouse motion events.
+            let data = data.clone();
+            let properties = properties.clone();
+            drawing_area.connect_motion_notify_event(move |widget, evt| {
+                let mut data = try_lock_or_return!(data, gtk::Inhibit(true));
+                let mut properties = try_lock_or_return!(properties, gtk::Inhibit(true));
+                let (x, y) = evt.get_position();
+                if let Some(coordinate) = properties.coordinate_of(x, y) {
+                    controller::interactive::cell_focused(widget, &coordinate, &mut data);
+                }
+                gtk::Inhibit(true)
+            });
+        }
 
         Interactive {
             drawing_area: Arc::new(Mutex::new(drawing_area)),
             data: data,
-            properties: Arc::new(Mutex::new(properties)),
+            properties: properties,
         }
     }
 
@@ -186,122 +254,165 @@ impl Interactive {
     // }
 // }
 
-// fn draw_cell(cr: &mut cairo::Context, props: &Properties,
-//              position: Coordinate, content: board::Content) {
-//     cr.set_source_rgb(0.0, 0.0, 0.0);
-//     cr.set_line_width(props.border_width);
-//     let bounds = props.bounds_of(position);
-//     cr.rectangle(bounds.top_left_x,
-//                  bounds.top_left_y,
-//                  bounds.length, bounds.length);
-//     cr.stroke();
-//     match content {
-//         board::Content::Empty => (),
-//         board::Content::Occupied(board::Token::Dwarf) => {
-//             cr.set_source_rgb(1.0, 0.0, 0.0);
-//             let padding = (props.cell_dimension - props.token_width) / 2.0;
-//             cr.rectangle(bounds.top_left_x + padding,
-//                          bounds.top_left_y + padding,
-//                          bounds.length - padding * 2.0,
-//                          bounds.length - padding * 2.0);
-//             cr.fill();
-//         },
-//         board::Content::Occupied(board::Token::Troll) => {
-//             cr.set_source_rgb(0.0, 0.8, 0.8);
-//             let padding = (props.cell_dimension - props.token_width) / 2.0;
-//             cr.rectangle(bounds.top_left_x + padding,
-//                          bounds.top_left_y + padding,
-//                          bounds.length - padding * 2.0,
-//                          bounds.length - padding * 2.0);
-//             cr.fill();
-//         },
-//         board::Content::Occupied(board::Token::Stone) => {
-//             cr.set_source_rgb(0.61, 0.43, 0.31);
-//             let padding = (props.cell_dimension - props.token_width) / 2.0;
-//             cr.rectangle(bounds.top_left_x + padding,
-//                          bounds.top_left_y + padding,
-//                          bounds.length - padding * 2.0,
-//                          bounds.length - padding * 2.0);
-//             cr.fill();
-//         },
-//     }
-// }
+fn draw_cell(cr: &cairo::Context, props: &Properties,
+             position: Coordinate, content: board::Content) {
+    cr.set_source_rgb(0.0, 0.0, 0.0);
+    cr.set_line_width(props.border_width);
+    let bounds = props.bounds_of(position);
+    cr.rectangle(bounds.top_left_x,
+                 bounds.top_left_y,
+                 bounds.length, bounds.length);
+    cr.stroke();
+    match content {
+        board::Content::Empty => (),
+        board::Content::Occupied(board::Token::Dwarf) => {
+            cr.set_source_rgb(1.0, 0.0, 0.0);
+            let padding = (props.cell_dimension - props.token_width) / 2.0;
+            cr.rectangle(bounds.top_left_x + padding,
+                         bounds.top_left_y + padding,
+                         bounds.length - padding * 2.0,
+                         bounds.length - padding * 2.0);
+            cr.fill();
+        },
+        board::Content::Occupied(board::Token::Troll) => {
+            cr.set_source_rgb(0.0, 0.8, 0.8);
+            let padding = (props.cell_dimension - props.token_width) / 2.0;
+            cr.rectangle(bounds.top_left_x + padding,
+                         bounds.top_left_y + padding,
+                         bounds.length - padding * 2.0,
+                         bounds.length - padding * 2.0);
+            cr.fill();
+        },
+        board::Content::Occupied(board::Token::Stone) => {
+            cr.set_source_rgb(0.61, 0.43, 0.31);
+            let padding = (props.cell_dimension - props.token_width) / 2.0;
+            cr.rectangle(bounds.top_left_x + padding,
+                         bounds.top_left_y + padding,
+                         bounds.length - padding * 2.0,
+                         bounds.length - padding * 2.0);
+            cr.fill();
+        },
+    }
+}
 
-// fn draw_selected_cell(cr: &mut cairo::Context, props: &Properties,
-//                       position: Coordinate, content: board::Content) {
-//     cr.set_source_rgb(0.0, 0.5, 0.7);
-//     cr.set_line_width(props.border_width);
-//     let bounds = props.bounds_of(position);
-//     cr.rectangle(bounds.top_left_x, bounds.top_left_y,
-//                  bounds.length, bounds.length);
-//     cr.stroke();
-//     match content {
-//         board::Content::Empty => (),
-//         board::Content::Occupied(board::Token::Dwarf) => {
-//             cr.set_source_rgb(1.0, 0.0, 0.0);
-//             let padding = (props.cell_dimension - props.token_width) / 2.0;
-//             cr.rectangle(bounds.top_left_x + padding,
-//                          bounds.top_left_y + padding,
-//                          bounds.length - padding * 2.0,
-//                          bounds.length - padding * 2.0);
-//             cr.fill();
-//         },
-//         board::Content::Occupied(board::Token::Troll) => {
-//             cr.set_source_rgb(0.0, 0.8, 0.8);
-//             let padding = (props.cell_dimension - props.token_width) / 2.0;
-//             cr.rectangle(bounds.top_left_x + padding,
-//                          bounds.top_left_y + padding,
-//                          bounds.length - padding * 2.0,
-//                          bounds.length - padding * 2.0);
-//             cr.fill();
-//         },
-//         board::Content::Occupied(board::Token::Stone) => {
-//             cr.set_source_rgb(0.61, 0.43, 0.31);
-//             let padding = (props.cell_dimension - props.token_width) / 2.0;
-//             cr.rectangle(bounds.top_left_x + padding,
-//                          bounds.top_left_y + padding,
-//                          bounds.length - padding * 2.0,
-//                          bounds.length - padding * 2.0);
-//             cr.fill();
-//         },
-//     }
-// }
+fn draw_selected_cell(cr: &cairo::Context, props: &Properties,
+                      position: Coordinate, content: board::Content) {
+    cr.set_source_rgb(0.0, 0.5, 0.7);
+    cr.set_line_width(props.border_width);
+    let bounds = props.bounds_of(position);
+    cr.rectangle(bounds.top_left_x, bounds.top_left_y,
+                 bounds.length, bounds.length);
+    cr.stroke();
+    match content {
+        board::Content::Empty => (),
+        board::Content::Occupied(board::Token::Dwarf) => {
+            cr.set_source_rgb(1.0, 0.0, 0.0);
+            let padding = (props.cell_dimension - props.token_width) / 2.0;
+            cr.rectangle(bounds.top_left_x + padding,
+                         bounds.top_left_y + padding,
+                         bounds.length - padding * 2.0,
+                         bounds.length - padding * 2.0);
+            cr.fill();
+        },
+        board::Content::Occupied(board::Token::Troll) => {
+            cr.set_source_rgb(0.0, 0.8, 0.8);
+            let padding = (props.cell_dimension - props.token_width) / 2.0;
+            cr.rectangle(bounds.top_left_x + padding,
+                         bounds.top_left_y + padding,
+                         bounds.length - padding * 2.0,
+                         bounds.length - padding * 2.0);
+            cr.fill();
+        },
+        board::Content::Occupied(board::Token::Stone) => {
+            cr.set_source_rgb(0.61, 0.43, 0.31);
+            let padding = (props.cell_dimension - props.token_width) / 2.0;
+            cr.rectangle(bounds.top_left_x + padding,
+                         bounds.top_left_y + padding,
+                         bounds.length - padding * 2.0,
+                         bounds.length - padding * 2.0);
+            cr.fill();
+        },
+    }
+}
 
-// fn draw_targeted_cell(cr: &mut cairo::Context, props: &Properties,
-//                       action: &thud_game::Action, content: board::Content) {
-//     cr.set_source_rgb(0.0, 0.5, 0.7);
-//     cr.set_line_width(props.border_width);
-//     if let Some(position) = action.target() {
-//         let bounds = props.bounds_of(position);
-//         cr.rectangle(bounds.top_left_x, bounds.top_left_y,
-//                      bounds.length, bounds.length);
-//         cr.stroke();
-//         match content {
-//             board::Content::Occupied(board::Token::Dwarf) => {
-//                 cr.set_source_rgba(1.0, 0.0, 0.0, 0.5);
-//                 let padding = (props.cell_dimension - props.token_width) / 2.0;
-//                 cr.rectangle(bounds.top_left_x + padding,
-//                              bounds.top_left_y + padding,
-//                              bounds.length - padding * 2.0,
-//                              bounds.length - padding * 2.0);
-//                 cr.fill();
-//             },
-//             board::Content::Occupied(board::Token::Troll) => {
-//                 cr.set_source_rgba(0.0, 0.8, 0.8, 0.5);
-//                 let padding = (props.cell_dimension - props.token_width) / 2.0;
-//                 cr.rectangle(bounds.top_left_x + padding,
-//                              bounds.top_left_y + padding,
-//                              bounds.length - padding * 2.0,
-//                              bounds.length - padding * 2.0);
-//                 cr.fill();
-//             },
-//             _ => (),
-//         }
-//     }
-// }
+fn draw_targeted_cell(cr: &cairo::Context, props: &Properties,
+                      action: &thud_game::Action, content: board::Content) {
+    cr.set_source_rgb(0.0, 0.5, 0.7);
+    cr.set_line_width(props.border_width);
+    if let Some(position) = action.target() {
+        let bounds = props.bounds_of(position);
+        cr.rectangle(bounds.top_left_x, bounds.top_left_y,
+                     bounds.length, bounds.length);
+        cr.stroke();
+        match content {
+            board::Content::Occupied(board::Token::Dwarf) => {
+                cr.set_source_rgba(1.0, 0.0, 0.0, 0.5);
+                let padding = (props.cell_dimension - props.token_width) / 2.0;
+                cr.rectangle(bounds.top_left_x + padding,
+                             bounds.top_left_y + padding,
+                             bounds.length - padding * 2.0,
+                             bounds.length - padding * 2.0);
+                cr.fill();
+            },
+            board::Content::Occupied(board::Token::Troll) => {
+                cr.set_source_rgba(0.0, 0.8, 0.8, 0.5);
+                let padding = (props.cell_dimension - props.token_width) / 2.0;
+                cr.rectangle(bounds.top_left_x + padding,
+                             bounds.top_left_y + padding,
+                             bounds.length - padding * 2.0,
+                             bounds.length - padding * 2.0);
+                cr.fill();
+            },
+            _ => (),
+        }
+    }
+}
 
-// fn draw_board_decorations(cr: &mut cairo::Context, props: &Properties) {
-// }
+pub fn draw_board_decorations(props: &Properties, cr: &cairo::Context) {
+    cr.set_source_rgb(0.0, 0.0, 0.0);
+    cr.set_line_width(props.border_width);
+
+    // Basic border.
+    // cr.rectangle(0.0, 0.0,
+    //              15.0 * props.cell_dimension + 16.0 * props.border_width,
+    //              15.0 * props.cell_dimension + 16.0 * props.border_width);
+    // cr.fill();
+
+    cr.new_path();
+    let row_lengths = [5, 7, 9, 11, 13,
+                       15, 15, 15, 15, 15,
+                       13, 11, 9, 7, 5];
+    let mut i = row_lengths.iter().enumerate();
+    loop {
+        match i.next() {
+            Some((x, length)) => {
+                let start_offset = (x as f64) * (props.cell_dimension// - props.border_width
+                );
+                let end_offset = ((x + 1) as f64) * (props.cell_dimension// + props.border_width
+                );
+                let padding = (15 - length) / 2;
+                let padding_offset_1 = (padding as f64) * (props.cell_dimension// - props.border_width
+                );
+                let padding_offset_2 = 15.0 * props.cell_dimension// + 16.0 * props.border_width
+                    - padding_offset_1;
+                cr.move_to(start_offset, padding_offset_1);
+                cr.line_to(end_offset, padding_offset_1);
+                cr.move_to(start_offset, padding_offset_2);
+                cr.line_to(end_offset, padding_offset_2);
+
+                cr.move_to(padding_offset_1, start_offset);
+                cr.line_to(padding_offset_1, end_offset);
+                cr.move_to(padding_offset_2, start_offset);
+                cr.line_to(padding_offset_2, end_offset);
+            },
+            None => break,
+        }
+    }
+    cr.set_source_rgb(1.0, 1.0, 1.0);
+    // cr.fill();
+    cr.set_source_rgb(0.0, 0.0, 0.0);
+    cr.stroke();
+}
 
 // fn draw_cells_passive<'a>(cr: &mut cairo::Context, props: &Properties, contents: board::ContentsIter<'a>) {
 //     for (position, content) in contents {
@@ -309,36 +420,32 @@ impl Interactive {
 //     }
 // }
 
-// fn draw_cells_interactive<'a>(cr: &mut cairo::Context, props: &Properties,
-//                               contents: board::ContentsIter<'a>, action_state: &model::InputMode) {
-//     let mut selected_content = None;
-//     let mut targeted_content = None;
-//     for (position, content) in contents {
-//         match action_state {
-//             &model::InputMode::Selected { from, .. } if  from == position =>
-//                 selected_content = Some(content),
-//             &model::InputMode::Targeted { from, .. } if from == position =>
-//                 selected_content = Some(content),
-//             &model::InputMode::Targeted { to, .. } if to == position =>
-//                 targeted_content = Some(content),
-//             _ => draw_cell(cr, props, position, content),
-//         }
-//     }
-//     match (action_state, selected_content, targeted_content) {
-//         (&model::InputMode::Selected { from: position, .. }, Some(selected), None) =>
-//             draw_selected_cell(cr, props, position, selected),
-//         (&model::InputMode::Targeted { from: position, action: ref action, .. }, Some(selected), Some(targeted)) => {
-//             draw_selected_cell(cr, props, position, selected);
-//             draw_targeted_cell(cr, props, action, targeted);
-//         },
-//         _ => (),
-//     }
-// }
-
-// fn draw_canvas_interactive(cr: &mut cairo::Context, props: &Properties, state: &ThudState, action_state: &model::InputMode) {
-//     draw_board_decorations(cr, props);
-//     draw_cells_interactive(cr, props, state.cells().cells_iter(), action_state);
-// }
+fn draw_cells_interactive<'a>(props: &Properties, cr: &cairo::Context,
+                              contents: board::ContentsIter<'a>,
+                              action_state: &model::InputMode) {
+    let mut selected_content = None;
+    let mut targeted_content = None;
+    for (position, content) in contents {
+        match action_state {
+            &model::InputMode::Selected { from, .. } if  from == position =>
+                selected_content = Some(content),
+            &model::InputMode::Targeted { from, .. } if from == position =>
+                selected_content = Some(content),
+            &model::InputMode::Targeted { to, .. } if to == position =>
+                targeted_content = Some(content),
+            _ => draw_cell(cr, props, position, content),
+        }
+    }
+    match (action_state, selected_content, targeted_content) {
+        (&model::InputMode::Selected { from: position, .. }, Some(selected), None) =>
+            draw_selected_cell(cr, props, position, selected),
+        (&model::InputMode::Targeted { from: position, action: ref action, .. }, Some(selected), Some(targeted)) => {
+            draw_selected_cell(cr, props, position, selected);
+            draw_targeted_cell(cr, props, action, targeted);
+        },
+        _ => (),
+    }
+}
 
 // fn draw_canvas_passive(cr: &mut cairo::Context, props: &Properties, state: &ThudState) {
 //     draw_board_decorations(cr, props);

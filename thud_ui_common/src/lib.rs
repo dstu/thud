@@ -18,10 +18,12 @@ pub const MOVE_SELECTION_CRITERION_FLAG: &'static str = "move_selection_criterio
 pub const RNG_SEED_FLAG: &'static str = "rng_seed";
 pub const COMPACT_SEARCH_GRAPH_FLAG: &'static str = "compact_search_graph";
 
-pub use thud_game::ai::mcts::allow_transpositions::Game as ThudGame;
-pub use thud_game::ai::mcts::allow_transpositions::Payoff as ThudPayoff;
-pub use thud_game::ai::mcts::allow_transpositions::State as ThudState;
-pub use thud_game::ai::mcts::allow_transpositions::Statistics as ThudStatistics;
+pub use thud_game::ai::mcts::deconvolve_transpositions::Game as ThudGame;
+pub use thud_game::ai::mcts::deconvolve_transpositions::Payoff as ThudPayoff;
+pub use thud_game::ai::mcts::deconvolve_transpositions::State as ThudState;
+pub use thud_game::ai::mcts::deconvolve_transpositions::Statistics as ThudStatistics;
+
+pub use thud_game::ai::mcts::allow_transpositions::State as ViewThudState;
 
 arg_enum! {
     #[derive(Debug)]

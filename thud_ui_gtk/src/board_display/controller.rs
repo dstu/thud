@@ -1,17 +1,3 @@
-macro_rules! try_lock {
-    ($x:expr) => (match $x.try_lock() {
-        ::std::result::Result::Ok(guard) => guard,
-        _ => return,
-    });
-}
-
-macro_rules! try_lock_or_return {
-    ($x:expr, $retval:expr) => (match $x.try_lock() {
-        ::std::result::Result::Ok(guard) => guard,
-        _ => return $retval,
-    });
-}
-
 pub mod interactive {
     use super::super::model;
     use ::gtk;
@@ -23,16 +9,14 @@ pub mod interactive {
     use std::collections::hash_map::Entry;
     use std::sync::{Arc, Mutex};
 
-    pub fn mouse_down(widget: &gtk::DrawingArea, coordinate: &Coordinate,
-                      data: Arc<Mutex<model::Interactive>>) {
-        let mut data = try_lock!(data);
+    pub fn mouse_down(widget: &gtk::DrawingArea, coordinate: &Coordinate, data: &mut model::Interactive) {
+        println!("mouse_down @ {:?}", coordinate);
         data.mouse_down = Some(*coordinate);
         widget.queue_draw();
     }
 
-    pub fn mouse_up(widget: &gtk::DrawingArea, up_coordinate: &Coordinate,
-                    data: Arc<Mutex<model::Interactive>>) {
-        let mut data = try_lock!(data);
+    pub fn mouse_up(widget: &gtk::DrawingArea, up_coordinate: &Coordinate, mut data: &mut model::Interactive) {
+        println!("mouse_up @ {:?}", up_coordinate);
         let down_coordinate = match data.mouse_down {
             Some(c) => c,
             None => return,
@@ -52,6 +36,29 @@ pub mod interactive {
         }
     }
 
+    pub fn cell_focused(widget: &gtk::DrawingArea, coordinate: &Coordinate, mut data: &mut model::Interactive) {
+        println!("cell_focused @ {:?}", coordinate);
+        match data.input_mode.clone() {
+            model::InputMode::Targeted { from, to, action, ref from_actions} if to != *coordinate => {
+                if let Some(new_action) = from_actions.get(coordinate) {
+                    data.input_mode = model::InputMode::Targeted {
+                        from: from, to: *coordinate, action: *new_action, from_actions: from_actions.clone(),
+                    };
+                    widget.queue_draw();
+                }
+            },
+            model::InputMode::Selected { from, actions } => {
+                if let Some(new_action) = actions.get(coordinate) {
+                    data.input_mode = model::InputMode::Targeted {
+                        from: from, to: *coordinate, action: *new_action, from_actions: actions.clone(),
+                    };
+                    widget.queue_draw();
+                }
+            },
+            _ => (),
+        };
+    }
+
     pub fn ai_ready(widget: &gtk::DrawingArea, action: Action,
                     data: Arc<Mutex<model::Interactive>>) {
         // TODO: repeat this until success, instead of discarding the AI action
@@ -62,10 +69,10 @@ pub mod interactive {
 
     /// User clicked on the board square `from`.
     fn select_from(widget: &gtk::DrawingArea, from: Coordinate, data: &mut model::Interactive) {
-        match data.state.cells()[from].role() {
-            Some(r) if r == *data.state.active_player() => {
+        match data.visible_state.cells()[from].role() {
+            Some(r) if r == *data.visible_state.active_player() => {
                 let mut actions: HashMap<Coordinate, Action> = HashMap::new();
-                for a in data.state.actions() {
+                for a in data.visible_state.actions() {
                     if let Some(t) = a.target() {
                         match actions.entry(t) {
                             Entry::Occupied(ref mut e) if a.is_shove() && e.get().is_move() =>
@@ -91,8 +98,8 @@ pub mod interactive {
     /// side on the board square `from`.
     fn select_target(widget: &gtk::DrawingArea, from: Coordinate, to: Coordinate,
                      actions: HashMap<Coordinate, Action>, data: &mut model::Interactive) {
-        match data.state.cells()[from].role() {
-            Some(r) if r != *data.state.active_player() => {
+        match data.visible_state.cells()[from].role() {
+            Some(r) if r != *data.visible_state.active_player() => {
                 if let Some(action) = actions.get(&to) {
                     data.input_mode = model::InputMode::Targeted {
                         from: from, to: to, action: *action, from_actions: actions.clone(),
@@ -106,8 +113,10 @@ pub mod interactive {
 
     /// User confirmed that they want to perform `action`.
     fn do_action(widget: &gtk::DrawingArea, action: Action, data: &mut model::Interactive) {
+        println!("do_action: {:?}", action);
         data.state.do_action(&action);
-        if data.interactive_roles.is_interactive(data.state.active_role()) {
+        data.visible_state.do_action(&action);
+        if data.interactive_roles.is_interactive(data.visible_state.active_role()) {
             data.input_mode = model::InputMode::Waiting;
         } else {
             data.input_mode = model::InputMode::Inactive;
