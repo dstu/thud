@@ -1,7 +1,6 @@
 use ::thud_game::{Action, Role};
-use ::thud_game::board;
 use ::thud_game::coordinate::Coordinate;
-use ::thud_ui_common::{ThudState, ViewThudState};
+use ::thud_ui_common::ThudState;
 
 use std::collections::HashMap;
 

@@ -12,6 +12,7 @@ pub use self::statistics::Statistics;
 
 use std::marker::PhantomData;
 
+#[derive(Clone)]
 pub struct Game<E> where E: board::CellEquivalence {
     cell_equivalence: PhantomData<E>,
 }

@@ -26,7 +26,7 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::result::Result;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum SearchError {
     NoRootState,
     Cycle,

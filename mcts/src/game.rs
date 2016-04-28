@@ -31,7 +31,7 @@ pub trait Statistics: Debug + Default + Reflect {
     fn increment(&self, payoff: &Self::Payoff);
 }
 
-pub trait Game: Reflect {
+pub trait Game: Clone + Reflect {
     type Action: Clone + Debug + Reflect;
     type PlayerId: Debug + Reflect;
     type Payoff: Payoff<PlayerId=Self::PlayerId, State=Self::State>;

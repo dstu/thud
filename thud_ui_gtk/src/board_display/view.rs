@@ -1,5 +1,4 @@
 use super::controller;
-#[macro_use] use super::macros;
 use super::model;
 
 use ::cairo;
