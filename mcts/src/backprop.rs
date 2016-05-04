@@ -1,11 +1,44 @@
-// use super::base::*;
-use super::Game;
+use super::{Game, EdgeData, VertexData};
 use super::{EdgeData, VertexData};
-use super::ucb;
-use ::search_graph;
 
 use std::iter::Iterator;
+use std::iter::Iterator;
 use std::marker::PhantomData;
+
+use ::rand::Rng;
+use ::search_graph::nav::{Edge, Node, ParentList};
+
+pub trait BackpropSelector<'a, G, R> where G: Game, R: Rng {
+    type Items: Iterator<Item=Edge<'a, G::State, VertexData, EdgeData<G>>>;
+
+    fn from_settings(settings: &SearchSettings) -> Self;
+
+    fn select(&self, parents: ParentList<'a, G::State, VertexData, EdgeData<G>>,
+              payoff: &G::Payoff, rng: &mut R) -> Self::Items;
+}
+
+pub fn backprop<'a, G, S, R>(node: Node<'a, G::State, VertexData, EdgeData<G>>,
+                             thread: &ThreadId, payoff: &G::Payoff, selector: S, rng: &mut R)
+                             -> Vec<Edge<'a, G::State, VertexData, EdgeData<G>>>
+    where G: Game, S: BackpropSelector, R: Rng {
+    let mut stack = vec!(node);
+    let mut result = Vec::new();
+    loop {
+        let next = stack.pop();
+        match next {
+            Some(node) => {
+                for parent in selector.select(node.get_parent_list(), payoff, rng).iter() {
+                    let previous_traversals = parent.mark_backprop_traversal(thread);
+                    if !previous_traversals.traversed_in_thread(thread) {
+                        stack.push(parent.get_source());
+                        result.push(parent);
+                    }
+                }
+            },
+            None => return result,
+        }
+    }
+}
 
 /// Iterable view over parents of a graph node, which selects for those parents
 /// for which this node is a best child.

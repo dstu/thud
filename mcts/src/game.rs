@@ -24,7 +24,7 @@ pub trait Payoff: Debug + Add + AddAssign + Default {
     fn score(&self, player: &Self::PlayerId) -> f32;
 }
 
-pub trait Statistics: Debug + Default + Reflect {
+pub trait Statistics: Clone + Debug + Default + Reflect {
     type Payoff: Payoff;
 
     fn as_payoff(&self) -> Self::Payoff;
