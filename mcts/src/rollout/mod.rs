@@ -1,33 +1,29 @@
-use super::{EdgeData, Game, Payoff, VertexData};
-use super::backprop;
-use super::ucb;
+use super::{EdgeData, Game, Payoff, SearchSettings, ThreadId, VertexData};
 
-mod rollout;
+mod error;
 
-pub use self::rollout::RolloutError;
+pub use self::error::RolloutError;
 
 use std::convert::From;
+use std::error::Error;
 use std::result::Result;
 
-use ::itertools::Itertools;
 use ::rand::Rng;
-use ::search_graph::nav::{ChildList, Node};
+use ::search_graph::nav::{ChildList, Edge, Node};
 
-pub trait RolloutSelector<G, R> where G: Game, R: Rng {
+pub trait RolloutSelector<G, R>: From<SearchSettings> where G: Game, R: Rng {
     type Error: Error;
 
-    fn from_settings(settings: &SearchSettings) -> Self;
-
     fn select<'a>(&self, children: ChildList<'a, G::State, VertexData, EdgeData<G>>,
-                  rng: &mut R) -> Result<Option<Edge<'a, G::State, VertexData, EdgeData<G>>>, Error>;
+                  rng: &mut R) -> Result<Option<Edge<'a, G::State, VertexData, EdgeData<G>>>, Self::Error>;
 }
 
 pub fn rollout<'a, G, S, R>(
     mut node: Node<'a, G::State, VertexData, EdgeData<G>>, thread: &ThreadId,
     selector: S, rng: &mut R)
-    -> Result<Node<'a, G::State, VertexData, EdgeData<G>>, RolloutError<'a, G, S::Error>> {
-    where G: 'a + Game, S: RolloutSelector<G, R>, R: Rng
-        let mut downward_trace = Vec::new();  // For backtracking.
+    -> Result<Node<'a, G::State, VertexData, EdgeData<G>>, RolloutError<'a, G, S::Error>>
+    where G: 'a + Game, S: RolloutSelector<G, R>, R: Rng {
+    let mut trace = Vec::new();  // For backtracking.
     loop {
         if let Some(_) = G::Payoff::from_state(node.get_label()) {
             break
@@ -37,10 +33,10 @@ pub fn rollout<'a, G, S, R>(
                     // Selector chose a child node.
                     let previous_traversals = best_child.get_data().mark_rollout_traversal(thread);
                     if previous_traversals.traversed_in_thread(thread) {
-                        return Err(RolloutError::Cycle(downward_trace))
+                        return Err(RolloutError::Cycle(trace))
                     }
                     node = best_child.get_target();
-                    downward_trace.push(best_child);
+                    trace.push(best_child);
                 },
                 None => {
                     // Selector found no suitable child node.

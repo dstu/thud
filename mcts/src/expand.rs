@@ -5,7 +5,7 @@ use ::search_graph;
 use std::collections::HashSet;
 use std::default::Default;
 
-pub fn expand<'a, G>(mut node: search_graph::mutators::MutNode<'a, G::State, VertexData, EdgeData<G::Statistics, G::Action>>) where G: 'a + Game {
+pub fn expand<'a, G>(mut node: search_graph::mutators::MutNode<'a, G::State, VertexData, EdgeData<G>>) where G: 'a + Game {
     let state = node.get_label().clone();
     trace!("expand: expanding moves at node {} for {:?}", node.get_id(), state.active_player());
     let mut child_states = HashSet::new();

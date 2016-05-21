@@ -1,3 +1,6 @@
+use ::game::Game;
+use ::graph::{EdgeData, VertexData};
+
 use std::convert::From;
 use std::error::Error;
 use std::fmt;

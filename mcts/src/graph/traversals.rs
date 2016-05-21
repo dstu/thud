@@ -1,8 +1,11 @@
 use ::ThreadId;
 
 use std::clone::Clone;
+use std::convert::From;
 use std::default::Default;
+use std::fmt;
 use std::sync::atomic;
+use std::usize;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Traversals {
@@ -11,11 +14,17 @@ pub struct Traversals {
 
 impl Traversals {
     pub fn concurrent_traversals(&self) -> u32 {
-        std::usize::count_ones(self.value)
+        usize::count_ones(self.value)
     }
 
     pub fn traversed_in_thread(&self, thread: &ThreadId) -> bool {
         (self.value & (1 << thread.as_u8())) != 0
+    }
+}
+
+impl From<usize> for Traversals {
+    fn from(value: usize) -> Self {
+        Traversals { value: value, }
     }
 }
 
@@ -28,23 +37,22 @@ impl AtomicTraversals {
         AtomicTraversals { value: atomic::AtomicUsize::new(0), }
     }
 
-    pub fn get(&self) -> Data {
+    pub fn get(&self) -> Traversals {
         // TODO: do we really need Ordering::SeqCst?
         let value = self.value.load(atomic::Ordering::Acquire);
-        Data::from_value(value)
+        From::from(value)
     }
 
-    pub fn mark_traversal(&self, thread: &ThreadId) -> Data {
+    pub fn mark_traversal(&self, thread: &ThreadId) -> Traversals {
         // TODO: do we really need Ordering::SeqCst?
-        let previous_value = self.value.fetch_or(1 << thread.as_u8(), atomic::ordering::AcqRel);
-        Data::from_value(previous_value)
+        let previous_value = self.value.fetch_or(1 << thread.as_u8(), atomic::Ordering::AcqRel);
+        From::from(previous_value)
     }
 
-    pub fn clear_traversal(&self, thread: &ThreadId) -> Data {
-        check_thread(thread);
+    pub fn clear_traversal(&self, thread: &ThreadId) -> Traversals {
         // TODO: do we really need Ordering::SeqCst?
-        let previous_value = self.value.fetch_and(~(1 << thread.as_u8()), atomic::ordering::AcqRel);
-        Data::from_value(previous_value)
+        let previous_value = self.value.fetch_and(!(1 << thread.as_u8()), atomic::Ordering::AcqRel);
+        From::from(previous_value)
     }
 }
 
@@ -52,7 +60,7 @@ impl Clone for AtomicTraversals {
     fn clone(&self) -> Self {
         // TODO: do we really need Ordering::SeqCst?
         AtomicTraversals {
-            value: self.value.load(atomic::Ordering::Acquire),
+            value: atomic::AtomicUsize::new(self.value.load(atomic::Ordering::Acquire)),
         }
     }
 }
@@ -60,7 +68,7 @@ impl Clone for AtomicTraversals {
 impl fmt::Debug for AtomicTraversals {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let data = self.get();
-        write!(f, "AtomicTraversals { value: {:b}, }", data.value)
+        write!(f, "AtomicTraversals {{ value: {:b}, }}", data.value)
     }
 }
 

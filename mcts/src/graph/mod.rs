@@ -2,9 +2,9 @@ mod edge;
 mod traversals;
 mod vertex;
 
-pub use edge::EdgeData;
-pub use traversals::{AtomicTraversals, Traversals};
-pub use vertex::VertexData;
+pub use self::edge::EdgeData;
+pub use self::traversals::{AtomicTraversals, Traversals};
+pub use self::vertex::VertexData;
 
 // pub type Graph<G: Game> =
 //     search_graph::Graph<G::State, VertexData, EdgeData<G::Statistics, G::Action>>;

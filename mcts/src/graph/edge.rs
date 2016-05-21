@@ -1,4 +1,4 @@
-use ::{Game, Statistics, ThreadId};
+use ::{Game, ThreadId};
 
 use std::clone::Clone;
 use std::default::Default;
@@ -40,7 +40,7 @@ impl<G> Clone for EdgeData<G> where G: Game {
 impl<G> EdgeData<G> where G: Game {
     pub fn new(action: G::Action) -> Self {
         EdgeData {
-            traversed: atomic::AtomicUsize::new(0),
+            traversed: atomic::AtomicBool::new(false),
             rollout_traversals: Default::default(),
             backprop_traversals: Default::default(),
             action: action,
@@ -56,11 +56,11 @@ impl<G> EdgeData<G> where G: Game {
         self.traversed.load(atomic::Ordering::Acquire)
     }
 
-    /// Potential race condition with `mark_rollout_traversal`.
-    pub fn rollout_traversals(&self) -> Traversals {
-        // TODO: do we really need Ordering::SeqCst?
-        self.traversed.load(atomic::Ordering::Release)
-    }
+    // /// Potential race condition with `mark_rollout_traversal`.
+    // pub fn rollout_traversals(&self) -> Traversals {
+    //     // TODO: do we really need Ordering::SeqCst?
+    //     self.traversed.load(atomic::Ordering::Release)
+    // }
 
     // Returns true iff edge was never previously visited in this epoch.
     pub fn mark_rollout_traversal(&self, thread: &ThreadId) -> Traversals {

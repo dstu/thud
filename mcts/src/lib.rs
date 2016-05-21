@@ -14,14 +14,17 @@ mod search_error;
 pub mod simulation;
 pub mod ucb;
 
+use self::backprop::BackpropSelector;
+use self::rollout::{RolloutError, RolloutSelector};
+use self::simulation::Simulator;
+
 pub use self::game::{Game, Payoff, State, Statistics};
 pub use self::graph::{EdgeData, VertexData};
 pub use self::search_error::SearchError;
 
 use std::convert::From;
-use std::error::Error;
-use std::fmt;
 use std::marker::PhantomData;
+use std::mem;
 use std::result::Result;
 
 use ::rand::Rng;
@@ -40,8 +43,9 @@ pub struct ThreadId(u8);
 
 impl ThreadId {
     pub fn new(id: u8) -> Self {
-        assert!(id < std::usize::BITS,
-                "Thread id {} exceeds maximum thread count {}", id, std::usize::BITS);
+        let max_thread_count = (mem::size_of::<usize>() * 8) as u8;
+        assert!(id < max_thread_count,
+                "Thread id {} exceeds maximum thread count {}", id, max_thread_count);
         ThreadId(id)
     }
 
@@ -72,32 +76,36 @@ pub struct ActionStatistics<G> where G: Game {
 
 pub fn new_search_graph<G>() -> search_graph::Graph<G::State, VertexData, EdgeData<G>>
      where G: Game {
-         search_graph::Graph::<G::State, VertexData, EdgeData<G::Statistics, G::Action>>::new()
+         search_graph::Graph::<G::State, VertexData, EdgeData<G>>::new()
      }
 
 #[derive(Clone, Copy, Debug)]
 pub struct SearchSettings {
-    pub simulation_count: usize,
+    pub simulation_count: u32,
     pub explore_bias: f64,
+    pub rollout_tasks: u32,
+    pub simulation_tasks: u32,
 }
 
-pub struct SearchState<R, G> where R: Rng, G: Game {
-    epoch: usize,
+pub struct SearchState<R, G, X, Y, Z>
+    where R: Rng, G: Game, X: RolloutSelector<G, R>, Y: for<'a> BackpropSelector<'a, G, R>, Z: Simulator<G, R> {
+    epoch: Epoch,
     rng: R,
-    game_type: PhantomData<G>,
+    phantom_types: PhantomData<(G, X, Y, Z)>,
 }
 
-impl<R, G> SearchState<R, G> where R: Rng, G: Game {
+impl<R, G, X, Y, Z> SearchState<R, G, X, Y, Z>
+    where R: Rng, G: Game, X: RolloutSelector<G, R>, Y: for<'a> BackpropSelector<'a, G, R>, Z: Simulator<G, R> {
     pub fn new(rng: R) -> Self {
         SearchState {
             epoch: Default::default(),
             rng: rng,
-            game_type: PhantomData,
+            phantom_types: PhantomData,
         }
     }
 
     pub fn initialize(&self, graph: &mut search_graph::Graph<G::State, VertexData,
-                                                             EdgeData<G::Statistics, G::Action>>,
+                                                             EdgeData<G>>,
                       root_state: &G::State) {
         let node = graph.add_root(root_state.clone(), Default::default());
         if node.get_child_list().is_empty() {
@@ -105,52 +113,79 @@ impl<R, G> SearchState<R, G> where R: Rng, G: Game {
         }
     }
 
-    pub fn step<F>(&mut self, graph: &mut search_graph::Graph<G::State, VertexData, EdgeData<G>>,
-                      root_state: &G::State, mut settings_fn: F) {
-                      -> Result<Vec<ActionStatistics<G>>, SearchError>
-        where F: FnMut(&Epoch)-> SearchSettings {
+    pub fn epoch(&self) -> &Epoch {
+        &self.epoch
+    }
+
+    pub fn step<'a, F>(&mut self, graph: &'a mut search_graph::Graph<G::State, VertexData, EdgeData<G>>,
+                       root_state: &G::State, settings: &SearchSettings)
+                       -> Result<Vec<ActionStatistics<G>>, SearchError<<X as RolloutSelector<G, R>>::Error, 
+                                                                       <Z as Simulator<G, R>>::Error,
+                                                                       <Y as BackpropSelector<'a, G, R>>::Error>> {
         self.epoch = self.epoch.next();
-        let settings = settings_fn(&self.epoch);
-        let mut expand = false;
+        let mut expanded;
+        let rollout_selector: X = From::from(*settings);
+        let thread = ThreadId(0);
         let state_to_expand = {
-            let root_node = match graph.get_node(&root_state) {
-                Some(n) => n,
-                None => return Err(SearchError::NoRootState),
+            let rollout_target = {
+                let root_node = match graph.get_node(&root_state) {
+                    Some(n) => n,
+                    None => return Err(SearchError::NoRootState),
+                };
+                match rollout::rollout(root_node, &thread, rollout_selector, &mut self.rng) {
+                    Ok(n) => n,
+                    Err(RolloutError::Cycle(_)) => panic!("Cycle in rollout"),
+                    Err(RolloutError::Selector(e)) => return Err(SearchError::Rollout(e)),
+                }
             };
-            let rollout_target = try!(rollout::rollout());
-            expand = rollout_result.get_data().mark_expanded();
-            let rollout_state = rollout_target.get_label().clone();
+            expanded = rollout_target.get_data().mark_expanded();
+            let rollout_state: G::State = rollout_target.get_label().clone();
             let payoff =
-                if let Some(payoff) = G::Payoff::from_state(rollout_state) {
+                if let Some(payoff) = G::Payoff::from_state(&rollout_state) {
                     // Known payoff from rollout target.
                     payoff
-                } else if rollout_to_expanded {
+                } else if expanded {
                     // Rollout found an unvisited edge to a node that was
                     // already expanded and has some payoff statistics. We
                     // propagate the known statistics from this node's children.
+                    let statistics = G::Statistics::default();
+                    for child in rollout_target.get_child_list().iter() {
+                        statistics.increment(&child.get_data().statistics.as_payoff());
+                    }
+                    statistics.as_payoff()
                 } else {
                     // Rollout found an unexpanded node with no known payoff, so
                     // we simulate a payoff.
-                    simulator.simulate(&settings, rollout_state.clone(), self.rng)
+                    let simulator: Z = From::from(*settings);
+                    match simulator.simulate(rollout_state.clone(), &mut self.rng) {
+                        Ok(p) => p,
+                        Err(e) => return Err(SearchError::Simulator(e)),
+                    }
                 };
-            let backprop_targets = try!(backprop::backprop());
+            let backprop_selector: Y = From::from(*settings);
+            let backprop_targets =
+                match backprop::backprop(rollout_target, &thread, &payoff, backprop_selector,
+                                         &mut self.rng) {
+                    Ok(ts) => ts,
+                    Err(e) => panic!("backprop error: {}", e),  // return Err(SearchError::Backprop(e)),
+                };
             for edge in backprop_targets.into_iter() {
                 edge.get_data().statistics.increment(&payoff);
             }
             rollout_state
         };
-        if expand {
+        if !expanded {
             expand::expand::<G>(graph.get_node_mut(&state_to_expand).unwrap());
         }
 
         // Gather statistics of each child of root.
         let children = graph.get_node(&root_state).unwrap().get_child_list();
         let mut child_ucb_results = ucb::child_edge_ucb_scores::<G, R>(
-            &children, self.epoch, self.explore_bias, &mut self.rng).into_iter();
+            &children, self.epoch, settings.explore_bias, &mut self.rng).into_iter();
         let mut root_stats = Vec::new();
         for child_edge in children.iter() {
             root_stats.push(ActionStatistics {
-                action: child_edge.get_data().action.clone(),
+                action: child_edge.get_data().action().clone(),
                 payoff: child_edge.get_data().statistics.as_payoff(),
                 ucb: child_ucb_results.next().unwrap().map(|s| UcbValue::from_success(&s)),
             });
@@ -161,11 +196,11 @@ impl<R, G> SearchState<R, G> where R: Rng, G: Game {
 
     // fn iterate_search<'a>(&mut self, state: &G::State,
     //                       graph: &mut search_graph::Graph<G::State, VertexData,
-    //                                                       EdgeData<G::Statistics, G::Action>>,
+    //                                                       EdgeData<G>>,
     //                       settings: &SearchSettings)
     //                       -> ::std::result::Result<(), SearchError> {
     //     let rollout_state_option = {
-    //         let node: search_graph::nav::Node<G::State, VertexData, EdgeData<G::Statistics, G::Action>> = match graph.get_node(state) {
+    //         let node: search_graph::nav::Node<G::State, VertexData, EdgeData<G>> = match graph.get_node(state) {
     //             Some(n) => n,
     //             None => return Err(SearchError::NoRootState),
     //         };

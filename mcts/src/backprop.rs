@@ -1,17 +1,15 @@
-use super::{Game, EdgeData, VertexData};
-use super::{EdgeData, VertexData};
+use super::{Game, EdgeData, SearchSettings, ThreadId, VertexData};
 
-use std::iter::Iterator;
+use std::error::Error;
 use std::iter::Iterator;
 use std::marker::PhantomData;
 
 use ::rand::Rng;
 use ::search_graph::nav::{Edge, Node, ParentList};
 
-pub trait BackpropSelector<'a, G, R> where G: Game, R: Rng {
+pub trait BackpropSelector<'a, G, R>: From<SearchSettings> where G: 'a + Game, R: Rng {
+    type Error: Error;
     type Items: Iterator<Item=Edge<'a, G::State, VertexData, EdgeData<G>>>;
-
-    fn from_settings(settings: &SearchSettings) -> Self;
 
     fn select(&self, parents: ParentList<'a, G::State, VertexData, EdgeData<G>>,
               payoff: &G::Payoff, rng: &mut R) -> Self::Items;
@@ -19,37 +17,37 @@ pub trait BackpropSelector<'a, G, R> where G: Game, R: Rng {
 
 pub fn backprop<'a, G, S, R>(node: Node<'a, G::State, VertexData, EdgeData<G>>,
                              thread: &ThreadId, payoff: &G::Payoff, selector: S, rng: &mut R)
-                             -> Vec<Edge<'a, G::State, VertexData, EdgeData<G>>>
-    where G: Game, S: BackpropSelector, R: Rng {
+                             -> Result<Vec<Edge<'a, G::State, VertexData, EdgeData<G>>>, <S as BackpropSelector<'a, G, R>>::Error>
+    where G: Game, S: BackpropSelector<'a, G, R>, R: Rng {
     let mut stack = vec!(node);
     let mut result = Vec::new();
     loop {
         let next = stack.pop();
         match next {
             Some(node) => {
-                for parent in selector.select(node.get_parent_list(), payoff, rng).iter() {
-                    let previous_traversals = parent.mark_backprop_traversal(thread);
+                for parent in selector.select(node.get_parent_list(), payoff, rng) {
+                    let previous_traversals = parent.get_data().mark_backprop_traversal(thread);
                     if !previous_traversals.traversed_in_thread(thread) {
                         stack.push(parent.get_source());
                         result.push(parent);
                     }
                 }
             },
-            None => return result,
+            None => return Ok(result),
         }
     }
 }
 
 /// Iterable view over parents of a graph node, which selects for those parents
 /// for which this node is a best child.
-pub struct ParentSelectionIter<'a, G, I> where G: 'a + Game, I: Iterator<Item=search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G::Statistics, G::Action>>> {
+pub struct ParentSelectionIter<'a, G, I> where G: 'a + Game, I: Iterator<Item=Edge<'a, G::State, VertexData, EdgeData<G>>> {
     parents: I,
     explore_bias: f64,
     epoch: usize,
     game_type: PhantomData<&'a G>,
 }
 
-impl<'a, G, I> ParentSelectionIter<'a, G, I> where G: 'a + Game, I: Iterator<Item=search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G::Statistics, G::Action>>>{
+impl<'a, G, I> ParentSelectionIter<'a, G, I> where G: 'a + Game, I: Iterator<Item=Edge<'a, G::State, VertexData, EdgeData<G>>> {
     pub fn new(parents: I, explore_bias: f64, epoch: usize) -> Self {
         ParentSelectionIter {
             parents: parents,
@@ -60,29 +58,29 @@ impl<'a, G, I> ParentSelectionIter<'a, G, I> where G: 'a + Game, I: Iterator<Ite
     }
 }
 
-impl<'a, G, I> Iterator for ParentSelectionIter<'a, G, I>
-    where G: 'a + Game, I: Iterator<Item=search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G::Statistics, G::Action>>> {
-        type Item = search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G::Statistics, G::Action>>;
+// impl<'a, G, I> Iterator for ParentSelectionIter<'a, G, I>
+//     where G: 'a + Game, I: Iterator<Item=Edge<'a, G::State, VertexData, EdgeData<G>>> {
+//         type Item = Edge<'a, G::State, VertexData, EdgeData<G>>;
 
-        fn next(&mut self) -> Option<search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G::Statistics, G::Action>>> {
-            loop {
-                match self.parents.next() {
-                    None => return None,
-                    Some(e) => {
-                        if e.get_data().visited_in_backtrace_epoch(self.epoch) {
-                            trace!("ParentSelectionIter::next: edge {} (from node {}) was already visited in backtrace epoch {}", e.get_id(), e.get_source().get_id(), self.epoch);
-                            continue
-                        }
-                        if ucb::is_best_child::<G>(&e, self.explore_bias) {
-                            trace!("ParentSelectionIter::next: edge {} (from node {}) is a best child", e.get_id(), e.get_source().get_id());
-                            return Some(e)
-                        }
-                        trace!("ParentSelectionIter::next: edge {} (data {:?}) is not a best child", e.get_id(), e.get_data());
-                    },
-                }
-            }
-        }
-    }
+//         fn next(&mut self) -> Option<Edge<'a, G::State, VertexData, EdgeData<G>>> {
+//             loop {
+//                 match self.parents.next() {
+//                     None => return None,
+//                     Some(e) => {
+//                         if e.get_data().visited_in_backtrace_epoch(self.epoch) {
+//                             trace!("ParentSelectionIter::next: edge {} (from node {}) was already visited in backtrace epoch {}", e.get_id(), e.get_source().get_id(), self.epoch);
+//                             continue
+//                         }
+//                         if ucb::is_best_child::<G>(&e, self.explore_bias) {
+//                             trace!("ParentSelectionIter::next: edge {} (from node {}) is a best child", e.get_id(), e.get_source().get_id());
+//                             return Some(e)
+//                         }
+//                         trace!("ParentSelectionIter::next: edge {} (data {:?}) is not a best child", e.get_id(), e.get_data());
+//                     },
+//                 }
+//             }
+//         }
+//     }
 
 // pub fn backprop_payoff<'a, R: Rng>(node: Node<'a>, epoch: usize, payoff: Payoff,
 //                                    role: thud_game::Role, explore_bias: f64, rng: &mut R) {
