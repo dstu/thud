@@ -1,3 +1,5 @@
+//! Graph component definitions for MCTS.
+
 mod edge;
 mod traversals;
 mod vertex;

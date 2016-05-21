@@ -29,19 +29,33 @@ use std::result::Result;
 
 use ::rand::Rng;
 
+/// Type-safe count of the number of major steps taken by a search algorithm.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Epoch(pub u32);
 
 impl Epoch {
+    /// Unwraps `self` into a `u32`.
     pub fn as_u32(&self) -> u32 { self.0 }
 
+    /// Returns the `Epoch` subsequent to `self`.
     pub fn next(&self) -> Self { Epoch(self.0 + 1) }
 }
 
+/// Identifies which thread a search algorithm is executing on.
+///
+/// Threads are numbered, starting from 0. This provides a type-safe wrapper
+/// starting from that value. Some data structures keep per-thread data that is
+/// addressed using this type. There is a limit to how many threads are
+/// supported (the width of a `usize`), and the constructor for this type
+/// ensures that a `ThreadId` will not be created beyond of this limit.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ThreadId(u8);
 
 impl ThreadId {
+    /// Returns a new `ThreadId` corresponding to the given value.
+    ///
+    /// Panics if `id` is too large (beyond the limit of per-thread structures
+    /// used in search).
     pub fn new(id: u8) -> Self {
         let max_thread_count = (mem::size_of::<usize>() * 8) as u8;
         assert!(id < max_thread_count,
@@ -49,16 +63,26 @@ impl ThreadId {
         ThreadId(id)
     }
 
+    /// Unwraps `self` into a `u8`.
     pub fn as_u8(&self) -> u8 { self.0 }
 }
 
+/// Wraps a decision made by the UCB rollout policy.
+///
+/// This is distinct from other types in the `ucb` module to provide a
+/// representation of the decision of UCB rollout that is not bound to the
+/// lifetime of a `search_graph` structure.
 #[derive(Clone, Debug)]
 pub enum UcbValue {
+    /// Select a game state because it has not yet been explored (and so no
+    /// finite UCB policy value is available).
     Select,
+    /// Select a game state with the given UCB policy value.
     Value(f64),
 }
 
 impl UcbValue {
+    /// Constructs a `UcbValue` from a `ucb::UcbSuccess`.
     pub fn from_success<'a, G: Game>(success: &ucb::UcbSuccess<'a, G>) -> Self {
         match success {
             &ucb::UcbSuccess::Select(_) => UcbValue::Select,
@@ -67,26 +91,43 @@ impl UcbValue {
     }
 }
 
+/// Statistics for a specific game action.
+///
+/// This type is used for reporting summary statistics for the next decision to
+/// make after executing search.
 #[derive(Clone, Debug)]
 pub struct ActionStatistics<G> where G: Game {
+    /// The action.
     pub action: G::Action,
+    /// The action's expected payoff.
     pub payoff: G::Payoff,
+    /// The result of UCB rollout for that action (used for debugging MCTS with
+    /// a UCB rollout policy).
     pub ucb: Result<UcbValue, ucb::UcbError>,
 }
 
+/// Creates a new search graph suitable for MCTS search through the state space
+/// of the game `G`.
 pub fn new_search_graph<G>() -> search_graph::Graph<G::State, VertexData, EdgeData<G>>
      where G: Game {
          search_graph::Graph::<G::State, VertexData, EdgeData<G>>::new()
      }
 
+/// Epoch-specific settings for a round of MCTS search.
 #[derive(Clone, Copy, Debug)]
 pub struct SearchSettings {
+    /// The number of simulations to run when estimating payout of a new game state.
     pub simulation_count: u32,
+    /// The exploration bias term to use for the UCB policy.
     pub explore_bias: f64,
+    /// The number of worker threads to run during rollout. (Each thread may
+    /// follow a distinct path through the game graph to a different end state.)
     pub rollout_tasks: u32,
+    /// The number of worker threads to run during simulation.
     pub simulation_tasks: u32,
 }
 
+/// State of MCTS search. This is the main entrypoint for running MCTS graph search.
 pub struct SearchState<R, G, X, Y, Z>
     where R: Rng, G: Game, X: RolloutSelector<G, R>, Y: for<'a> BackpropSelector<'a, G, R>, Z: Simulator<G, R> {
     epoch: Epoch,
@@ -96,6 +137,7 @@ pub struct SearchState<R, G, X, Y, Z>
 
 impl<R, G, X, Y, Z> SearchState<R, G, X, Y, Z>
     where R: Rng, G: Game, X: RolloutSelector<G, R>, Y: for<'a> BackpropSelector<'a, G, R>, Z: Simulator<G, R> {
+    /// Returns a new `SearchState` using the given random number generator.
     pub fn new(rng: R) -> Self {
         SearchState {
             epoch: Default::default(),
@@ -104,6 +146,8 @@ impl<R, G, X, Y, Z> SearchState<R, G, X, Y, Z>
         }
     }
 
+    /// Initializes `graph` for search for the next move to make from
+    /// `root_state`.
     pub fn initialize(&self, graph: &mut search_graph::Graph<G::State, VertexData,
                                                              EdgeData<G>>,
                       root_state: &G::State) {
@@ -113,10 +157,13 @@ impl<R, G, X, Y, Z> SearchState<R, G, X, Y, Z>
         }
     }
 
+    /// Returns the current search epoch.
     pub fn epoch(&self) -> &Epoch {
         &self.epoch
     }
 
+    /// Increments the search epoch and runs a round of MCTS searching for the
+    /// next move to make from `root_state`.
     pub fn step<'a, F>(&mut self, graph: &'a mut search_graph::Graph<G::State, VertexData, EdgeData<G>>,
                        root_state: &G::State, settings: &SearchSettings)
                        -> Result<Vec<ActionStatistics<G>>, SearchError<<X as RolloutSelector<G, R>>::Error, 

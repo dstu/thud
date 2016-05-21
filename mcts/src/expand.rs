@@ -1,4 +1,5 @@
-// use super::base::*;
+//! Utility module for expapnsion of game state at a graph node.
+
 use super::{EdgeData, Game, State, VertexData};
 use ::search_graph;
 

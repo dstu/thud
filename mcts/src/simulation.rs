@@ -1,3 +1,5 @@
+//! Interface for deriving payoffs from game state.
+
 use super::{Game, SearchSettings};
 
 use std::convert::From;

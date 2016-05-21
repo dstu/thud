@@ -1,3 +1,5 @@
+//! Interface and implementations for the rollout phase of MCTS.
+
 use super::{EdgeData, Game, Payoff, SearchSettings, ThreadId, VertexData};
 
 mod error;

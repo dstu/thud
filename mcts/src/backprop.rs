@@ -1,3 +1,6 @@
+//! Interface and implementations for backpropagation of game payoffs through a
+//! search graph.
+
 use super::{Game, EdgeData, SearchSettings, ThreadId, VertexData};
 
 use std::error::Error;

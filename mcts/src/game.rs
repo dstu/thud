@@ -1,3 +1,5 @@
+//! Base interfaces defining a game whose state space can be searched with MCTS.
+
 use std::cmp::Eq;
 use std::fmt::Debug;
 use std::hash::Hash;

@@ -1,3 +1,5 @@
+//! Top-level error types for graph search.
+
 use std::error::Error;
 use std::fmt;
 

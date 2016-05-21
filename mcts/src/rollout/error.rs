@@ -1,3 +1,5 @@
+//! Error type for MCTS rollout.
+
 use ::game::Game;
 use ::graph::{EdgeData, VertexData};
 
