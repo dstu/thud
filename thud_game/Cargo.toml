@@ -15,5 +15,5 @@ rand = { version = "0.3.12", optional = true }
 syncbox = { version = "0.2.4", optional = true }
 
 [dev-dependencies]
-quickcheck = "0.2"
-quickcheck_macros = "0.2"
+quickcheck = "0.5"
+quickcheck_macros = "0.5"
