@@ -8,11 +8,11 @@ use super::coordinate::{Coordinate, Convolution, Direction};
 
 use std::clone::Clone;
 use std::cmp::{Eq, PartialEq};
+use std::collections::hash_map::DefaultHasher;
 use std::default::Default;
 use std::fmt;
-use std::marker::Reflect;
 use std::ops::{Index, IndexMut};
-use std::hash::{Hash, Hasher, SipHasher};
+use std::hash::{Hash, Hasher};
 
 /// A physical token on the game board.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -294,7 +294,7 @@ impl<'a> Iterator for OccupiedCellsIter<'a> {
     }
 }
 
-pub trait CellEquivalence: Clone + Eq + Hash + PartialEq + Reflect + fmt::Debug {
+pub trait CellEquivalence: Clone + Eq + Hash + PartialEq + fmt::Debug {
     fn hash_board<H>(board: &Cells, state: &mut H) where H: Hasher;
     fn boards_equal(b1: &Cells, b2: &Cells) -> bool;
 }
@@ -332,14 +332,14 @@ pub struct TranspositionalEquivalence;
 
 impl CellEquivalence for TranspositionalEquivalence {
     fn hash_board<H>(board: &Cells, state: &mut H) where H: Hasher {
-        let mut hashers = [SipHasher::new(),
-                           SipHasher::new(),
-                           SipHasher::new(),
-                           SipHasher::new(),
-                           SipHasher::new(),
-                           SipHasher::new(),
-                           SipHasher::new(),
-                           SipHasher::new(),];
+        let mut hashers = [DefaultHasher::new(),
+                           DefaultHasher::new(),
+                           DefaultHasher::new(),
+                           DefaultHasher::new(),
+                           DefaultHasher::new(),
+                           DefaultHasher::new(),
+                           DefaultHasher::new(),
+                           DefaultHasher::new(),];
         for c in Coordinate::all() {
             for (i, v) in Convolution::all().iter().enumerate() {
                 board[v.convolve(*c)].hash(&mut hashers[i]);
