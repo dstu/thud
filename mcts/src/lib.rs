@@ -1,5 +1,3 @@
-#![feature(reflect_marker)]
-
 extern crate itertools;
 #[macro_use] extern crate log;
 extern crate rand;
