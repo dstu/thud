@@ -1,0 +1,2 @@
+[workspace]
+members = ["mcts", "thud_game", "thud_ui_common", "thud_ui_console"]
