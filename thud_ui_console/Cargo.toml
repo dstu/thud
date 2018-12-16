@@ -9,7 +9,7 @@ log = "0.3.5"
 mcts = { path = "../mcts" }
 thud-game = { path = "../thud_game" }
 thud-ui-common = { path = "../thud_ui_common" }
-rand = "0.3.12"
+rand = "0.6.1"
 
 [profile.release]
 lto = true
