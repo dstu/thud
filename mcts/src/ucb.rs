@@ -3,6 +3,7 @@
 use super::{EdgeData, Epoch, Game, Payoff, State, Statistics, VertexData};
 use ::search_graph;
 use ::rand::Rng;
+use ::rand::distributions::Distribution;
 
 use std::cmp::Ordering;
 use std::error::Error;
@@ -316,7 +317,7 @@ pub fn find_best_child_edge_index<'a, G, R>(c: &search_graph::nav::ChildList<'a,
                             // We use reservoir sampling to break ties.
                             // trace!("find_best_child_edge_index: found indices {} and {} with score {}; sampling to break tie", best_index, index, v);
                             sampling_count += 1;
-                            if rng.gen_weighted_bool(sampling_count) {
+                            if rand::distributions::Bernoulli::new(1.0 / (sampling_count as f64)).sample(rng) {
                                 best_index = index;
                             }
                             // trace!("find_best_child_edge_index: updated best index to {} after sampling", best_index);
