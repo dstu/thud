@@ -1,8 +1,6 @@
-use super::payoff::Payoff;
-
-use board;
+use crate::ai::mcts::payoff::Payoff;
+use crate::{board, Role};
 use mcts;
-use Role;
 
 use std::clone::Clone;
 use std::fmt;
@@ -105,10 +103,10 @@ where
 
 #[cfg(test)]
 mod test {
+  use crate::board::TranspositionalEquivalence;
   use mcts::Statistics;
-  use thud_game;
-  type ThudPayoff = ::Payoff<board::TranspositionalEquivalence>;
-  type ThudStatistics = ::Statistics<board::TranspositionalEquivalence>;
+  type ThudPayoff = crate::ai::mcts::Payoff<TranspositionalEquivalence>;
+  type ThudStatistics = crate::ai::mcts::Statistics<TranspositionalEquivalence>;
 
   #[test]
   fn new_statistics_zero_ok() {

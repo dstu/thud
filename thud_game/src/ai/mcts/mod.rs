@@ -1,8 +1,7 @@
-use board;
+use crate::{board, Role};
+use crate::actions::Action;
+use crate::state::State;
 use mcts;
-
-use state::State;
-use {Action, Role};
 
 mod payoff;
 mod statistics;
@@ -12,7 +11,7 @@ pub use self::statistics::Statistics;
 
 use std::marker::PhantomData;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Game<E>
 where
   E: board::CellEquivalence,
@@ -24,7 +23,7 @@ impl<E> ::mcts::State for State<E>
 where
   E: board::CellEquivalence,
 {
-  type Action = ::Action;
+  type Action = crate::actions::Action;
   type Payoff = Payoff<E>;
   type PlayerId = Role;
 
@@ -62,20 +61,20 @@ where
   type Action = Action;
   type PlayerId = Role;
   type Payoff = Payoff<E>;
-  type State = ::state::State<E>;
+  type State = crate::state::State<E>;
   type Statistics = Statistics<E>;
 }
 
 pub mod allow_transpositions {
-  pub type Game = super::Game<::board::SimpleEquivalence>;
-  pub type Payoff = super::Payoff<::board::SimpleEquivalence>;
-  pub type State = ::state::State<::board::SimpleEquivalence>;
-  pub type Statistics = super::Statistics<::board::SimpleEquivalence>;
+  pub type Game = super::Game<crate::board::SimpleEquivalence>;
+  pub type Payoff = super::Payoff<crate::board::SimpleEquivalence>;
+  pub type State = crate::state::State<crate::board::SimpleEquivalence>;
+  pub type Statistics = super::Statistics<crate::board::SimpleEquivalence>;
 }
 
 pub mod deconvolve_transpositions {
-  pub type Game = super::Game<::board::TranspositionalEquivalence>;
-  pub type Payoff = super::Payoff<::board::TranspositionalEquivalence>;
-  pub type State = ::state::State<::board::TranspositionalEquivalence>;
-  pub type Statistics = super::Statistics<::board::TranspositionalEquivalence>;
+  pub type Game = super::Game<crate::board::TranspositionalEquivalence>;
+  pub type Payoff = super::Payoff<crate::board::TranspositionalEquivalence>;
+  pub type State = crate::state::State<crate::board::TranspositionalEquivalence>;
+  pub type Statistics = super::Statistics<crate::board::TranspositionalEquivalence>;
 }

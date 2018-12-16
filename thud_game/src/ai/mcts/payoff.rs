@@ -1,6 +1,5 @@
-use board;
+use crate::{board, Role};
 use mcts;
-use Role;
 
 use std::default::Default;
 use std::fmt;
@@ -99,7 +98,7 @@ impl<E> mcts::Payoff for Payoff<E>
 where
   E: board::CellEquivalence,
 {
-  type State = ::state::State<E>;
+  type State = crate::state::State<E>;
   type PlayerId = Role;
 
   fn from_state(state: &Self::State) -> Option<Payoff<E>> {
