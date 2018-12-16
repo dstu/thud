@@ -1,6 +1,7 @@
 //! Upper confidence bound (UCB1) algorithm for graph search.
 
 use super::{EdgeData, Epoch, Game, Payoff, State, Statistics, VertexData};
+use log::error;
 use rand::distributions::Distribution;
 use rand::Rng;
 use search_graph;

@@ -43,7 +43,7 @@ where
     if let Some(_) = G::Payoff::from_state(node.get_label()) {
       break;
     } else {
-      match try!(selector.select(node.get_child_list(), rng)) {
+      match selector.select(node.get_child_list(), rng)? {
         Some(best_child) => {
           // Selector chose a child node.
           let previous_traversals = best_child.get_data().mark_rollout_traversal(thread);

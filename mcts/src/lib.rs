@@ -1,9 +1,3 @@
-extern crate itertools;
-#[macro_use]
-extern crate log;
-extern crate rand;
-extern crate search_graph;
-
 pub mod backprop;
 pub mod expand;
 mod game;

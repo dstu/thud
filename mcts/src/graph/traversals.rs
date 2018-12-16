@@ -1,4 +1,4 @@
-use ThreadId;
+use crate::ThreadId;
 
 use std::clone::Clone;
 use std::convert::From;

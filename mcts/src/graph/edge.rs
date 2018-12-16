@@ -1,4 +1,4 @@
-use {Game, ThreadId};
+use crate::{Game, ThreadId};
 
 use std::clone::Clone;
 use std::default::Default;

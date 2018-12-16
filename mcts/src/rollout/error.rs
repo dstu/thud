@@ -1,7 +1,7 @@
 //! Error type for MCTS rollout.
 
-use game::Game;
-use graph::{EdgeData, VertexData};
+use crate::game::Game;
+use crate::graph::{EdgeData, VertexData};
 
 use std::convert::From;
 use std::error::Error;
