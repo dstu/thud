@@ -1,9 +1,6 @@
 #![feature(associated_type_defaults)]
 #![feature(const_fn)]
 #![feature(custom_attribute)]
-#![feature(fn_traits)]
-#![feature(reflect_marker)]
-#![feature(unboxed_closures)]
 #![cfg_attr(test, feature(plugin))]
 #![cfg_attr(test, plugin(quickcheck_macros))]
 
@@ -11,11 +8,10 @@
 extern crate mcts;
 #[cfg(test)]
 extern crate quickcheck;
+#[macro_use] extern crate r4;
 #[cfg(feature = "ai-mcts")]
 extern crate syncbox;
 
-#[macro_use]
-extern crate log;
 #[macro_use]
 pub mod coordinate;
 pub mod board;
