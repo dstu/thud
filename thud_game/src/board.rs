@@ -1,5 +1,3 @@
-// -*- mode: rust; rust-indent-offset: 4; -*-
-
 use super::Role;
 use super::actions::Action;
 use super::coordinate::{Coordinate, Convolution, Direction};

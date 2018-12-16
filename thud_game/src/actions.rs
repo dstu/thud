@@ -1,5 +1,3 @@
-// -*- mode: rust; rust-indent-offset: 4; -*-
-
 use super::coordinate::Coordinate;
 use super::end;
 
