@@ -4,26 +4,14 @@
 #![cfg_attr(test, feature(plugin))]
 #![cfg_attr(test, plugin(quickcheck_macros))]
 
-#[cfg(feature = "ai-mcts")]
-extern crate mcts;
-#[cfg(test)]
-extern crate quickcheck;
-#[macro_use] extern crate r4;
-#[cfg(feature = "ai-mcts")]
-extern crate syncbox;
-
-#[macro_use]
-pub mod coordinate;
+#[macro_use] pub mod coordinate;
+#[macro_use] pub mod actions;
 pub mod board;
-#[macro_use]
-pub mod actions;
-#[cfg(any(feature = "ai", feature = "ai-mcts"))]
-pub mod ai;
 pub mod end;
 pub mod state;
 pub mod util;
 
-pub use actions::Action;
+#[cfg(any(feature = "ai", feature = "ai-mcts"))] pub mod ai;
 
 use std::error::Error;
 use std::fmt;

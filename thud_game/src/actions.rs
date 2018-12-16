@@ -60,10 +60,10 @@ impl fmt::Debug for Action {
       &Action::Move(start, end) => write!(f, "Move({:?}, {:?})", start, end),
       &Action::Hurl(start, end) => write!(f, "Hurl({:?}, {:?})", start, end),
       &Action::Shove(start, end, capture_count, captured) => {
-        try!(write!(f, "Shove({:?}, {:?}, [", start, end));
-        try!(write!(f, "{:?}", captured[0]));
+        write!(f, "Shove({:?}, {:?}, [", start, end)?;
+        write!(f, "{:?}", captured[0])?;
         for i in 1..capture_count {
-          try!(write!(f, ", {:?}", captured[i as usize]));
+          write!(f, ", {:?}", captured[i as usize])?;
         }
         write!(f, "])")
       }
@@ -104,7 +104,7 @@ impl Eq for Action {}
 #[macro_export]
 macro_rules! move_literal {
   (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr)) => {
-    $crate::Action::Move(
+    $crate::actions::Action::Move(
       $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
       $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
     )
@@ -115,7 +115,7 @@ macro_rules! move_literal {
 macro_rules! shove_literal {
     (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
      [($capture_1_row: expr, $capture_1_col: expr)]) =>
-        ($crate::Action::Shove(
+        ($crate::actions::Action::Shove(
             $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
             $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
             1,
@@ -129,7 +129,7 @@ macro_rules! shove_literal {
     (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
      [($capture_1_row: expr, $capture_1_col: expr),
       ($capture_2_row: expr, $capture_2_col: expr)]) =>
-        ($crate::Action::Shove(
+        ($crate::actions::Action::Shove(
             $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
             $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
             2,
@@ -144,7 +144,7 @@ macro_rules! shove_literal {
      [($capture_1_row: expr, $capture_1_col: expr),
       ($capture_2_row: expr, $capture_2_col: expr),
       ($capture_3_row: expr, $capture_3_col: expr)]) =>
-        ($crate::Action::Shove(
+        ($crate::actions::Action::Shove(
             $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
             $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
             3,
@@ -160,7 +160,7 @@ macro_rules! shove_literal {
       ($capture_2_row: expr, $capture_2_col: expr),
       ($capture_3_row: expr, $capture_3_col: expr),
       ($capture_4_row: expr, $capture_4_col: expr)]) =>
-        ($crate::Action::Shove(
+        ($crate::actions::Action::Shove(
             $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
             $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
             4,
@@ -177,7 +177,7 @@ macro_rules! shove_literal {
       ($capture_3_row: expr, $capture_3_col: expr),
       ($capture_4_row: expr, $capture_4_col: expr),
       ($capture_5_row: expr, $capture_5_col: expr)]) =>
-        ($crate::Action::Shove(
+        ($crate::actions::Action::Shove(
             $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
             $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
             5,
@@ -195,7 +195,7 @@ macro_rules! shove_literal {
       ($capture_4_row: expr, $capture_4_col: expr),
       ($capture_5_row: expr, $capture_5_col: expr),
       ($capture_6_row: expr, $capture_6_col: expr)]) =>
-        ($crate::Action::Shove(
+        ($crate::actions::Action::Shove(
             $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
             $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
             6,
@@ -214,7 +214,7 @@ macro_rules! shove_literal {
       ($capture_5_row: expr, $capture_5_col: expr),
       ($capture_6_row: expr, $capture_6_col: expr),
       ($capture_7_row: expr, $capture_7_col: expr)]) =>
-        ($crate::Action::Shove(
+        ($crate::actions::Action::Shove(
             $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
             $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
             7,
@@ -224,16 +224,14 @@ macro_rules! shove_literal {
              $crate::coordinate::Coordinate::new_unchecked($capture_4_row, $capture_4_col),
              $crate::coordinate::Coordinate::new_unchecked($capture_5_row, $capture_5_col),
              $crate::coordinate::Coordinate::new_unchecked($capture_6_row, $capture_6_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_7_row, $capture_7_col),,]));
+             $crate::coordinate::Coordinate::new_unchecked($capture_7_row, $capture_7_col),]));
 }
 
 #[cfg(test)]
 mod test {
-  use actions::Action;
-  use board;
-  use end;
-  use state::State;
-  use Role;
+  use crate::actions::Action;
+  use crate::{board, end, Role};
+  use crate::state::State;
 
   #[test]
   fn troll_can_move() {
@@ -350,7 +348,7 @@ d___d_________d
     );
     let actions = {
       let mut v: Vec<Action> = state.role_actions(Role::Troll).collect();
-      v.sort_by(::util::cmp_actions);
+      v.sort_by(crate::util::cmp_actions);
       v
     };
     let desired_actions = {
@@ -391,7 +389,7 @@ d___d_________d
         shove_literal!((6, 9), (5, 10), [(5, 9), (4, 9)]),
         // Troll at (7, 5).
       ];
-      v.sort_by(::util::cmp_actions);
+      v.sort_by(crate::util::cmp_actions);
       v
     };
     assert_eq!(actions, desired_actions);

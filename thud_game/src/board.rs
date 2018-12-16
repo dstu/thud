@@ -1,7 +1,8 @@
-use super::actions::Action;
-use super::coordinate::{Convolution, Coordinate, Direction};
-use super::Role;
+use crate::actions::Action;
+use crate::coordinate::{Convolution, Coordinate, Direction};
+use crate::Role;
 
+use r4::iterate;
 #[cfg(test)]
 use quickcheck::{Arbitrary, Gen};
 
@@ -544,9 +545,9 @@ impl Arbitrary for Cells {
 #[cfg(test)]
 mod test {
   use super::{decode_board, Cells, Content, Token};
-  use actions::Action;
-  use coordinate::{Coordinate, Direction};
-  use util;
+  use crate::actions::Action;
+  use crate::coordinate::{Coordinate, Direction};
+  use crate::util;
 
   #[test]
   fn decode_board_ok() {

@@ -3,6 +3,7 @@ use super::board;
 use super::coordinate::{Convolution, Coordinate};
 use super::end;
 use super::Role;
+use r4::iterate;
 
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -176,9 +177,8 @@ mod test {
   use std::collections::HashMap;
 
   use super::*;
-  use actions::Action;
-  use board;
-  use end;
+  use crate::actions::Action;
+  use crate::{board, end};
 
   fn new_simple_state() -> State<board::SimpleEquivalence> {
     State::new(board::Cells::default())
