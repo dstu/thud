@@ -10,45 +10,58 @@ use std::convert::From;
 use std::error::Error;
 use std::result::Result;
 
-use ::rand::Rng;
-use ::search_graph::nav::{ChildList, Edge, Node};
+use rand::Rng;
+use search_graph::nav::{ChildList, Edge, Node};
 
-pub trait RolloutSelector<G, R>: From<SearchSettings> where G: Game, R: Rng {
-    type Error: Error;
+pub trait RolloutSelector<G, R>: From<SearchSettings>
+where
+  G: Game,
+  R: Rng,
+{
+  type Error: Error;
 
-    fn select<'a>(&self, children: ChildList<'a, G::State, VertexData, EdgeData<G>>,
-                  rng: &mut R) -> Result<Option<Edge<'a, G::State, VertexData, EdgeData<G>>>, Self::Error>;
+  fn select<'a>(
+    &self,
+    children: ChildList<'a, G::State, VertexData, EdgeData<G>>,
+    rng: &mut R,
+  ) -> Result<Option<Edge<'a, G::State, VertexData, EdgeData<G>>>, Self::Error>;
 }
 
 pub fn rollout<'a, G, S, R>(
-    mut node: Node<'a, G::State, VertexData, EdgeData<G>>, thread: &ThreadId,
-    selector: S, rng: &mut R)
-    -> Result<Node<'a, G::State, VertexData, EdgeData<G>>, RolloutError<'a, G, S::Error>>
-    where G: 'a + Game, S: RolloutSelector<G, R>, R: Rng {
-    let mut trace = Vec::new();  // For backtracking.
-    loop {
-        if let Some(_) = G::Payoff::from_state(node.get_label()) {
-            break
-        } else {
-            match try!(selector.select(node.get_child_list(), rng)) {
-                Some(best_child) => {
-                    // Selector chose a child node.
-                    let previous_traversals = best_child.get_data().mark_rollout_traversal(thread);
-                    if previous_traversals.traversed_in_thread(thread) {
-                        return Err(RolloutError::Cycle(trace))
-                    }
-                    node = best_child.get_target();
-                    trace.push(best_child);
-                },
-                None => {
-                    // Selector found no suitable child node.
-                    // TODO: handle this more intelligently.
-                    panic!("selector declined to choose a child")
-                },
-            }
+  mut node: Node<'a, G::State, VertexData, EdgeData<G>>,
+  thread: &ThreadId,
+  selector: S,
+  rng: &mut R,
+) -> Result<Node<'a, G::State, VertexData, EdgeData<G>>, RolloutError<'a, G, S::Error>>
+where
+  G: 'a + Game,
+  S: RolloutSelector<G, R>,
+  R: Rng,
+{
+  let mut trace = Vec::new(); // For backtracking.
+  loop {
+    if let Some(_) = G::Payoff::from_state(node.get_label()) {
+      break;
+    } else {
+      match try!(selector.select(node.get_child_list(), rng)) {
+        Some(best_child) => {
+          // Selector chose a child node.
+          let previous_traversals = best_child.get_data().mark_rollout_traversal(thread);
+          if previous_traversals.traversed_in_thread(thread) {
+            return Err(RolloutError::Cycle(trace));
+          }
+          node = best_child.get_target();
+          trace.push(best_child);
         }
+        None => {
+          // Selector found no suitable child node.
+          // TODO: handle this more intelligently.
+          panic!("selector declined to choose a child")
+        }
+      }
     }
-    Ok(node)
+  }
+  Ok(node)
 }
 
 //     // Upward scan to do best-child backprop.

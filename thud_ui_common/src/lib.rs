@@ -1,6 +1,8 @@
 extern crate chrono;
-#[macro_use] extern crate clap;
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate clap;
+#[macro_use]
+extern crate log;
 extern crate fern;
 extern crate mcts;
 extern crate rand;
@@ -38,14 +40,14 @@ arg_enum! {
 }
 
 impl InitialBoard {
-    pub fn cells(&self) -> board::Cells {
-        match *self {
-            InitialBoard::Default => board::decode_board(DEFAULT_CELLS),
-            InitialBoard::TrollEndgame => board::decode_board(TROLL_ENDGAME),
-            InitialBoard::DwarfEndgame => board::decode_board(DWARF_ENDGAME),
-            InitialBoard::DwarfBoxed => board::decode_board(DWARF_BOXED),
-        }
+  pub fn cells(&self) -> board::Cells {
+    match *self {
+      InitialBoard::Default => board::decode_board(DEFAULT_CELLS),
+      InitialBoard::TrollEndgame => board::decode_board(TROLL_ENDGAME),
+      InitialBoard::DwarfEndgame => board::decode_board(DWARF_ENDGAME),
+      InitialBoard::DwarfBoxed => board::decode_board(DWARF_BOXED),
     }
+  }
 }
 
 arg_enum! {
@@ -128,89 +130,87 @@ _dd_________dd_
 .....d___d.....
 "#;
 
-pub fn set_args<'a, 'b>(app: App<'a, 'b>, flags: &[&str]) -> App<'a, 'b> where 'a: 'b {
-    let populated_flags: Vec<Arg<'static, 'static>> = flags.iter().map(|f| match *f {
-        x if x == ITERATION_COUNT_FLAG =>
-            Arg::with_name(ITERATION_COUNT_FLAG)
-            .short("i")
-            .long("iterations")
-            .takes_value(true)
-            .value_name("ITERATIONS")
-            .help("Number of Monte Carlo iterations to run per epoch")
-            .required(true),
-        x if x == SIMULATION_COUNT_FLAG =>
-            Arg::with_name(SIMULATION_COUNT_FLAG)
-            .short("s")
-            .long("simulations")
-            .takes_value(true)
-            .value_name("SIMULATIONS")
-            .help("Number of simulations to run at each expansion step")
-            .required(true),
-        x if x == EXPLORATION_BIAS_FLAG =>
-            Arg::with_name(EXPLORATION_BIAS_FLAG)
-            .short("b")
-            .long("exploration_bias")
-            .takes_value(true)
-            .value_name("BIAS")
-            .help("Exploration bias for UCB computation")
-            .required(true),
-        x if x == INITIAL_BOARD_FLAG =>
-            Arg::with_name(INITIAL_BOARD_FLAG)
-            .long("board")
-            .takes_value(true)
-            .possible_values(&["default", "trollendgame", "dwarfendgame", "dwarfboxed"])
-            .help("Initial board configuration"),
-        x if x == INITIAL_PLAYER_FLAG =>
-            Arg::with_name(INITIAL_PLAYER_FLAG)
-            .short("p")
-            .long("player")
-            .takes_value(true)
-            .possible_values(&["dwarf", "troll"])
-            .help("Initial player to play"),
-        x if x == AI_PLAYER_FLAG =>
-            Arg::with_name(AI_PLAYER_FLAG)
-            .short("p")
-            .long("player")
-            .takes_value(true)
-            .possible_values(&["dwarf", "troll"])
-            .help("Side that the AI will play"),
-        x if x == LOG_LEVEL_FLAG =>
-            Arg::with_name(LOG_LEVEL_FLAG)
-            .long("log_level")
-            .takes_value(true)
-            .possible_values(&["info", "trace", "error", "debug", "off"])
-            .help("Logging level"),
-        x if x == MOVE_SELECTION_CRITERION_FLAG =>
-            Arg::with_name(MOVE_SELECTION_CRITERION_FLAG)
-            .long("move_selection")
-            .takes_value(true)
-            .possible_values(&["visitcount", "ucb"])
-            .help("Criteria for selecting the best move to make"),
-        x if x == RNG_SEED_FLAG =>
-            Arg::with_name(RNG_SEED_FLAG)
-            .long("seed")
-            .takes_value(true)
-            .help("Manually specify RNG seed"),
-        x if x == COMPACT_SEARCH_GRAPH_FLAG =>
-            Arg::with_name(COMPACT_SEARCH_GRAPH_FLAG)
-            .long("compact_graph")
-            .takes_value(false)
-            .help("Compact the search graph after each move"),
-        x => panic!("Unrecognized flag identifier '{}'", x),
-    }).collect();
-    app.args(&populated_flags)
+pub fn set_args<'a, 'b>(app: App<'a, 'b>, flags: &[&str]) -> App<'a, 'b>
+where
+  'a: 'b,
+{
+  let populated_flags: Vec<Arg<'static, 'static>> = flags
+    .iter()
+    .map(|f| match *f {
+      x if x == ITERATION_COUNT_FLAG => Arg::with_name(ITERATION_COUNT_FLAG)
+        .short("i")
+        .long("iterations")
+        .takes_value(true)
+        .value_name("ITERATIONS")
+        .help("Number of Monte Carlo iterations to run per epoch")
+        .required(true),
+      x if x == SIMULATION_COUNT_FLAG => Arg::with_name(SIMULATION_COUNT_FLAG)
+        .short("s")
+        .long("simulations")
+        .takes_value(true)
+        .value_name("SIMULATIONS")
+        .help("Number of simulations to run at each expansion step")
+        .required(true),
+      x if x == EXPLORATION_BIAS_FLAG => Arg::with_name(EXPLORATION_BIAS_FLAG)
+        .short("b")
+        .long("exploration_bias")
+        .takes_value(true)
+        .value_name("BIAS")
+        .help("Exploration bias for UCB computation")
+        .required(true),
+      x if x == INITIAL_BOARD_FLAG => Arg::with_name(INITIAL_BOARD_FLAG)
+        .long("board")
+        .takes_value(true)
+        .possible_values(&["default", "trollendgame", "dwarfendgame", "dwarfboxed"])
+        .help("Initial board configuration"),
+      x if x == INITIAL_PLAYER_FLAG => Arg::with_name(INITIAL_PLAYER_FLAG)
+        .short("p")
+        .long("player")
+        .takes_value(true)
+        .possible_values(&["dwarf", "troll"])
+        .help("Initial player to play"),
+      x if x == AI_PLAYER_FLAG => Arg::with_name(AI_PLAYER_FLAG)
+        .short("p")
+        .long("player")
+        .takes_value(true)
+        .possible_values(&["dwarf", "troll"])
+        .help("Side that the AI will play"),
+      x if x == LOG_LEVEL_FLAG => Arg::with_name(LOG_LEVEL_FLAG)
+        .long("log_level")
+        .takes_value(true)
+        .possible_values(&["info", "trace", "error", "debug", "off"])
+        .help("Logging level"),
+      x if x == MOVE_SELECTION_CRITERION_FLAG => Arg::with_name(MOVE_SELECTION_CRITERION_FLAG)
+        .long("move_selection")
+        .takes_value(true)
+        .possible_values(&["visitcount", "ucb"])
+        .help("Criteria for selecting the best move to make"),
+      x if x == RNG_SEED_FLAG => Arg::with_name(RNG_SEED_FLAG)
+        .long("seed")
+        .takes_value(true)
+        .help("Manually specify RNG seed"),
+      x if x == COMPACT_SEARCH_GRAPH_FLAG => Arg::with_name(COMPACT_SEARCH_GRAPH_FLAG)
+        .long("compact_graph")
+        .takes_value(false)
+        .help("Compact the search graph after each move"),
+      x => panic!("Unrecognized flag identifier '{}'", x),
+    })
+    .collect();
+  app.args(&populated_flags)
 }
 
 pub fn init_logger(logging_level: log::LogLevelFilter) {
-    let config = fern::DispatchConfig {
-        format: Box::new(|msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
-            let time = chrono::Local::now().format("%Y-%m-%d %T%.3f%z").to_string();
-            format!("[{}][{}] {}", time, level, msg)
-        }),
-        output: vec![fern::OutputConfig::stdout()],
-        level: logging_level,
-    };
-    if let Err(e) = fern::init_global_logger(config, log::LogLevelFilter::Trace) {
-        panic!("Filed to initialize global logger: {}", e);
-    }
+  let config = fern::DispatchConfig {
+    format: Box::new(
+      |msg: &str, level: &log::LogLevel, _location: &log::LogLocation| {
+        let time = chrono::Local::now().format("%Y-%m-%d %T%.3f%z").to_string();
+        format!("[{}][{}] {}", time, level, msg)
+      },
+    ),
+    output: vec![fern::OutputConfig::stdout()],
+    level: logging_level,
+  };
+  if let Err(e) = fern::init_global_logger(config, log::LogLevelFilter::Trace) {
+    panic!("Filed to initialize global logger: {}", e);
+  }
 }
