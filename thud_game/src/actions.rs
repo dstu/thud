@@ -260,7 +260,6 @@ _______________
     assert_eq!(
       actions,
       vec!(
-        Action::ProposeEnd,
         Action::Move(coordinate_literal!(5, 14), coordinate_literal!(4, 13)),
         Action::Shove(
           coordinate_literal!(5, 14),
@@ -275,7 +274,8 @@ _______________
             coordinate_literal!(7, 7),
             coordinate_literal!(7, 7)
           ]
-        )
+        ),
+        Action::ProposeEnd,
       )
     );
   }
@@ -303,29 +303,12 @@ Td__________dd_
     ));
     state.do_action(&Action::HandleEndProposal(end::Decision::Decline));
     let actions: Vec<Action> = state.role_actions(Role::Troll).collect();
-    assert!(actions.is_empty());
+    assert_eq!(actions, vec!());
   }
 
   #[test]
   fn troll_can_move_and_shove() {
     let state = State::<board::TranspositionalEquivalence>::new(
-      //             board::decode_board(r#"
-      // ....._____.....
-      // ....______d....
-      // ..._T___d__d...
-      // ..__________d..
-      // .d___d___d___d.
-      // d________d_____
-      // _______T_T____d
-      // _d___T_O_______
-      // _______T______d
-      // d___d_____T___d
-      // .d______T_____.
-      // ..d_T______dd..
-      // ..._____d___...
-      // ....d_____d....
-      // ....._d___.....
-      // "#)
       board::decode_board(
         r#"
 ....._____.....
@@ -387,7 +370,6 @@ d___d_________d
         shove_literal!((6, 9), (6, 10), [(5, 9)]),
         shove_literal!((6, 9), (5, 8), [(5, 9), (4, 9)]),
         shove_literal!((6, 9), (5, 10), [(5, 9), (4, 9)]),
-        // Troll at (7, 5).
       ];
       v.sort_by(crate::util::cmp_actions);
       v

@@ -130,34 +130,42 @@ impl Cells {
   }
 
   /// Returns an iterator over possible move actions that may be taken by a
-  /// piece at `start` moving in `direction`.
+  /// piece of type `role` at `start` moving in `direction`.
   pub fn move_actions_from<'s>(
     &'s self,
-    start: Coordinate,
-    direction: Direction,
+      start: Coordinate,
+      role: Role,
+      direction: Direction,
   ) -> impl Iterator<Item = Action> + 's {
     let cells = self;
     Ray::new(start, direction)
       .skip(1) // Don't look at where move starts from.
+      .take(match role { Role::Dwarf => usize::max_value(), Role::Troll => 1, })
       .take_while(move |end| cells[*end].is_empty()) // Stop when hitting an occupied space.
       .map(move |end| Action::Move(start, end))
   }
 
   /// Returns an iterator over possible move actions that may be taken by a
   /// Dwarf at `start` by moving in `direction`.
-  pub fn hurl_actions_from<'s>(
+  pub fn hurl_action_from<'s>(
     &'s self,
     start: Coordinate,
     direction: Direction,
-  ) -> impl Iterator<Item = Action> + 's {
-    Ray::new(start, direction)
+  ) -> Option<Action> {
+    let positions = Ray::new(start, direction)
       .skip(1)
-      .zip(Ray::new(start, direction.reverse()))
-      .take_while(move |(_, previous)| self[*previous].is_dwarf())
-      .filter_map(move |(end, _)| match self[end] {
-        Content::Occupied(Token::Troll) => Some(Action::Hurl(start, end)),
-        _ => None,
-      })
+      .zip(Ray::new(start, direction.reverse()));
+    for (end, previous) in positions {
+      if !self[previous].is_dwarf() {
+        return None
+      }
+      match self[end] {
+        Content::Occupied(Token::Troll) => return Some(Action::Hurl(start, end)),
+        Content::Empty => continue,
+        _ => return None,
+      }
+    }
+    None
   }
 
   /// Returns an iterator over possible shove actions that may be taken by a
@@ -170,7 +178,7 @@ impl Cells {
     Ray::new(start, direction)
       .skip(1)
       .zip(Ray::new(start, direction.reverse()))
-      .take_while(move |(_, previous)| self[*previous].is_troll())
+      .take_while(move |(end, previous)| self[*previous].is_troll() && self[*end].is_empty())
       .filter_map(move |(end, _)| {
         let mut captured = [coordinate_literal!(7, 7); 7];
         let mut i = 0u8;
@@ -200,28 +208,21 @@ impl Cells {
     allow_end_proposal: bool,
   ) -> impl Iterator<Item = Action> + 's {
     let move_actions = iterate![for position in self.occupied_iter(r);
-                                    for direction in Direction::all().into_iter();
-                                    for action in self.move_actions_from(position, *direction);
-                                    yield action]
-    .take(match r {
-      Role::Dwarf => usize::max_value(),
-      Role::Troll => 1,
-    });
+                                for direction in Direction::all().into_iter();
+                                for action in self.move_actions_from(position, r, *direction);
+                                yield action];
     let hurl_actions = iterate![if r == Role::Dwarf;
-                                    for position in self.occupied_iter(r);
-                                    for direction in Direction::all().into_iter();
-                                    for action in self.hurl_actions_from(position, *direction);
-                                    yield action];
+                                for position in self.occupied_iter(r);
+                                for direction in Direction::all().into_iter();
+                                if let Some(action) = self.hurl_action_from(position, *direction);
+                                yield action];
     let shove_actions = iterate![if r == Role::Troll;
-                                     for position in self.occupied_iter(r);
-                                     for direction in Direction::all().into_iter();
-                                     for action in self.shove_actions_from(position, *direction);
-                                     yield action];
-    let _end_proposal_actions = iterate![if allow_end_proposal; yield Action::ProposeEnd];
-    // We could add end_proposal_actions, but we're debugging right now, and
-    // constantly exploring the possibility of terminating the game gets
-    // tiresome.
-    move_actions.chain(hurl_actions).chain(shove_actions)
+                                 for position in self.occupied_iter(r);
+                                 for direction in Direction::all().into_iter();
+                                 for action in self.shove_actions_from(position, *direction);
+                                 yield action];
+    let end_proposal_actions = iterate![if allow_end_proposal; yield Action::ProposeEnd];
+    move_actions.chain(hurl_actions).chain(shove_actions).chain(end_proposal_actions)
   }
 
   /// Returns an iterator over all actions that may be performed by the piece
@@ -232,23 +233,18 @@ impl Cells {
       Content::Occupied(t) => t.role(),
       _ => None,
     };
-    let move_actions = iterate![if role.is_some();
-                                    for direction in Direction::all().into_iter();
-                                    for action in self.move_actions_from(position, *direction);
-                                    yield action]
-    .take(if role == Some(Role::Dwarf) {
-      usize::max_value()
-    } else {
-      1
-    });
+    let move_actions = iterate![if let Some(r) = role;
+                                for direction in Direction::all().into_iter();
+                                for action in self.move_actions_from(position, r, *direction);
+                                yield action];
     let hurl_actions = iterate![if role == Some(Role::Dwarf);
-                                    for direction in Direction::all().into_iter();
-                                    for action in self.hurl_actions_from(position, *direction);
-                                    yield action];
+                                for direction in Direction::all().into_iter();
+                                if let Some(action) = self.hurl_action_from(position, *direction);
+                                yield action];
     let shove_actions = iterate![if role == Some(Role::Troll);
-                                     for direction in Direction::all().into_iter();
-                                     for action in self.shove_actions_from(position, *direction);
-                                     yield action];
+                                 for direction in Direction::all().into_iter();
+                                 for action in self.shove_actions_from(position, *direction);
+                                 yield action];
     move_actions.chain(hurl_actions).chain(shove_actions)
   }
 
@@ -645,6 +641,8 @@ d_____________d
         available_captures.sort_by(util::cmp_actions);
         generated_moves.sort_by(util::cmp_actions);
         if available_captures != generated_moves {
+          println!("available captures: {:?}", available_captures);
+          println!("generated moves: {:?}", generated_moves);
           return false;
         }
       }
@@ -671,6 +669,8 @@ d_____________d
         generated_moves.sort_by(util::cmp_actions);
         available_moves.sort_by(util::cmp_actions);
         if available_moves != generated_moves {
+          println!("available moves: {:?}", available_moves);
+          println!("generated moves: {:?}", generated_moves);
           return false;
         }
       }
@@ -727,6 +727,8 @@ d_____________d
         available_captures.sort_by(util::cmp_actions);
         generated_moves.sort_by(util::cmp_actions);
         if available_captures != generated_moves {
+          println!("available moves: {:?}", available_captures);
+          println!("generated moves: {:?}", generated_moves);
           return false;
         }
       }
