@@ -3,8 +3,8 @@ use crate::coordinate::{Convolution, Coordinate, Direction};
 use crate::Role;
 
 use r4::iterate;
-#[cfg(test)]
-use quickcheck::{Arbitrary, Gen};
+#[cfg(test)] use rand::Rng;
+#[cfg(test)] use quickcheck::{Arbitrary, Gen};
 
 use std::clone::Clone;
 use std::cmp::{Eq, PartialEq};

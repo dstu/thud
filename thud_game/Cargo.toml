@@ -12,10 +12,10 @@ ai-mcts = ["mcts", "syncbox"]
 [dependencies]
 log = "0.4.6"
 mcts = { path = "../mcts", optional = true }
-rand = { version = "0.6.1", optional = true }
 r4 = "1.0"
 syncbox = { version = "0.2.4", optional = true }
 
 [dev-dependencies]
 quickcheck = "0.7.2"
 quickcheck_macros = "0.7.0"
+rand = "0.6.1"

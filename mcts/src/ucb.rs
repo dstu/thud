@@ -355,7 +355,7 @@ where
             // We use reservoir sampling to break ties.
             // trace!("find_best_child_edge_index: found indices {} and {} with score {}; sampling to break tie", best_index, index, v);
             sampling_count += 1;
-            if rand::distributions::Bernoulli::new(1.0 / (sampling_count as f64)).sample(rng) {
+            if rng.gen_ratio(1, sampling_count) {
               best_index = index;
             }
             // trace!("find_best_child_edge_index: updated best index to {} after sampling", best_index);

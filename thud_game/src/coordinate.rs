@@ -1,5 +1,5 @@
-#[cfg(test)]
-use quickcheck::{Arbitrary, Gen};
+#[cfg(test)] use quickcheck::{Arbitrary, Gen};
+#[cfg(test)] use rand::Rng;
 
 use std::fmt;
 
@@ -2546,7 +2546,7 @@ impl Arbitrary for CoordinateLineSegment {
         match next {
           None => break,
           Some(n) => {
-            if g.gen_weighted_bool(length as u32) {
+            if g.gen_ratio(1, length as u32) {
               break;
             }
             next = n.to_direction(direction);
