@@ -1,7 +1,7 @@
+// -*- mode: rust; rust-indent-offset: 4; -*-
+
 use super::Role;
-use super::actions::{Action, ActionIterator,
-                     DwarfCoordinateConsumer, DwarfDirectionConsumer,
-                     TrollCoordinateConsumer, TrollDirectionConsumer};
+use super::actions::Action;
 use super::coordinate::{Coordinate, Convolution, Direction};
 
 #[cfg(test)] use ::quickcheck::{Arbitrary, Gen};
@@ -121,50 +121,103 @@ impl Cells {
         Cells { cells: [Content::Empty; 165], }
     }
 
-    pub fn role_actions<'s>(&'s self, r: Role, allow_end_proposal: bool) -> ActionIterator<'s> {
-        let occupied_cells = self.occupied_iter(r);
-        match r {
-            Role::Dwarf =>
-                ActionIterator::for_dwarf(
-                    allow_end_proposal,
-                    occupied_cells.flat_map(DwarfCoordinateConsumer::new(self))),
-                //  The above provides a concrete type for these iterator transforms:
-                //  occupied_cells.flat_map(|position| {
-                //         Direction::all()
-                //             .into_iter()
-                //             .flat_map(|d| (MoveIterator::new(self, position, *d)
-                //                            .chain(HurlIterator::new(self, position, *d))))
-                // })),
-            Role::Troll =>
-                ActionIterator::for_troll(
-                    allow_end_proposal,
-                    occupied_cells.flat_map(TrollCoordinateConsumer::new(self))),
-                    //  The above provides a concrete type for these iterator transforms:
-                    // occupied_cells.flat_map(|position| {
-                    //     Direction::all()
-                    //         .into_iter()
-                    //         .flat_map(|d| (MoveIterator::new(self, position, *d).take(1)
-                    //                        .chain(ShoveIterator::new(self, position, *d))))
-                    // })),
-        }
+    /// Returns an iterator over possible move actions that may be taken by a
+    /// piece at `start` moving in `direction`.
+    pub fn move_actions_from<'s>(&'s self, start: Coordinate, direction: Direction)
+                                 -> impl Iterator<Item=Action> + 's {
+        let cells = self;
+        Ray::new(start, direction).skip(1)                 // Don't look at where move starts from.
+           .take_while(move |end| cells[*end].is_empty())  // Stop when hitting an occupied space.
+           .map(move |end| Action::Move(start, end))
     }
 
-    pub fn position_actions<'s>(&'s self, position: Coordinate) -> ActionIterator<'s> {
-        match self[position] {
-            Content::Occupied(t) if t.role() == Some(Role::Dwarf) => {
-                ActionIterator::for_dwarf_position(
-                    Direction::all()
-                        .into_iter()
-                        .flat_map(DwarfDirectionConsumer::new(self, position)))
-            },
-            Content::Occupied(t) if t.role() == Some(Role::Troll) => {
-                ActionIterator::for_troll_position(
-                    Direction::all()
-                        .into_iter()
-                        .flat_map(TrollDirectionConsumer::new(self, position)))
-            },
-            _ => ActionIterator::empty(),
-        }
+    /// Returns an iterator over possible move actions that may be taken by a
+    /// Dwarf at `start` by moving in `direction`.
+    pub fn hurl_actions_from<'s>(&'s self, start: Coordinate, direction: Direction)
+                                 -> impl Iterator<Item=Action> + 's {
+        Ray::new(start, direction).skip(1).zip(Ray::new(start, direction.reverse()))
+            .take_while(move |(_, previous)| self[*previous].is_dwarf())
+            .filter_map(move |(end, _)| match self[end] {
+                Content::Occupied(Token::Troll) => Some(Action::Hurl(start, end)),
+                _ => None,
+            })
+    }
+
+    /// Returns an iterator over possible shove actions that may be taken by a
+    /// Troll at `start` by moving in `direction`.
+    pub fn shove_actions_from<'s>(&'s self, start: Coordinate, direction: Direction)
+                              -> impl Iterator<Item=Action> + 's {
+        Ray::new(start, direction).skip(1).zip(Ray::new(start, direction.reverse()))
+            .take_while(move |(_, previous)| self[*previous].is_troll())
+            .filter_map(move |(end, _)| {
+                let mut captured = [coordinate_literal!(7, 7); 7];
+                let mut i = 0u8;
+                for d in Direction::all() {
+                    match end.to_direction(*d) {
+                        Some(adjacent) if self[adjacent].is_dwarf() => {
+                            captured[i as usize] = adjacent;
+                            i += 1;
+                        },
+                        _ => (),
+                    }
+                }
+                if i == 0 {
+                    None
+                } else {
+                    Some(Action::Shove(start, end, i, captured))
+                }
+            })
+    }
+
+    /// Returns an iterator over all actions that the role `r` can perform. If
+    /// `allow_end_proposal` is `true`, then one of the actions will be
+    /// proposing an end to the game.
+    pub fn role_actions<'s>(&'s self, r: Role, allow_end_proposal: bool)
+                            -> impl Iterator<Item=Action> + 's {
+        let move_actions = iterate![for position in self.occupied_iter(r);
+                                    for direction in Direction::all().into_iter();
+                                    for action in self.move_actions_from(position, *direction);
+                                    yield action]
+            .take(match r { Role::Dwarf => usize::max_value(), Role::Troll => 1, });
+        let hurl_actions = iterate![if r == Role::Dwarf;
+                                    for position in self.occupied_iter(r);
+                                    for direction in Direction::all().into_iter();
+                                    for action in self.hurl_actions_from(position, *direction);
+                                    yield action];
+        let shove_actions = iterate![if r == Role::Troll;
+                                     for position in self.occupied_iter(r);
+                                     for direction in Direction::all().into_iter();
+                                     for action in self.shove_actions_from(position, *direction);
+                                     yield action];
+        let _end_proposal_actions = iterate![if allow_end_proposal; yield Action::ProposeEnd];
+        // We could add end_proposal_actions, but we're debugging right now, and
+        // constantly exploring the possibility of terminating the game gets
+        // tiresome.
+        move_actions.chain(hurl_actions).chain(shove_actions)
+    }
+
+    /// Returns an iterator over all actions that may be performed by the piece
+    /// that is currently at `position`. If there is no piece there, then the
+    /// iterator will be empty.
+    pub fn position_actions<'s>(&'s self, position: Coordinate) -> impl Iterator<Item=Action> + 's {
+        let role = match self[position] {
+            Content::Occupied(t) => t.role(),
+            _ => None,
+        };
+        let move_actions = iterate![if role.is_some();
+                                    for direction in Direction::all().into_iter();
+                                    for action in self.move_actions_from(position, *direction);
+                                    yield action]
+            .take(if role == Some(Role::Dwarf) { usize::max_value() } else { 1 });
+        let hurl_actions = iterate![if role == Some(Role::Dwarf);
+                                    for direction in Direction::all().into_iter();
+                                    for action in self.hurl_actions_from(position, *direction);
+                                    yield action];
+        let shove_actions = iterate![if role == Some(Role::Troll);
+                                     for direction in Direction::all().into_iter();
+                                     for action in self.shove_actions_from(position, *direction);
+                                     yield action];
+        move_actions.chain(hurl_actions).chain(shove_actions)
     }
 
     pub fn do_action(&mut self, a: &Action) {
@@ -190,12 +243,21 @@ impl Cells {
         }
     }
 
-    pub fn cells_iter<'s>(&'s self) -> ContentsIter<'s> {
-        ContentsIter { board: self, index: 0, }
+    /// Returns an iterator over each cell on the board.
+    pub fn cells_iter<'s>(&'s self) -> impl Iterator<Item=(Coordinate, Content)> + 's {
+        iterate![for index in 0..self.cells.len();
+                 let coordinate = Coordinate::from_index(index);
+                 yield (coordinate, self[coordinate])]
     }
 
-    pub fn occupied_iter<'s>(&'s self, r: Role) -> OccupiedCellsIter<'s> {
-        OccupiedCellsIter { board: self, role: r, index: 0, }
+    /// Returns an iterator over coordinates of cells that are occupied by a
+    /// piece that has the role `r`.
+    pub fn occupied_iter<'s>(&'s self, r: Role) -> impl Iterator<Item=Coordinate> + 's {
+        iterate![for index in 0..self.cells.len();
+                 let coordinate = Coordinate::from_index(index);
+                 if let Content::Occupied(t) = self[coordinate];
+                 if t.role() == Some(r);
+                 yield coordinate]
     }
 }
 
@@ -246,51 +308,6 @@ impl Index<Coordinate> for Cells {
 impl IndexMut<Coordinate> for Cells {
     fn index_mut(&mut self, c: Coordinate) -> &mut Content {
         &mut self.cells[c.index()]
-    }
-}
-
-pub struct ContentsIter<'a> {
-    board: &'a Cells,
-    index: usize,
-}
-
-impl<'a> Iterator for ContentsIter<'a> {
-    type Item = (Coordinate, Content);
-
-    fn next(&mut self) -> Option<(Coordinate, Content)> {
-        if self.index >= self.board.cells.len() {
-            None
-        } else {
-            let coordinate = Coordinate::from_index(self.index);
-            self.index += 1;
-            Some((coordinate, self.board[coordinate]))
-        }
-    }
-}
-
-pub struct OccupiedCellsIter<'a> {
-    board: &'a Cells,
-    role: Role,
-    index: usize,
-}
-
-impl<'a> Iterator for OccupiedCellsIter<'a> {
-    type Item = Coordinate;
-
-    fn next(&mut self) -> Option<Coordinate> {
-        loop {
-            if self.index >= self.board.cells.len() {
-                return None
-            } else {
-                let coordinate = Coordinate::from_index(self.index);
-                self.index += 1;
-                match self.board[coordinate] {
-                    Content::Occupied(t) if t.role() == Some(self.role) =>
-                        return Some(coordinate),
-                    _ => continue,
-                }
-            }
-        }
     }
 }
 

@@ -1,5 +1,7 @@
+// -*- mode: rust; rust-indent-offset: 4; -*-
+
 use super::Role;
-use super::actions::{Action, ActionIterator};
+use super::actions::Action;
 use super::board;
 use super::coordinate::{Coordinate, Convolution};
 use super::end;
@@ -35,18 +37,24 @@ impl<E> State<E> where E: board::CellEquivalence {
         &self.active_role
     }
 
-    pub fn actions<'s>(&'s self) -> ActionIterator<'s> {
+    pub fn actions<'s>(&'s self) -> impl Iterator<Item=Action> + 's {
         self.role_actions(*self.active_role())
     }
 
-    pub fn role_actions<'s>(&'s self, r: Role) -> ActionIterator<'s> {
-        if self.proposed_terminate && self.terminate_decision.is_none() {
-            return ActionIterator::accept_or_decline_end()
-        }
-        self.board.role_actions(r, self.terminate_decision.is_none())
+    pub fn role_actions<'s>(&'s self, r: Role) -> impl Iterator<Item=Action> + 's {
+        let must_handle_end_proposal = self.proposed_terminate && self.terminate_decision.is_none();
+        let handle_end_proposal =
+            iterate![if must_handle_end_proposal;
+                     yield Action::HandleEndProposal(end::Decision::Accept);
+                     yield Action::HandleEndProposal(end::Decision::Decline)];
+        let regular_moves =
+            iterate![if !must_handle_end_proposal;
+                     for action in self.board.role_actions(r, self.terminate_decision.is_none());
+                     yield action];
+        handle_end_proposal.chain(regular_moves)
     }
 
-    pub fn position_actions<'s>(&'s self, position: Coordinate) -> ActionIterator<'s> {
+    pub fn position_actions<'s>(&'s self, position: Coordinate) -> impl Iterator<Item=Action> + 's {
         self.board.position_actions(position)
     }
 
