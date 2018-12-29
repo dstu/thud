@@ -252,8 +252,8 @@ _______________
 ..._________...
 ...._______....
 ....._____.....
-"#,
-    ));
+"#),
+    &board::TRANSPOSITIONAL_EQUIVALENCE);
     let actions: Vec<Action> = state.role_actions(Role::Troll).collect();
     assert!(!actions.is_empty());
     assert_eq!(Action::ProposeEnd, Action::ProposeEnd);
@@ -299,8 +299,8 @@ Td__________dd_
 ..._____d___...
 ...._______....
 ....._____.....
-"#,
-    ));
+"#),
+                               &board::TRANSPOSITIONAL_EQUIVALENCE);
     state.do_action(&Action::HandleEndProposal(end::Decision::Decline));
     let actions: Vec<Action> = state.role_actions(Role::Troll).collect();
     assert_eq!(actions, vec!());
@@ -326,9 +326,8 @@ d___d_________d
 ..._____d___...
 ....d_____d....
 ....._d___.....
-"#,
-      ),
-    );
+"#),
+    &board::TRANSPOSITIONAL_EQUIVALENCE);
     let actions = {
       let mut v: Vec<Action> = state.role_actions(Role::Troll).collect();
       v.sort_by(crate::util::cmp_actions);
@@ -396,8 +395,8 @@ d______T______d
 ...d_______d...
 ....d_____d....
 .....dd_dd.....
-"#,
-    ));
+"#),
+    &board::TRANSPOSITIONAL_EQUIVALENCE);
     let actions: Vec<Action> = state.role_actions(Role::Dwarf).collect();
     assert!(!actions.contains(&move_literal!((9, 0), (9, 7))));
   }

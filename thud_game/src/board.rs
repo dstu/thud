@@ -7,12 +7,14 @@ use r4::iterate;
 #[cfg(test)] use quickcheck::{Arbitrary, Gen};
 
 use std::clone::Clone;
-use std::cmp::{Eq, PartialEq};
 use std::collections::hash_map::DefaultHasher;
 use std::default::Default;
 use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::{Index, IndexMut};
+
+pub static SIMPLE_EQUIVALENCE: SimpleEquivalence = SimpleEquivalence{};
+pub static TRANSPOSITIONAL_EQUIVALENCE: TranspositionalEquivalence = TranspositionalEquivalence{};
 
 /// A physical token on the game board.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -340,31 +342,28 @@ impl IndexMut<Coordinate> for Cells {
   }
 }
 
-pub trait CellEquivalence: Clone + Eq + Hash + PartialEq + fmt::Debug {
-  fn hash_board<H>(board: &Cells, state: &mut H)
-  where
-    H: Hasher;
-  fn boards_equal(b1: &Cells, b2: &Cells) -> bool;
+pub trait CellEquivalence: fmt::Debug {
+  fn hash_board(&self, board: &Cells) -> u64;
+  fn boards_equal(&self, b1: &Cells, b2: &Cells) -> bool;
 }
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SimpleEquivalence;
 
 impl CellEquivalence for SimpleEquivalence {
-  fn hash_board<H>(board: &Cells, state: &mut H)
-  where
-    H: Hasher,
-  {
+  fn hash_board(&self, board: &Cells) -> u64 {
+    let mut state = std::collections::hash_map::DefaultHasher::new();
     for row in 0u8..15u8 {
       for col in 0u8..15u8 {
         if let Some(c) = Coordinate::new(row, col) {
-          board[c].hash(state)
+          board[c].hash(&mut state)
         }
       }
     }
+    state.finish()
   }
 
-  fn boards_equal(b1: &Cells, b2: &Cells) -> bool {
+  fn boards_equal(&self, b1: &Cells, b2: &Cells) -> bool {
     for row in 0u8..15u8 {
       for col in 0u8..15u8 {
         if let Some(c) = Coordinate::new(row, col) {
@@ -382,10 +381,8 @@ impl CellEquivalence for SimpleEquivalence {
 pub struct TranspositionalEquivalence;
 
 impl CellEquivalence for TranspositionalEquivalence {
-  fn hash_board<H>(board: &Cells, state: &mut H)
-  where
-    H: Hasher,
-  {
+  fn hash_board(&self, board: &Cells) -> u64 {
+    let mut state = std::collections::hash_map::DefaultHasher::new();
     let mut hashers = [
       DefaultHasher::new(),
       DefaultHasher::new(),
@@ -415,9 +412,10 @@ impl CellEquivalence for TranspositionalEquivalence {
     for v in hash_values.into_iter() {
       state.write_u64(*v);
     }
+    state.finish()
   }
 
-  fn boards_equal(b1: &Cells, b2: &Cells) -> bool {
+  fn boards_equal(&self, b1: &Cells, b2: &Cells) -> bool {
     let mut equivalences = [true, true, true, true, true, true, true, true];
     for row in 0u8..15u8 {
       for col in 0u8..15u8 {

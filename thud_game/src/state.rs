@@ -5,25 +5,25 @@ use crate::end;
 use crate::Role;
 use r4::iterate;
 
-use std::borrow::{Borrow, BorrowMut};
 use std::hash::{Hash, Hasher};
-use std::marker::PhantomData;
 
-#[derive(Clone, Debug)]
-pub struct State {
+#[derive(Debug)]
+pub struct State<'a> {
   board: Cells,
   active_role: Role,
   proposed_terminate: bool,
   terminate_decision: Option<end::Decision>,
+  equivalence_class: &'a dyn CellEquivalence,
 }
 
-impl State {
-  pub fn new(board: Cells) -> Self {
+impl<'a> State<'a> {
+  pub fn new(board: Cells, equivalence_class: &'a CellEquivalence) -> Self {
     State {
       board: board,
       active_role: Role::Dwarf,
       proposed_terminate: false,
       terminate_decision: None,
+      equivalence_class: equivalence_class,
     }
   }
 
@@ -112,60 +112,37 @@ impl State {
   }
 }
 
-/// Wraps around a state and makes it possible to store it in a hash-based
-/// container.
-#[derive(Clone, Debug)]
-pub struct AddressableState<E: CellEquivalence> {
-  pub state: State,
-  marker: PhantomData<E>,
-}
-
-impl<E: CellEquivalence> AddressableState<E> {
-  pub fn new(state: State) -> Self {
-    AddressableState {
-      state: state,
-      marker: PhantomData,
+impl<'a> Clone for State<'a> {
+  fn clone(&self) -> Self {
+    State {
+      board: self.board.clone(),
+      active_role: self.active_role,
+      proposed_terminate: self.proposed_terminate,
+      terminate_decision: self.terminate_decision,
+      equivalence_class: self.equivalence_class,
     }
   }
 }
 
-impl<E: CellEquivalence> Hash for AddressableState<E> {
+impl<'a> Hash for State<'a> {
   fn hash<H: Hasher>(&self, state: &mut H) {
-    <E as CellEquivalence>::hash_board(&self.state.board, state);
-    self.state.active_role.hash(state);
-    self.state.proposed_terminate.hash(state);
-    self.state.terminate_decision.hash(state);
+    (self.equivalence_class.hash_board(&self.board)).hash(state);
+    self.active_role.hash(state);
+    self.proposed_terminate.hash(state);
+    self.terminate_decision.hash(state);
   }
 }
 
-impl <E: CellEquivalence> PartialEq for AddressableState<E> {
+impl<'a> PartialEq for State<'a> {
   fn eq(&self, other: &Self) -> bool {
-    <E as CellEquivalence>::boards_equal(&self.state.board, &other.state.board) &&
-      self.state.active_role == other.state.active_role &&
-      self.state.proposed_terminate == other.state.proposed_terminate &&
-      self.state.terminate_decision == other.state.terminate_decision
+    self.equivalence_class.boards_equal(&self.board, &other.board) &&
+      self.active_role == other.active_role &&
+      self.proposed_terminate == other.proposed_terminate &&
+      self.terminate_decision == other.terminate_decision
   }
 }
 
-impl<E: CellEquivalence> Eq for AddressableState<E> {}
-
-impl<E: CellEquivalence> From<State> for AddressableState<E> {
-  fn from(state: State) -> Self {
-    AddressableState::new(state)
-  }
-}
-
-impl<E: CellEquivalence> Borrow<State> for AddressableState<E> {
-  fn borrow(&self) -> &State {
-    &self.state
-  }
-}
-
-impl<E: CellEquivalence> BorrowMut<State> for AddressableState<E> {
-  fn borrow_mut(&mut self) -> &mut State {
-    &mut self.state
-  }
-}
+impl<'a> Eq for State<'a> {}
 
 #[cfg(test)]
 mod test {
@@ -175,16 +152,12 @@ mod test {
   use crate::end;
   use std::collections::HashMap;
 
-  fn new_state() -> State {
-    State::new(Cells::default())
+  fn new_simple_state() -> State<'static> {
+    State::new(Cells::default(), &board::SIMPLE_EQUIVALENCE)
   }
 
-  fn new_simple_state() -> AddressableState<board::SimpleEquivalence> {
-    new_state().into()
-  }
-
-  fn new_untransposing_state() -> AddressableState<board::TranspositionalEquivalence> {
-    new_state().into()
+  fn new_untransposing_state() -> State<'static> {
+    State::new(Cells::default(), &board::TRANSPOSITIONAL_EQUIVALENCE)
   }
 
   #[test]
@@ -216,13 +189,13 @@ mod test {
   #[test]
   fn simple_move_equivalence() {
     let mut s1 = new_simple_state();
-    s1.state.do_action(&move_literal!((2, 3), (10, 3)));
+    s1.do_action(&move_literal!((2, 3), (10, 3)));
     let mut s2 = new_simple_state();
-    s2.state.do_action(&move_literal!((2, 3), (10, 3)));
+    s2.do_action(&move_literal!((2, 3), (10, 3)));
     assert!(s1 == s2);
   }
 
-  fn check_hash_collision<E: board::CellEquivalence>(s1: AddressableState<E>, s2: AddressableState<E>) {
+  fn check_hash_collision(s1: State, s2: State) {
     let mut table = HashMap::new();
     assert!(table.is_empty());
     table.insert(s1, true);
@@ -233,94 +206,94 @@ mod test {
   #[test]
   fn simple_move_hash_collision() {
     let mut s1 = new_simple_state();
-    s1.state.do_action(&move_literal!((2, 3), (10, 3)));
+    s1.do_action(&move_literal!((2, 3), (10, 3)));
     let mut s2 = new_simple_state();
-    s2.state.do_action(&move_literal!((2, 3), (10, 3)));
+    s2.do_action(&move_literal!((2, 3), (10, 3)));
     check_hash_collision(s1, s2);
   }
 
   #[test]
   fn transposed_move_equivalence() {
     let mut s1 = new_untransposing_state();
-    s1.state.do_action(&move_literal!((5, 0), (1, 5)));
+    s1.do_action(&move_literal!((5, 0), (1, 5)));
     let mut s2 = new_untransposing_state();
-    s2.state.do_action(&move_literal!((5, 0), (1, 5)));
+    s2.do_action(&move_literal!((5, 0), (1, 5)));
     assert!(s1 == s2);
 
     s1 = new_untransposing_state();
-    s1.state.do_action(&move_literal!((5, 0), (1, 5)));
+    s1.do_action(&move_literal!((5, 0), (1, 5)));
     s2 = new_untransposing_state();
-    s2.state.do_action(&move_literal!((0, 5), (5, 1)));
+    s2.do_action(&move_literal!((0, 5), (5, 1)));
     assert!(s1 == s2);
   }
 
   #[test]
   fn transposed_move_hash_collision() {
     let mut s1 = new_untransposing_state();
-    s1.state.do_action(&move_literal!((5, 0), (1, 5)));
+    s1.do_action(&move_literal!((5, 0), (1, 5)));
     let mut s2 = new_untransposing_state();
-    s2.state.do_action(&move_literal!((5, 0), (1, 5)));
+    s2.do_action(&move_literal!((5, 0), (1, 5)));
     check_hash_collision(s1, s2);
 
     s1 = new_untransposing_state();
-    s1.state.do_action(&move_literal!((5, 0), (1, 5)));
+    s1.do_action(&move_literal!((5, 0), (1, 5)));
     s2 = new_untransposing_state();
-    s2.state.do_action(&move_literal!((0, 5), (5, 1)));
+    s2.do_action(&move_literal!((0, 5), (5, 1)));
     check_hash_collision(s1, s2);
   }
 
   #[test]
   fn simple_move_nonequivalence_1() {
     let mut s1 = new_simple_state();
-    s1.state.do_action(&move_literal!((2, 3), (10, 3)));
+    s1.do_action(&move_literal!((2, 3), (10, 3)));
     let mut s2 = new_simple_state();
-    s2.state.do_action(&move_literal!((14, 9), (6, 1)));
+    s2.do_action(&move_literal!((14, 9), (6, 1)));
     assert!(s1 != s2);
   }
 
   #[test]
   fn simple_move_nonequivalence_2() {
     let mut s1 = new_simple_state();
-    s1.state.do_action(&move_literal!((0, 5), (8, 5)));
+    s1.do_action(&move_literal!((0, 5), (8, 5)));
     let mut s2 = new_simple_state();
-    s2.state.do_action(&move_literal!((0, 5), (9, 5)));
+    s2.do_action(&move_literal!((0, 5), (9, 5)));
     assert!(s1 != s2);
   }
 
   #[test]
   fn transposed_move_nonequivalence_1() {
     let mut s1 = new_untransposing_state();
-    s1.state.do_action(&move_literal!((2, 3), (10, 3)));
+    s1.do_action(&move_literal!((2, 3), (10, 3)));
     let mut s2 = new_untransposing_state();
-    s2.state.do_action(&move_literal!((14, 9), (6, 1)));
+    s2.do_action(&move_literal!((14, 9), (6, 1)));
     assert!(s1 != s2);
   }
 
   #[test]
   fn transposed_move_nonequivalence_2() {
     let mut s1 = new_untransposing_state();
-    s1.state.do_action(&move_literal!((0, 5), (8, 5)));
+    s1.do_action(&move_literal!((0, 5), (8, 5)));
     let mut s2 = new_untransposing_state();
-    s2.state.do_action(&move_literal!((0, 5), (9, 5)));
+    s2.do_action(&move_literal!((0, 5), (9, 5)));
     assert!(s1 != s2);
   }
 
   #[test]
   fn propose_end_ok() {
     let state = new_simple_state();
-    assert!(!state.state.proposed_terminate);
-    assert_eq!(state.state.terminate_decision, None);
-    let available_actions: Vec<Action> = state.state.actions().collect();
+    assert!(!state.proposed_terminate);
+    assert_eq!(state.terminate_decision, None);
+    let available_actions: Vec<Action> = state.actions().collect();
     assert!(available_actions.contains(&Action::ProposeEnd));
   }
 
   #[test]
   fn no_propose_end_ok() {
     let mut state = new_simple_state();
-    assert!(!state.state.proposed_terminate);
-    state.state.do_action(&Action::ProposeEnd);
-    assert!(state.state.proposed_terminate);
-    let available_actions: Vec<Action> = state.state.actions().collect();
+    assert!(!state.proposed_terminate);
+    state.do_action(&Action::ProposeEnd);
+    assert!(state.proposed_terminate);
+    let available_actions: Vec<Action> = state.actions().collect();
     assert_eq!(
       available_actions,
       vec!(
@@ -328,28 +301,28 @@ mod test {
         Action::HandleEndProposal(end::Decision::Decline)
       )
     );
-    assert!(!state.state.terminated());
+    assert!(!state.terminated());
   }
 
   #[test]
   fn accept_terminate_ok() {
     let mut state = new_simple_state();
-    state.state.do_action(&Action::ProposeEnd);
-    state.state.do_action(&Action::HandleEndProposal(end::Decision::Accept));
-    assert!(state.state.terminated());
+    state.do_action(&Action::ProposeEnd);
+    state.do_action(&Action::HandleEndProposal(end::Decision::Accept));
+    assert!(state.terminated());
   }
 
   #[test]
   fn decline_terminate_ok() {
     let mut state = new_simple_state();
-    state.state.do_action(&Action::ProposeEnd);
-    state.state.do_action(&Action::HandleEndProposal(end::Decision::Decline));
-    assert!(!state.state.terminated());
-    let mut available_actions: Vec<Action> = state.state.actions().collect();
+    state.do_action(&Action::ProposeEnd);
+    state.do_action(&Action::HandleEndProposal(end::Decision::Decline));
+    assert!(!state.terminated());
+    let mut available_actions: Vec<Action> = state.actions().collect();
     assert!(!available_actions.contains(&Action::ProposeEnd));
 
-    state.state.do_action(&available_actions[0]);
-    available_actions = state.state.actions().collect();
+    state.do_action(&available_actions[0]);
+    available_actions = state.actions().collect();
     assert!(available_actions.contains(&Action::ProposeEnd));
   }
 }
