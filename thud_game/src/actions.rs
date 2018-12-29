@@ -235,7 +235,7 @@ mod test {
 
   #[test]
   fn troll_can_move() {
-    let state = State::<board::TranspositionalEquivalence>::new(board::decode_board(
+    let state = State::new(board::decode_board(
       r#"
 ....._____.....
 ...._______....
@@ -282,7 +282,7 @@ _______________
 
   #[test]
   fn troll_cant_move() {
-    let mut state = State::<board::TranspositionalEquivalence>::new(board::decode_board(
+    let mut state = State::new(board::decode_board(
       r#"
 .....____d.....
 ...._____d_....
@@ -308,7 +308,7 @@ Td__________dd_
 
   #[test]
   fn troll_can_move_and_shove() {
-    let state = State::<board::TranspositionalEquivalence>::new(
+    let state = State::new(
       board::decode_board(
         r#"
 ....._____.....
@@ -379,7 +379,7 @@ d___d_________d
 
   #[test]
   fn dwarf_cant_move_illegally_ok() {
-    let state = State::<board::TranspositionalEquivalence>::new(board::decode_board(
+    let state = State::new(board::decode_board(
       r#"
 .....dd_dd.....
 ....d_____d....
