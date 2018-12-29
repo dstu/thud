@@ -1,8 +1,9 @@
-use super::coordinate::Coordinate;
-use super::end;
+use crate::coordinate::Coordinate;
+use crate::end;
 
 use std::cmp::{Eq, PartialEq};
-use std::fmt;
+use std::{error, fmt};
+use std::str::FromStr;
 
 #[derive(Clone, Copy, Hash)]
 pub enum Action {
@@ -100,6 +101,27 @@ impl PartialEq<Action> for Action {
 }
 
 impl Eq for Action {}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ActionParseError {
+  InvalidMove,
+}
+
+impl FromStr for Action {
+  type Err = ActionParseError;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    unimplemented!()
+  }
+}
+
+impl error::Error for ActionParseError {}
+
+impl fmt::Display for ActionParseError {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{:?}", self)
+  }
+}
 
 #[macro_export]
 macro_rules! move_literal {

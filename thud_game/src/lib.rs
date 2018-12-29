@@ -4,6 +4,7 @@
 #![cfg_attr(test, feature(plugin))]
 #![cfg_attr(test, plugin(quickcheck_macros))]
 
+pub mod agents;
 #[macro_use] pub mod coordinate;
 #[macro_use] pub mod actions;
 pub mod board;
