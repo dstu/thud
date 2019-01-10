@@ -8,16 +8,16 @@ use r4::iterate;
 use std::hash::{Hash, Hasher};
 
 #[derive(Debug)]
-pub struct State<'a> {
+pub struct State {
   board: Cells,
   active_role: Role,
   proposed_terminate: bool,
   terminate_decision: Option<end::Decision>,
-  equivalence_class: &'a dyn CellEquivalence,
+  equivalence_class: &'static dyn CellEquivalence,
 }
 
-impl<'a> State<'a> {
-  pub fn new(board: Cells, equivalence_class: &'a CellEquivalence) -> Self {
+impl State {
+  pub fn new(board: Cells, equivalence_class: &'static CellEquivalence) -> Self {
     State {
       board: board,
       active_role: Role::Dwarf,
@@ -112,7 +112,7 @@ impl<'a> State<'a> {
   }
 }
 
-impl<'a> Clone for State<'a> {
+impl Clone for State {
   fn clone(&self) -> Self {
     State {
       board: self.board.clone(),
@@ -124,7 +124,7 @@ impl<'a> Clone for State<'a> {
   }
 }
 
-impl<'a> Hash for State<'a> {
+impl Hash for State {
   fn hash<H: Hasher>(&self, state: &mut H) {
     (self.equivalence_class.hash_board(&self.board)).hash(state);
     self.active_role.hash(state);
@@ -133,7 +133,7 @@ impl<'a> Hash for State<'a> {
   }
 }
 
-impl<'a> PartialEq for State<'a> {
+impl PartialEq for State {
   fn eq(&self, other: &Self) -> bool {
     self.equivalence_class.boards_equal(&self.board, &other.board) &&
       self.active_role == other.active_role &&
@@ -142,7 +142,7 @@ impl<'a> PartialEq for State<'a> {
   }
 }
 
-impl<'a> Eq for State<'a> {}
+impl Eq for State {}
 
 #[cfg(test)]
 mod test {
@@ -152,11 +152,11 @@ mod test {
   use crate::end;
   use std::collections::HashMap;
 
-  fn new_simple_state() -> State<'static> {
+  fn new_simple_state() -> State {
     State::new(Cells::default(), &board::SIMPLE_EQUIVALENCE)
   }
 
-  fn new_untransposing_state() -> State<'static> {
+  fn new_untransposing_state() -> State {
     State::new(Cells::default(), &board::TRANSPOSITIONAL_EQUIVALENCE)
   }
 

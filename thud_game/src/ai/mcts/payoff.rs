@@ -3,23 +3,15 @@ use mcts;
 
 use std::default::Default;
 use std::fmt;
-use std::marker::PhantomData;
 use std::ops::{Add, AddAssign};
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-pub struct Payoff<E>
-where
-  E: board::CellEquivalence,
-{
+pub struct Payoff {
   pub weight: u32,
   pub values: [u32; 2],
-  cell_equivalence: PhantomData<E>,
 }
 
-impl<E> Payoff<E>
-where
-  E: board::CellEquivalence,
-{
+impl Payoff {
   pub fn new(weight: u32, dwarf: u32, troll: u32) -> Self {
     let mut values = [0, 0];
     values[Role::Dwarf.index()] = dwarf;
@@ -27,57 +19,42 @@ where
     Payoff {
       weight: weight,
       values: values,
-      cell_equivalence: PhantomData,
     }
   }
 }
 
-impl<E> Default for Payoff<E>
-where
-  E: board::CellEquivalence,
-{
+impl Default for Payoff {
   fn default() -> Self {
     Payoff {
       weight: 0,
       values: [0, 0],
-      cell_equivalence: PhantomData,
     }
   }
 }
 
-impl<E> Add for Payoff<E>
-where
-  E: board::CellEquivalence,
-{
-  type Output = Payoff<E>;
+impl Add for Payoff {
+  type Output = Payoff;
 
-  fn add(self, other: Payoff<E>) -> Payoff<E> {
+  fn add(self, other: Payoff) -> Payoff {
     Payoff {
       weight: self.weight + other.weight,
       values: [
         self.values[0] + other.values[0],
         self.values[1] + other.values[1],
       ],
-      cell_equivalence: PhantomData,
     }
   }
 }
 
-impl<E> AddAssign for Payoff<E>
-where
-  E: board::CellEquivalence,
-{
-  fn add_assign(&mut self, other: Payoff<E>) {
+impl AddAssign for Payoff {
+  fn add_assign(&mut self, other: Payoff) {
     self.weight += other.weight;
     self.values[0] += other.values[0];
     self.values[1] += other.values[1];
   }
 }
 
-impl<E> fmt::Debug for Payoff<E>
-where
-  E: board::CellEquivalence,
-{
+impl fmt::Debug for Payoff {
   fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
     write!(
       f,
@@ -94,15 +71,11 @@ fn role_payoff(r: Role) -> u32 {
   }
 }
 
-impl<E> mcts::Payoff for Payoff<E>
-where
-  E: board::CellEquivalence,
-{
-  type State = crate::state::State<E>;
+impl mcts::Payoff for Payoff {
+  type State = crate::state::State;
   type PlayerId = Role;
 
-  fn from_state(state: &Self::State) -> Option<Payoff<E>> {
-    use mcts::State;
+  fn from_state(state: &Self::State) -> Option<Payoff> {
     if state.terminated() {
       let mut payoff = Payoff::default();
       payoff.weight = 1;

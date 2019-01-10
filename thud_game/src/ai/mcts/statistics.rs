@@ -1,20 +1,15 @@
 use crate::ai::mcts::payoff::Payoff;
-use crate::{board, Role};
+use crate::Role;
 use mcts;
 
 use std::clone::Clone;
 use std::fmt;
-use std::marker::PhantomData;
 use std::sync::atomic;
 
 use syncbox::atomic::AtomicU64;
 
-pub struct Statistics<E>
-where
-  E: board::CellEquivalence,
-{
+pub struct Statistics {
   packed: AtomicU64,
-  cell_equivalence: PhantomData<E>,
 }
 
 const VISITS_MASK: u64  // Upper 20 bits.
@@ -24,44 +19,30 @@ const DWARF_SCORE_MASK: u64  // Middle 22 bits.
 const TROLL_SCORE_MASK: u64  // Lower 22 bits.
     = 0x00000000003FFFFF;
 
-impl<E> Statistics<E>
-where
-  E: board::CellEquivalence,
-{
+impl Statistics where {
   pub fn new() -> Self {
     Statistics {
       packed: AtomicU64::new(0),
-      cell_equivalence: PhantomData,
     }
   }
 }
 
-impl<E> Clone for Statistics<E>
-where
-  E: board::CellEquivalence,
-{
+impl Clone for Statistics {
   fn clone(&self) -> Self {
     // TODO: do we really need Ordering::SeqCst?
     Statistics {
       packed: AtomicU64::new(self.packed.load(atomic::Ordering::AcqRel)),
-      cell_equivalence: PhantomData,
     }
   }
 }
 
-impl<E> Default for Statistics<E>
-where
-  E: board::CellEquivalence,
-{
+impl Default for Statistics {
   fn default() -> Self {
     Statistics::new()
   }
 }
 
-impl<E> fmt::Debug for Statistics<E>
-where
-  E: board::CellEquivalence,
-{
+impl fmt::Debug for Statistics {
   fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
     use mcts::{Payoff, Statistics};
     let value = self.as_payoff();
@@ -75,11 +56,8 @@ where
   }
 }
 
-impl<E> mcts::Statistics for Statistics<E>
-where
-  E: board::CellEquivalence,
-{
-  type Payoff = super::payoff::Payoff<E>;
+impl mcts::Statistics for Statistics {
+  type Payoff = super::payoff::Payoff;
 
   fn as_payoff(&self) -> Self::Payoff {
     // TODO: do we really need Ordering::SeqCst?
@@ -103,49 +81,46 @@ where
 
 #[cfg(test)]
 mod test {
-  use crate::board::TranspositionalEquivalence;
   use mcts::Statistics;
-  type ThudPayoff = crate::ai::mcts::Payoff<TranspositionalEquivalence>;
-  type ThudStatistics = crate::ai::mcts::Statistics<TranspositionalEquivalence>;
 
   #[test]
   fn new_statistics_zero_ok() {
-    let stats = ThudStatistics::new();
-    assert_eq!(stats.as_payoff(), ThudPayoff::new(0, 0, 0));
+    let stats = super::Statistics::new();
+    assert_eq!(stats.as_payoff(), super::Payoff::new(0, 0, 0));
   }
 
   #[test]
   fn statistics_sum_visits_ok() {
-    let stats = ThudStatistics::new();
-    let payoff = ThudPayoff::new(1, 0, 0);
+    let stats = super::Statistics::new();
+    let payoff = super::Payoff::new(1, 0, 0);
     stats.increment(&payoff);
     assert_eq!(stats.as_payoff(), payoff);
   }
 
   #[test]
   fn statistics_sum_dwarf_ok() {
-    let stats = ThudStatistics::new();
-    let payoff = ThudPayoff::new(0, 3, 0);
+    let stats = super::Statistics::new();
+    let payoff = super::Payoff::new(0, 3, 0);
     stats.increment(&payoff);
     assert_eq!(stats.as_payoff(), payoff);
   }
 
   #[test]
   fn statistics_sum_payoff_ok() {
-    let stats = ThudStatistics::new();
-    let payoff = ThudPayoff::new(5, 100, 50000);
+    let stats = super::Statistics::new();
+    let payoff = super::Payoff::new(5, 100, 50000);
     stats.increment(&payoff);
     assert_eq!(stats.as_payoff(), payoff);
   }
 
   #[test]
   fn statistics_sum_truncate_ok() {
-    let stats = ThudStatistics::new();
-    let payoff = ThudPayoff::new(::std::u32::MAX, ::std::u32::MAX, ::std::u32::MAX);
+    let stats = super::Statistics::new();
+    let payoff = super::Payoff::new(::std::u32::MAX, ::std::u32::MAX, ::std::u32::MAX);
     stats.increment(&payoff);
     assert_eq!(
       stats.as_payoff(),
-      ThudPayoff::new(
+      super::Payoff::new(
         0xFFFFF,  // 20 bits.
         0x3FFFFF, // 22 bits.
         0x3FFFFF
