@@ -2,12 +2,13 @@
 name = "thud-ui-common"
 version = "0.1.0"
 authors = ["Stu Black"]
+edition = "2018"
 
 [dependencies]
-chrono = "0.2.*"
-clap = "2.2.*"
-fern = "0.3.5"
-log = "0.3.5"
+chrono = "0.4"
+clap = "2.32"
+fern = "0.5"
+log = "0.4"
 mcts = { path = "../mcts" }
 rand = "0.6.1"
 
