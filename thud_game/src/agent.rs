@@ -60,27 +60,20 @@ pub trait Agent {
 /// A prompt function may be specified, which will result in a prompt string
 /// being printed before each move is read.
 pub struct StdinAgent<F: Fn(&crate::state::State) -> String> {
-  prompt: Option<F>,
+  prompt: F,
 }
 
 impl<F: Fn(&crate::state::State) -> String> StdinAgent<F> {
-  /// Returns an agent that will read moves from stdin without printing a prompt.
-  pub fn new() -> Self {
-    StdinAgent { prompt: None, }
-  }
-
   /// Returns an agent that will evaluate `prompt` on the current game state and
   /// print the resulting string each time a move is requested.
   pub fn with_prompt(prompt: F) -> Self {
-    StdinAgent { prompt: Some(prompt), }
+    StdinAgent { prompt: prompt, }
   }
 }
 
 impl<F: Fn(&crate::state::State) -> String> Agent for StdinAgent<F> {
   fn propose_move(&mut self, state: &crate::state::State) -> Result {
-    if let Some(ref prompt_fn) = self.prompt {
-      print!("{}", prompt_fn(state));
-    }
+    print!("{}", (self.prompt)(state));
     let mut line = String::new();
     let bytes_read = io::stdin().lock().read_line(&mut line)?;
     if bytes_read == 0 {
