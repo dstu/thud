@@ -1,14 +1,12 @@
-//! 
-
-use ::thud_game;
+use thud_game;
 use super::payoff::ThudPayoff;
 use super::Statistics;
 
 use std::fmt;
 use std::sync::atomic;
 
-use ::syncbox::atomic::AtomicU64;
-use ::thud_game::Role;
+use syncbox::atomic::AtomicU64;
+use thud_game::Role;
 
 pub struct ThudStatistics {
     packed: AtomicU64,
@@ -57,10 +55,8 @@ impl Statistics for ThudStatistics {
         let mut values = [0u32, 0u32];
         values[Role::Dwarf.index()] = ((packed & DWARF_SCORE_MASK) >> 22) as u32;
         values[Role::Troll.index()] = (packed & TROLL_SCORE_MASK) as u32;
-        ThudPayoff {
-            weight: ((packed & VISITS_MASK) >> 44) as u32,
-            values: values,
-        }
+        let weight: u32 = ((packed & VISITS_MASK) >> 44);
+        ThudPayoff { weight, values, }
     }
 
     fn increment(&self, p: &Self::Payoff) {

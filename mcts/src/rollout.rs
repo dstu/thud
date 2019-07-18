@@ -1,25 +1,78 @@
 //! Interface and implementations for the rollout phase of MCTS.
 
-use super::{EdgeData, Game, Payoff, SearchSettings, ThreadId, VertexData};
-
-mod error;
-
-pub use self::error::RolloutError;
+use crate::SearchSettings;
+use crate::graph::{EdgeData, VertexData};
+use crate::game::{Game, Payoff};
 
 use std::convert::From;
 use std::error::Error;
+use std::fmt;
 use std::result::Result;
 
+use log::error;
 use rand::Rng;
 use search_graph::nav::{ChildList, Edge, Node};
 
-pub trait RolloutSelector<G, R>: From<SearchSettings>
+/// Error type for MCTS rollout.
+pub enum RolloutError<'a, G, E>
+where
+  G: 'a + Game,
+  E: Error,
+{
+  Cycle(Vec<Edge<'a, G::State, VertexData, EdgeData<G>>>),
+  Selector(E),
+}
+
+impl<'a, G: 'a + Game, E: Error> fmt::Debug for RolloutError<'a, G, E> {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match *self {
+      RolloutError::Cycle(_) => write!(f, "Cycle in path"),
+      RolloutError::Selector(ref e) => write!(f, "Selector error ({:?})", e),
+    }
+  }
+}
+
+impl<'a, G: 'a + Game, E: Error> fmt::Display for RolloutError<'a, G, E> {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match *self {
+      RolloutError::Cycle(_) => write!(f, "Cycle in path"),
+      RolloutError::Selector(ref e) => write!(f, "Selector error ({})", e),
+    }
+  }
+}
+
+impl<'a, G: 'a + Game, E: Error> Error for RolloutError<'a, G, E> {
+  fn description(&self) -> &str {
+    match *self {
+      RolloutError::Cycle(_) => "Cycle",
+      RolloutError::Selector(_) => "Selector error",
+    }
+  }
+
+  fn cause(&self) -> Option<&Error> {
+    match *self {
+      RolloutError::Selector(ref e) => Some(e),
+      _ => None,
+    }
+  }
+}
+
+impl<'a, G: 'a + Game, E: Error> From<E> for RolloutError<'a, G, E> {
+  fn from(e: E) -> Self {
+    RolloutError::Selector(e)
+  }
+}
+
+/// Provides a method for selecting an outgoing child edge to follow during
+/// the rollout phase of MCTS.
+pub trait RolloutSelector<G, R>: for<'a> From<&'a SearchSettings>
 where
   G: Game,
   R: Rng,
 {
   type Error: Error;
 
+  /// Returns the element of `children` that should be followed, or an error.
   fn select<'a>(
     &self,
     children: ChildList<'a, G::State, VertexData, EdgeData<G>>,
@@ -27,9 +80,12 @@ where
   ) -> Result<Option<Edge<'a, G::State, VertexData, EdgeData<G>>>, Self::Error>;
 }
 
+/// Traverses the game graph downwards from `node` down to some terminating
+/// vertex in the search graph. The terminating vertex will either have a known
+/// payoff, or yield `None` when `selector.select()` is called on it. Returns
+/// the terminating vertex, or an error.
 pub fn rollout<'a, G, S, R>(
   mut node: Node<'a, G::State, VertexData, EdgeData<G>>,
-  thread: &ThreadId,
   selector: S,
   rng: &mut R,
 ) -> Result<Node<'a, G::State, VertexData, EdgeData<G>>, RolloutError<'a, G, S::Error>>
@@ -38,25 +94,19 @@ where
   S: RolloutSelector<G, R>,
   R: Rng,
 {
-  let mut trace = Vec::new(); // For backtracking.
   loop {
     if let Some(_) = G::Payoff::from_state(node.get_label()) {
+      // Hit known payoff.
       break;
     } else {
       match selector.select(node.get_child_list(), rng)? {
         Some(best_child) => {
-          // Selector chose a child node.
-          let previous_traversals = best_child.get_data().mark_rollout_traversal(thread);
-          if previous_traversals.traversed_in_thread(thread) {
-            return Err(RolloutError::Cycle(trace));
-          }
+          best_child.get_data().mark_rollout_traversal();
           node = best_child.get_target();
-          trace.push(best_child);
-        }
+        },
         None => {
-          // Selector found no suitable child node.
-          // TODO: handle this more intelligently.
-          panic!("selector declined to choose a child")
+          error!("selector declined to choose a child");
+          break;
         }
       }
     }

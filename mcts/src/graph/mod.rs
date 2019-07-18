@@ -1,11 +1,9 @@
 //! Graph component definitions for MCTS.
 
 mod edge;
-mod traversals;
 mod vertex;
 
 pub use self::edge::EdgeData;
-pub use self::traversals::{AtomicTraversals, Traversals};
 pub use self::vertex::VertexData;
 
 // pub type Graph<G: Game> =

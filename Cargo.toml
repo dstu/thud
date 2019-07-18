@@ -1,2 +1,12 @@
 [workspace]
 members = ["mcts", "thud_game", "thud_ui_common", "thud_ui_console"]
+
+[profile.release]
+lto = true
+
+[profile.dev]
+opt-level = 3
+debug = true
+rpath = false
+lto = false
+debug-assertions = false

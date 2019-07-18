@@ -1,8 +1,7 @@
 //! Upper confidence bound (UCB1) algorithm for graph search.
 
-use super::{EdgeData, Epoch, Game, Payoff, State, Statistics, VertexData};
+use super::{EdgeData, Game, Payoff, State, Statistics, VertexData};
 use log::error;
-use rand::distributions::Distribution;
 use rand::Rng;
 use search_graph;
 
@@ -295,7 +294,6 @@ pub fn is_best_child<'a, G: 'a + Game>(
 
 pub fn find_best_child_edge_index<'a, G, R>(
   c: &search_graph::nav::ChildList<'a, G::State, VertexData, EdgeData<G>>,
-  epoch: Epoch,
   explore_bias: f64,
   rng: &mut R,
 ) -> Result<usize, UcbError>
@@ -371,9 +369,8 @@ where
 
 pub fn child_edge_ucb_scores<'a, G, R>(
   c: &search_graph::nav::ChildList<'a, G::State, VertexData, EdgeData<G>>,
-  epoch: Epoch,
   explore_bias: f64,
-  rng: &mut R,
+  _rng: &mut R,
 ) -> Vec<Result<UcbSuccess<'a, G>, UcbError>>
 where
   G: Game,

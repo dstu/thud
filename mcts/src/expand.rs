@@ -7,6 +7,7 @@ use search_graph;
 use std::collections::HashSet;
 use std::default::Default;
 
+/// Ensures that the outgoing child edges of `node` have all been expanded.
 pub fn expand<'a, G>(
   mut node: search_graph::mutators::MutNode<'a, G::State, VertexData, EdgeData<G>>,
 ) where

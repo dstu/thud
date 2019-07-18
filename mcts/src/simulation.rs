@@ -8,7 +8,7 @@ use std::result::Result;
 
 use rand::Rng;
 
-pub trait Simulator<G, R>: From<SearchSettings>
+pub trait Simulator<G, R>: for<'a> From<&'a SearchSettings>
 where
   G: Game,
   R: Rng,

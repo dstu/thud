@@ -18,7 +18,7 @@ pub trait State: Debug + Hash + Eq + Clone {
   fn terminated(&self) -> bool;
 }
 
-pub trait Payoff: Debug + Add + AddAssign + Default {
+pub trait Payoff: Add + AddAssign + Debug + Default {
   type State: State;
   type PlayerId: Debug;
 
