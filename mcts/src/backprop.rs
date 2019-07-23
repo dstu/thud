@@ -10,7 +10,6 @@ use crate::ucb;
 use crate::SearchSettings;
 use log::trace;
 use rand::Rng;
-use search_graph::nav::{Edge, Node, ParentList};
 
 /// Provides a method for selecting outgoing parent edges to follow during
 /// backprop phase of MCTS.
@@ -19,13 +18,14 @@ where
   G: 'a + Game,
   R: Rng,
 {
-  type Items: Iterator<Item = Edge<'a, G::State, VertexData, EdgeData<G>>>;
+  type Items: Iterator<Item = search_graph::view::EdgeRef<'a>>;
 
   /// Returns the edges to follow when pushing statistics back up through the
   /// search graph.
-  fn select(
+  fn select<I: IntoIterator<Item = search_graph::view::EdgeRef<'a>>>(
     &self,
-    parents: ParentList<'a, G::State, VertexData, EdgeData<G>>,
+    graph: &search_graph::view::View<G::State, VertexData, EdgeData<G>>,
+    parents: I,
     payoff: &G::Payoff,
     rng: &mut R,
   ) -> Self::Items;
@@ -37,18 +37,19 @@ where
 /// iterator is lazy, and the edges that it yields may be affected by statistics
 /// updates if they are applied during iteration.
 pub fn backprop_iter<'a, 'b, G, S, R>(
-  node: Node<'a, G::State, VertexData, EdgeData<G>>,
+  graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
+  node: search_graph::view::NodeRef<'a>,
   payoff: &'b G::Payoff,
   selector: &'b S,
   rng: &'b mut R,
-) -> impl Iterator<Item = Edge<'a, G::State, VertexData, EdgeData<G>>> + 'b
+) -> impl Iterator<Item = search_graph::view::EdgeRef<'a>> + 'b
 where
   'a: 'b,
   G: Game,
   S: BackpropSelector<'a, G, R> + 'b,
   R: Rng,
 {
-  BackpropIter::new(node, payoff, selector, rng)
+  BackpropIter::new(graph, node, payoff, selector, rng)
 }
 
 /// Chains together parent traversals.
@@ -58,8 +59,9 @@ where
   S: BackpropSelector<'a, G, R> + 'b,
   R: Rng,
 {
+  graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
   /// Nodes whose parent edges to traverse.
-  stack: Vec<Node<'a, G::State, VertexData, EdgeData<G>>>,
+  stack: Vec<search_graph::view::NodeRef<'a>>,
   /// Edges from most recently examined node.
   parent_edges: S::Items,
   payoff: &'b G::Payoff,
@@ -74,13 +76,15 @@ where
   R: Rng,
 {
   fn new(
-    node: Node<'a, G::State, VertexData, EdgeData<G>>,
+    graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
+    node: search_graph::view::NodeRef<'a>,
     payoff: &'b G::Payoff,
     selector: &'b S,
     rng: &'b mut R,
   ) -> Self {
-    let parent_edges = selector.select(node.get_parent_list(), payoff, rng);
+    let parent_edges = selector.select(graph, graph.parents(node), payoff, rng);
     BackpropIter {
+      graph,
       stack: vec![],
       parent_edges,
       payoff,
@@ -96,22 +100,22 @@ where
   S: BackpropSelector<'a, G, R>,
   R: Rng,
 {
-  type Item = Edge<'a, G::State, VertexData, EdgeData<G>>;
+  type Item = search_graph::view::EdgeRef<'a>;
 
   fn next(&mut self) -> Option<Self::Item> {
     while let Some(parent) = self.parent_edges.next() {
-      if !parent.get_data().mark_backprop_traversal() {
-        self.stack.push(parent.get_source());
+      if !self.graph.edge_data(parent).mark_backprop_traversal() {
+        self.stack.push(self.graph.edge_source(parent));
         return Some(parent);
       }
     }
     while let Some(node) = self.stack.pop() {
       self.parent_edges = self
         .selector
-        .select(node.get_parent_list(), self.payoff, self.rng);
+        .select(self.graph, self.graph.parents(node), self.payoff, self.rng);
       while let Some(parent) = self.parent_edges.next() {
-        if !parent.get_data().mark_backprop_traversal() {
-          self.stack.push(parent.get_source());
+        if !self.graph.edge_data(parent).mark_backprop_traversal() {
+          self.stack.push(self.graph.edge_source(parent));
           return Some(parent);
         }
       }
@@ -126,23 +130,25 @@ where
 
 /// Iterable view over parents of a graph node that selects parents for which
 /// this node is a best child.
-pub struct ParentSelectionIter<'a, G, I>
+pub struct ParentSelectionIter<'a, 'b, G, I>
 where
   G: 'a + Game,
-  I: Iterator<Item = Edge<'a, G::State, VertexData, EdgeData<G>>>,
+  I: Iterator<Item = search_graph::view::EdgeRef<'a>>
 {
+  graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
   parents: I,
   explore_bias: f64,
   game_type: PhantomData<&'a G>,
 }
 
-impl<'a, G, I> ParentSelectionIter<'a, G, I>
+impl<'a, 'b, G, I> ParentSelectionIter<'a, 'b, G, I>
 where
   G: 'a + Game,
-  I: Iterator<Item = Edge<'a, G::State, VertexData, EdgeData<G>>>,
+  I: Iterator<Item = search_graph::view::EdgeRef<'a>>,
 {
-  pub fn new(parents: I, explore_bias: f64) -> Self {
+  pub fn new(graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>, parents: I, explore_bias: f64) -> Self {
     ParentSelectionIter {
+      graph,
       parents,
       explore_bias,
       game_type: PhantomData,
@@ -150,38 +156,36 @@ where
   }
 }
 
-impl<'a, G, I> Iterator for ParentSelectionIter<'a, G, I>
+impl<'a, 'b, G, I> Iterator for ParentSelectionIter<'a, 'b, G, I>
 where
   G: 'a + Game,
-  I: Iterator<Item = Edge<'a, G::State, VertexData, EdgeData<G>>>,
+  I: Iterator<Item = search_graph::view::EdgeRef<'a>>,
 {
-  type Item = Edge<'a, G::State, VertexData, EdgeData<G>>;
+  type Item = search_graph::view::EdgeRef<'a>;
 
-  fn next(&mut self) -> Option<Edge<'a, G::State, VertexData, EdgeData<G>>> {
+  fn next(&mut self) -> Option<search_graph::view::EdgeRef<'a>> {
     loop {
       match self.parents.next() {
         None => return None,
         Some(e) => {
-          if e.get_data().mark_backprop_traversal() {
+          if self.graph.edge_data(e).mark_backprop_traversal() {
             trace!(
-              "ParentSelectionIter::next: edge {} (from node {}) was already visited in backtrace",
-              e.get_id(),
-              e.get_source().get_id()
+              "ParentSelectionIter::next: edge was already visited in backtrace",
             );
             continue;
           }
-          if ucb::is_best_child::<G>(&e, self.explore_bias) {
+          if ucb::is_best_child::<G>(self.graph, e, self.explore_bias) {
             trace!(
-              "ParentSelectionIter::next: edge {} (from node {}) is a best child",
-              e.get_id(),
-              e.get_source().get_id()
+              "ParentSelectionIter::next: edge {:?} (from node {:?}) is a best child",
+              e,
+              self.graph.edge_source(e),
             );
             return Some(e);
           }
           trace!(
-            "ParentSelectionIter::next: edge {} (data {:?}) is not a best child",
-            e.get_id(),
-            e.get_data()
+            "ParentSelectionIter::next: edge {:?} (data {:?}) is not a best child",
+            e,
+            self.graph.edge_data(e),
           );
         }
       }
@@ -190,21 +194,22 @@ where
 }
 
 pub fn backprop<'a, 'b, G, S, R>(
-  node: Node<'a, G::State, VertexData, EdgeData<G>>,
+  graph: &search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
+  node: search_graph::view::NodeRef<'a>,
   payoff: &G::Payoff,
   selector: &S,
   rng: &mut R,
 ) where
   'a: 'b,
-  G: Game,
+  G: Game + 'a,
   S: BackpropSelector<'a, G, R> + 'b,
   R: Rng,
 {
   // Traverse parent nodes and place them into a materialized collection because
   // updating the statistics alters best child status, and backprop_iter returns
   // a lazy iterator.
-  let statistics: Vec<&EdgeData<G>> = backprop_iter(node, payoff, selector, rng)
-    .map(|edge| edge.get_data())
+  let statistics: Vec<&EdgeData<G>> = backprop_iter(graph, node, payoff, selector, rng)
+    .map(|edge| graph.edge_data(edge))
     .collect();
   for s in statistics {
     s.statistics.increment(payoff);

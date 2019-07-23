@@ -8,20 +8,16 @@ use search_graph;
 use std::cmp::Ordering;
 use std::error::Error;
 use std::fmt;
-use std::marker::PhantomData;
 use std::result::Result;
 
 /// Represents success when computing the UCB score for a child.
-pub enum UcbSuccess<'a, G>
-where
-  G: Game + 'a,
-{
+pub enum UcbSuccess<'a> {
   /// No (finite) value can be computed, but the UCB policy indicates that
   /// this child should be selected. E.g., the child has not yet been visited.
-  Select(search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G>>),
+  Select(search_graph::view::EdgeRef<'a>),
   /// A value is computed.
   Value(
-    search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G>>,
+    search_graph::view::EdgeRef<'a>,
     f64,
   ),
 }
@@ -38,16 +34,16 @@ pub enum UcbError {
 }
 
 /// Lazy iterator over UCB scores for a series of edges.
-pub struct EdgeUcbIter<'a, G, I>
+pub struct EdgeUcbIter<'a, 'b, G, I>
 where
+  'a: 'b,
   G: 'a + Game,
-  I: 'a + Iterator<Item = search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G>>>,
+  I: 'b + Iterator<Item = search_graph::view::EdgeRef<'a>>,
 {
-  lifetime_marker: PhantomData<&'a ()>,
   log_parent_visits: f64,
   explore_bias: f64,
+  graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
   edges: I,
-  game_type: PhantomData<G>,
 }
 
 impl fmt::Display for UcbError {
@@ -68,12 +64,13 @@ impl Error for UcbError {
   }
 }
 
-impl<'a, G, I> EdgeUcbIter<'a, G, I>
+impl<'a, 'b, G, I> EdgeUcbIter<'a, 'b, G, I>
 where
+  'a: 'b,
   G: Game,
-  I: 'a + Iterator<Item = search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G>>>,
+  I: 'b + Iterator<Item = search_graph::view::EdgeRef<'a>>,
 {
-  /// Constructs a new `ThudEdgeUcbIter` that will compute UCB scores using the
+  /// Constructs a new `EdgeUcbIter` that will compute UCB scores using the
   /// given constants. All floating-point values are assumed to be valid
   /// floating-point values and positive.
   ///
@@ -84,31 +81,31 @@ where
   ///  - `edges`: an iterator over edge handles for which to compute UCB
   ///    scores. This should usually be a list of child edges which share a
   ///    parent vertex.
-  pub fn new(log_parent_visits: f64, explore_bias: f64, edges: I) -> Self {
+  pub fn new(log_parent_visits: f64, explore_bias: f64, graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>, edges: I) -> Self {
     EdgeUcbIter {
-      lifetime_marker: PhantomData,
       log_parent_visits: log_parent_visits,
       explore_bias: explore_bias,
+      graph,
       edges: edges,
-      game_type: PhantomData,
     }
   }
 }
 
-impl<'a, G, I> Iterator for EdgeUcbIter<'a, G, I>
+impl<'a, 'b, G, I> Iterator for EdgeUcbIter<'a, 'b, G, I>
 where
+  'a: 'b,
   G: Game,
-  I: 'a + Iterator<Item = search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G>>>,
+  I: 'b + Iterator<Item = search_graph::view::EdgeRef<'a>>,
 {
-  type Item = Result<UcbSuccess<'a, G>, UcbError>;
+  type Item = Result<UcbSuccess<'a>, UcbError>;
 
-  fn next(&mut self) -> Option<Result<UcbSuccess<'a, G>, UcbError>> {
+  fn next(&mut self) -> Option<Result<UcbSuccess<'a>, UcbError>> {
     self.edges.next().map(|e| {
-      let payoff = e.get_data().statistics.as_payoff();
+      let payoff = self.graph.edge_data(e).statistics.as_payoff();
       if payoff.visits() == 0 {
         Ok(UcbSuccess::Select(e))
       } else {
-        Ok(child_score(self.log_parent_visits, self.explore_bias, e))
+        Ok(child_score(self.log_parent_visits, self.explore_bias, self.graph, e))
       }
     })
   }
@@ -122,14 +119,15 @@ where
 pub fn child_score<'a, G: Game>(
   log_parent_visits: f64,
   explore_bias: f64,
-  child: search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G>>,
-) -> UcbSuccess<'a, G> {
-  let payoff = child.get_data().statistics.as_payoff();
+  graph: &search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
+  child: search_graph::view::EdgeRef<'a>,
+) -> UcbSuccess<'a> {
+  let payoff = graph.edge_data(child).statistics.as_payoff();
   if payoff.visits() == 0 {
     UcbSuccess::Select(child)
   } else {
     let child_visits = payoff.visits() as f64;
-    let child_payoff = payoff.score(child.get_source().get_label().active_player()) as f64;
+    let child_payoff = payoff.score(graph.node_state(graph.edge_source(child)).active_player()) as f64;
     let ucb =
       child_payoff / child_visits + explore_bias * f64::sqrt(log_parent_visits / child_visits);
     UcbSuccess::Value(child, ucb)
@@ -149,44 +147,36 @@ pub fn child_score<'a, G: Game>(
 /// children. But when doing backpropagation on a full game state graph (not
 /// just a tree), we want to know all of the parent edges which could have
 /// rolled out to a given child.
-pub fn is_best_child<'a, G: 'a + Game>(
-  e: &search_graph::nav::Edge<'a, G::State, VertexData, EdgeData<G>>,
+pub fn is_best_child<'a, 'b, G: 'a + Game>(
+  graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
+  e: search_graph::view::EdgeRef<'a>,
   explore_bias: f64,
-) -> bool {
-  let payoff = e.get_data().statistics.as_payoff();
+) -> bool where 'a: 'b {
+  let payoff = graph.edge_data(e).statistics.as_payoff();
   // trace!("is_best_child: edge {} has {} visits", e.get_id(), stats.visits);
   if payoff.visits() == 0 {
     // Edge has been visited, but statistics aren't yet updated.
     // trace!("is_best_child: edge {} is a best child because stats.visits == 0", e.get_id());
     return true;
   }
-  let parent = e.get_source();
-  let siblings = parent.get_child_list();
-  if siblings.len() == 1 {
-    // Only child of parent.
-    // trace!("is_best_child: edge {} is a best child because it has no siblings", e.get_id());
-    return true;
-  }
+  let parent = graph.edge_source(e);
   // trace!("is_best_child: edge {} (from node {}) has {} siblings", e.get_id(), parent.get_id(), siblings.len());
   let log_parent_visits = {
     let mut parent_visits = 0;
-    for child_edge in parent.get_child_list().iter() {
-      parent_visits += child_edge.get_data().statistics.as_payoff().visits();
+    for child_edge in graph.children(parent) {
+      parent_visits += graph.edge_data(child_edge).statistics.as_payoff().visits();
     }
     f64::ln(parent_visits as f64)
   };
   let mut edge_ucb = None;
   let mut best_ucb = ::std::f64::MIN;
-  let ucb_iter = EdgeUcbIter::<
-    G,
-    search_graph::nav::ChildListIter<'a, G::State, VertexData, EdgeData<G>>,
-  >::new(log_parent_visits, explore_bias, siblings.iter());
+  let ucb_iter = EdgeUcbIter::new(log_parent_visits, explore_bias, graph, graph.children(parent));
   // Scan through siblings to find the maximum UCB score. This is
   // short-circuited using a lazy iterator to ameliorate the O(n) running
   // time.
   for ucb in ucb_iter {
     match ucb {
-      Ok(UcbSuccess::Select(ref sibling)) if e.get_id() == sibling.get_id() => {
+      Ok(UcbSuccess::Select(sibling)) if e == sibling => {
         // trace!("is_best_child: edge {} is best child by fiat of score computation", e.get_id());
         return true;
       }
@@ -197,7 +187,7 @@ pub fn is_best_child<'a, G: 'a + Game>(
         }
       }
       Ok(UcbSuccess::Value(sibling, score)) => {
-        if sibling.get_id() == e.get_id() {
+        if sibling == e {
           if best_ucb > score {
             // trace!("is_best_child: found ucb {} for edge {}, but a sibling has a higher ucb of {}", score, e.get_id(), best_ucb);
             return false;
@@ -292,27 +282,29 @@ pub fn is_best_child<'a, G: 'a + Game>(
   // }
 }
 
-pub fn find_best_child_edge_index<'a, G, R>(
-  c: &search_graph::nav::ChildList<'a, G::State, VertexData, EdgeData<G>>,
+pub fn find_best_child_edge_index<'a, 'b, G, R>(
+  graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
+  parent: search_graph::view::NodeRef<'a>,
   explore_bias: f64,
   rng: &mut R,
 ) -> Result<usize, UcbError>
 where
+  'a: 'b,
   G: 'a + Game,
   R: Rng,
 {
-  if c.is_empty() {
+  if graph.children(parent).next().is_none() {
     error!(
-      "find_best_child_edge_index: no children for node {} with board: {:?}",
-      c.get_source_node().get_id(),
-      c.get_source_node().get_label()
+      "find_best_child_edge_index: no children for node {:?} with board: {:?}",
+      parent,
+      graph.node_state(parent),
     );
     return Err(UcbError::NoChildren);
   }
   let log_parent_visits = {
     let mut parent_visits = 0;
-    for child in c.iter() {
-      parent_visits += child.get_data().statistics.as_payoff().visits();
+    for child in graph.children(parent) {
+      parent_visits += graph.edge_data(child).statistics.as_payoff().visits();
     }
     if parent_visits == 0 {
       // When we visit a vertex for the first time, it will have zero visits.
@@ -325,10 +317,7 @@ where
   let mut best_index = 0;
   let mut best_ucb = ::std::f64::MIN;
   let mut sampling_count = 0u32;
-  let ucb_iter = EdgeUcbIter::<
-    G,
-    search_graph::nav::ChildListIter<'a, G::State, VertexData, EdgeData<G>>,
-  >::new(log_parent_visits, explore_bias, c.iter());
+  let ucb_iter = EdgeUcbIter::new(log_parent_visits, explore_bias, graph, graph.children(parent));
   for (index, ucb) in ucb_iter.enumerate() {
     match ucb {
       Ok(UcbSuccess::Select(_)) => {
@@ -365,29 +354,4 @@ where
     }
   }
   return Ok(best_index);
-}
-
-pub fn child_edge_ucb_scores<'a, G, R>(
-  c: &search_graph::nav::ChildList<'a, G::State, VertexData, EdgeData<G>>,
-  explore_bias: f64,
-  _rng: &mut R,
-) -> Vec<Result<UcbSuccess<'a, G>, UcbError>>
-where
-  G: Game,
-  R: Rng,
-{
-  let log_parent_visits = {
-    let mut parent_visits = 0;
-    for child in c.iter() {
-      parent_visits += child.get_data().statistics.as_payoff().visits();
-    }
-    if parent_visits == 0 {
-      // When we visit a vertex for the first time, it will have zero visits.
-      0.0
-    } else {
-      // Otherwise, it should be positive.
-      f64::ln(parent_visits as f64)
-    }
-  };
-  EdgeUcbIter::new(log_parent_visits, explore_bias, c.iter()).collect()
 }
