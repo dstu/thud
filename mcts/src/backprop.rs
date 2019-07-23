@@ -13,11 +13,7 @@ use rand::Rng;
 
 /// Provides a method for selecting outgoing parent edges to follow during
 /// backprop phase of MCTS.
-pub trait BackpropSelector<'a, G, R>: for<'b> From<&'b SearchSettings>
-where
-  G: 'a + Game,
-  R: Rng,
-{
+pub trait BackpropSelector<'a, G: Game, R: Rng>: for<'b> From<&'b SearchSettings> {
   type Items: Iterator<Item = search_graph::view::EdgeRef<'a>>;
 
   /// Returns the edges to follow when pushing statistics back up through the
@@ -46,7 +42,7 @@ pub fn backprop_iter<'a, 'b, G, S, R>(
 where
   'a: 'b,
   G: Game,
-  S: BackpropSelector<'a, G, R> + 'b,
+  S: BackpropSelector<'a, G, R>,
   R: Rng,
 {
   BackpropIter::new(graph, node, payoff, selector, rng)

@@ -37,7 +37,7 @@ pub enum UcbError {
 pub struct EdgeUcbIter<'a, 'b, G, I>
 where
   'a: 'b,
-  G: 'a + Game,
+  G: Game,
   I: 'b + Iterator<Item = search_graph::view::EdgeRef<'a>>,
 {
   log_parent_visits: f64,
