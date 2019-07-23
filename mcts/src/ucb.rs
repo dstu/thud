@@ -16,10 +16,7 @@ pub enum UcbSuccess<'a> {
   /// this child should be selected. E.g., the child has not yet been visited.
   Select(search_graph::view::EdgeRef<'a>),
   /// A value is computed.
-  Value(
-    search_graph::view::EdgeRef<'a>,
-    f64,
-  ),
+  Value(search_graph::view::EdgeRef<'a>, f64),
 }
 
 /// Represents error conditions when computing the UCB score for a child.
@@ -81,7 +78,12 @@ where
   ///  - `edges`: an iterator over edge handles for which to compute UCB
   ///    scores. This should usually be a list of child edges which share a
   ///    parent vertex.
-  pub fn new(log_parent_visits: f64, explore_bias: f64, graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>, edges: I) -> Self {
+  pub fn new(
+    log_parent_visits: f64,
+    explore_bias: f64,
+    graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
+    edges: I,
+  ) -> Self {
     EdgeUcbIter {
       log_parent_visits: log_parent_visits,
       explore_bias: explore_bias,
@@ -105,7 +107,12 @@ where
       if payoff.visits() == 0 {
         Ok(UcbSuccess::Select(e))
       } else {
-        Ok(child_score(self.log_parent_visits, self.explore_bias, self.graph, e))
+        Ok(child_score(
+          self.log_parent_visits,
+          self.explore_bias,
+          self.graph,
+          e,
+        ))
       }
     })
   }
@@ -127,7 +134,8 @@ pub fn child_score<'a, G: Game>(
     UcbSuccess::Select(child)
   } else {
     let child_visits = payoff.visits() as f64;
-    let child_payoff = payoff.score(graph.node_state(graph.edge_source(child)).active_player()) as f64;
+    let child_payoff =
+      payoff.score(graph.node_state(graph.edge_source(child)).active_player()) as f64;
     let ucb =
       child_payoff / child_visits + explore_bias * f64::sqrt(log_parent_visits / child_visits);
     UcbSuccess::Value(child, ucb)
@@ -151,7 +159,10 @@ pub fn is_best_child<'a, 'b, G: 'a + Game>(
   graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
   e: search_graph::view::EdgeRef<'a>,
   explore_bias: f64,
-) -> bool where 'a: 'b {
+) -> bool
+where
+  'a: 'b,
+{
   let payoff = graph.edge_data(e).statistics.as_payoff();
   // trace!("is_best_child: edge {} has {} visits", e.get_id(), stats.visits);
   if payoff.visits() == 0 {
@@ -170,7 +181,12 @@ pub fn is_best_child<'a, 'b, G: 'a + Game>(
   };
   let mut edge_ucb = None;
   let mut best_ucb = ::std::f64::MIN;
-  let ucb_iter = EdgeUcbIter::new(log_parent_visits, explore_bias, graph, graph.children(parent));
+  let ucb_iter = EdgeUcbIter::new(
+    log_parent_visits,
+    explore_bias,
+    graph,
+    graph.children(parent),
+  );
   // Scan through siblings to find the maximum UCB score. This is
   // short-circuited using a lazy iterator to ameliorate the O(n) running
   // time.
@@ -317,7 +333,12 @@ where
   let mut best_index = 0;
   let mut best_ucb = ::std::f64::MIN;
   let mut sampling_count = 0u32;
-  let ucb_iter = EdgeUcbIter::new(log_parent_visits, explore_bias, graph, graph.children(parent));
+  let ucb_iter = EdgeUcbIter::new(
+    log_parent_visits,
+    explore_bias,
+    graph,
+    graph.children(parent),
+  );
   for (index, ucb) in ucb_iter.enumerate() {
     match ucb {
       Ok(UcbSuccess::Select(_)) => {

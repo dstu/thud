@@ -106,9 +106,10 @@ where
       }
     }
     while let Some(node) = self.stack.pop() {
-      self.parent_edges = self
-        .selector
-        .select(self.graph, self.graph.parents(node), self.payoff, self.rng);
+      self.parent_edges =
+        self
+          .selector
+          .select(self.graph, self.graph.parents(node), self.payoff, self.rng);
       while let Some(parent) = self.parent_edges.next() {
         if !self.graph.edge_data(parent).mark_backprop_traversal() {
           self.stack.push(self.graph.edge_source(parent));
@@ -129,7 +130,7 @@ where
 pub struct ParentSelectionIter<'a, 'b, G, I>
 where
   G: 'a + Game,
-  I: Iterator<Item = search_graph::view::EdgeRef<'a>>
+  I: Iterator<Item = search_graph::view::EdgeRef<'a>>,
 {
   graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
   parents: I,
@@ -142,7 +143,11 @@ where
   G: 'a + Game,
   I: Iterator<Item = search_graph::view::EdgeRef<'a>>,
 {
-  pub fn new(graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>, parents: I, explore_bias: f64) -> Self {
+  pub fn new(
+    graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
+    parents: I,
+    explore_bias: f64,
+  ) -> Self {
     ParentSelectionIter {
       graph,
       parents,
@@ -165,9 +170,7 @@ where
         None => return None,
         Some(e) => {
           if self.graph.edge_data(e).mark_backprop_traversal() {
-            trace!(
-              "ParentSelectionIter::next: edge was already visited in backtrace",
-            );
+            trace!("ParentSelectionIter::next: edge was already visited in backtrace",);
             continue;
           }
           if ucb::is_best_child::<G>(self.graph, e, self.explore_bias) {

@@ -72,7 +72,7 @@ pub struct SearchSettings {
   pub explore_bias: f64,
 }
 
-/// 
+///
 pub struct RolloutPhase<'a, R: Rng, G: Game> {
   rng: R,
   settings: SearchSettings,
@@ -130,9 +130,10 @@ impl<'a, R: Rng, G: Game> ScoringPhase<'a, R, G> {
   pub fn score<S: Simulator<G, R>>(mut self) -> Result<BackpropPhase<'a, R, G>, S::Error> {
     let payoff = match G::Payoff::from_state(self.graph.node_state(self.rollout_node)) {
       Some(p) => p,
-      None => {
-        S::from(&self.settings).simulate(self.graph.node_state(self.rollout_node).clone(), &mut self.rng)?
-      }
+      None => S::from(&self.settings).simulate(
+        self.graph.node_state(self.rollout_node).clone(),
+        &mut self.rng,
+      )?,
     };
     Ok(BackpropPhase {
       rng: self.rng,
@@ -184,18 +185,24 @@ pub struct ExpandPhase<'a, R: Rng, G: Game> {
 impl<'a, R: Rng, G: Game> ExpandPhase<'a, R, G> {
   pub fn expand(mut self) -> RolloutPhase<'a, R, G> {
     if !self.graph.node_data(self.rollout_node).mark_expanded() {
-      self.graph.node_state(self.rollout_node).clone().for_actions(|action| {
-        let mut child_state = self.graph.node_state(self.rollout_node).clone();
-        child_state.do_action(&action);
-        let child = match self.graph.find_node(&child_state) {
-          Some(n) => n,
-          None => self
+      self
+        .graph
+        .node_state(self.rollout_node)
+        .clone()
+        .for_actions(|action| {
+          let mut child_state = self.graph.node_state(self.rollout_node).clone();
+          child_state.do_action(&action);
+          let child = match self.graph.find_node(&child_state) {
+            Some(n) => n,
+            None => self
+              .graph
+              .append_node(child_state.clone(), Default::default()),
+          };
+          self
             .graph
-            .append_node(child_state.clone(), Default::default()),
-        };
-        self.graph.append_edge(self.rollout_node, child, EdgeData::new(action));
-        true
-      });
+            .append_edge(self.rollout_node, child, EdgeData::new(action));
+          true
+        });
     }
     RolloutPhase {
       rng: self.rng,
