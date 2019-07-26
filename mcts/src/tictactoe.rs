@@ -120,8 +120,4 @@ impl game::State for State {
       Player::O => Player::X,
     };
   }
-
-  fn terminated(&self) -> bool {
-    self.board.winner().is_some()
-  }
 }

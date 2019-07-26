@@ -14,7 +14,6 @@ pub trait State: Debug + Hash + Eq + Clone {
   where
     F: FnMut(Self::Action) -> bool;
   fn do_action(&mut self, action: &<Self as State>::Action);
-  fn terminated(&self) -> bool;
 }
 
 pub trait Statistics<S: State, P>: Clone + Debug + Default {
