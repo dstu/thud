@@ -11,12 +11,12 @@ use std::fmt;
 use std::result::Result;
 
 /// Represents success when computing the UCB score for a child.
-pub enum UcbSuccess<'a> {
+pub enum UcbSuccess<'id> {
   /// No (finite) value can be computed, but the UCB policy indicates that
   /// this child should be selected. E.g., the child has not yet been visited.
-  Select(search_graph::view::EdgeRef<'a>),
+  Select(search_graph::view::EdgeRef<'id>),
   /// A value is computed.
-  Value(search_graph::view::EdgeRef<'a>, f64),
+  Value(search_graph::view::EdgeRef<'id>, f64),
 }
 
 /// Represents error conditions when computing the UCB score for a child.
@@ -31,15 +31,14 @@ pub enum UcbError {
 }
 
 /// Lazy iterator over UCB scores for a series of edges.
-pub struct EdgeUcbIter<'a, 'b, G, I>
+pub struct EdgeUcbIter<'a, 'b, 'id, G, I>
 where
-  'a: 'b,
   G: Game,
-  I: 'b + Iterator<Item = search_graph::view::EdgeRef<'a>>,
+  I: Iterator<Item = search_graph::view::EdgeRef<'id>>,
 {
   log_parent_visits: f64,
   explore_bias: f64,
-  graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
+  graph: &'b search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
   edges: I,
 }
 
@@ -61,11 +60,10 @@ impl Error for UcbError {
   }
 }
 
-impl<'a, 'b, G, I> EdgeUcbIter<'a, 'b, G, I>
+impl<'a, 'b, 'id, G, I> EdgeUcbIter<'a, 'b, 'id, G, I>
 where
-  'a: 'b,
   G: Game,
-  I: 'b + Iterator<Item = search_graph::view::EdgeRef<'a>>,
+  I: Iterator<Item = search_graph::view::EdgeRef<'id>>,
 {
   /// Constructs a new `EdgeUcbIter` that will compute UCB scores using the
   /// given constants. All floating-point values are assumed to be valid
@@ -81,7 +79,7 @@ where
   pub fn new(
     log_parent_visits: f64,
     explore_bias: f64,
-    graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
+    graph: &'b search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
     edges: I,
   ) -> Self {
     EdgeUcbIter {
@@ -93,15 +91,14 @@ where
   }
 }
 
-impl<'a, 'b, G, I> Iterator for EdgeUcbIter<'a, 'b, G, I>
+impl<'a, 'b, 'id, G, I> Iterator for EdgeUcbIter<'a, 'b, 'id, G, I>
 where
-  'a: 'b,
   G: Game,
-  I: 'b + Iterator<Item = search_graph::view::EdgeRef<'a>>,
+  I: Iterator<Item = search_graph::view::EdgeRef<'id>>,
 {
-  type Item = Result<UcbSuccess<'a>, UcbError>;
+  type Item = Result<UcbSuccess<'id>, UcbError>;
 
-  fn next(&mut self) -> Option<Result<UcbSuccess<'a>, UcbError>> {
+  fn next(&mut self) -> Option<Result<UcbSuccess<'id>, UcbError>> {
     self.edges.next().map(|e| {
       let payoff = self.graph.edge_data(e).statistics.as_payoff();
       if payoff.visits() == 0 {
@@ -123,12 +120,12 @@ where
 }
 
 /// Returns the UCB policy result for the given values.
-pub fn child_score<'a, G: Game>(
+pub fn child_score<'a, 'id, G: Game>(
   log_parent_visits: f64,
   explore_bias: f64,
-  graph: &search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
-  child: search_graph::view::EdgeRef<'a>,
-) -> UcbSuccess<'a> {
+  graph: &search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
+  child: search_graph::view::EdgeRef<'id>,
+) -> UcbSuccess<'id> {
   let payoff = graph.edge_data(child).statistics.as_payoff();
   if payoff.visits() == 0 {
     UcbSuccess::Select(child)
@@ -155,13 +152,11 @@ pub fn child_score<'a, G: Game>(
 /// children. But when doing backpropagation on a full game state graph (not
 /// just a tree), we want to know all of the parent edges which could have
 /// rolled out to a given child.
-pub fn is_best_child<'a, 'b, G: 'a + Game>(
-  graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
-  e: search_graph::view::EdgeRef<'a>,
+pub fn is_best_child<'a, 'id, G: Game>(
+  graph: &search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
+  e: search_graph::view::EdgeRef<'id>,
   explore_bias: f64,
 ) -> bool
-where
-  'a: 'b,
 {
   let payoff = graph.edge_data(e).statistics.as_payoff();
   // trace!("is_best_child: edge {} has {} visits", e.get_id(), stats.visits);
@@ -298,15 +293,14 @@ where
   // }
 }
 
-pub fn find_best_child_edge_index<'a, 'b, G, R>(
-  graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
-  parent: search_graph::view::NodeRef<'a>,
+pub fn find_best_child_edge_index<'a, 'id, G, R>(
+  graph: &search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
+  parent: search_graph::view::NodeRef<'id>,
   explore_bias: f64,
   rng: &mut R,
 ) -> Result<usize, UcbError>
 where
-  'a: 'b,
-  G: 'a + Game,
+  G: Game,
   R: Rng,
 {
   if graph.children(parent).next().is_none() {

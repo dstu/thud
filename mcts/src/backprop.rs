@@ -2,7 +2,6 @@
 //! search graph.
 
 use std::iter::Iterator;
-use std::marker::PhantomData;
 
 use crate::game::{Game, Statistics};
 use crate::graph::{EdgeData, VertexData};
@@ -13,12 +12,12 @@ use rand::Rng;
 
 /// Provides a method for selecting outgoing parent edges to follow during
 /// backprop phase of MCTS.
-pub trait BackpropSelector<'a, G: Game, R: Rng>: for<'b> From<&'b SearchSettings> {
-  type Items: Iterator<Item = search_graph::view::EdgeRef<'a>>;
+pub trait BackpropSelector<'id, G: Game, R: Rng>: for<'b> From<&'b SearchSettings> {
+  type Items: Iterator<Item = search_graph::view::EdgeRef<'id>>;
 
   /// Returns the edges to follow when pushing statistics back up through the
   /// search graph.
-  fn select<I: IntoIterator<Item = search_graph::view::EdgeRef<'a>>>(
+  fn select<I: IntoIterator<Item = search_graph::view::EdgeRef<'id>>>(
     &self,
     graph: &search_graph::view::View<G::State, VertexData, EdgeData<G>>,
     parents: I,
@@ -32,32 +31,32 @@ pub trait BackpropSelector<'a, G: Game, R: Rng>: for<'b> From<&'b SearchSettings
 /// statistics of each edge produced by this iterator. Keep in mind that the
 /// iterator is lazy, and the edges that it yields may be affected by statistics
 /// updates if they are applied during iteration.
-pub fn backprop_iter<'a, 'b, G, S, R>(
-  graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
-  node: search_graph::view::NodeRef<'a>,
+pub fn backprop_iter<'a, 'b, 'id, G, S, R>(
+  graph: &'b search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
+  node: search_graph::view::NodeRef<'id>,
   payoff: &'b G::Payoff,
   selector: &'b S,
   rng: &'b mut R,
-) -> impl Iterator<Item = search_graph::view::EdgeRef<'a>> + 'b
+) -> impl Iterator<Item = search_graph::view::EdgeRef<'id>> + 'b
 where
   'a: 'b,
   G: Game,
-  S: BackpropSelector<'a, G, R>,
+  S: BackpropSelector<'id, G, R>,
   R: Rng,
 {
   BackpropIter::new(graph, node, payoff, selector, rng)
 }
 
 /// Chains together parent traversals.
-struct BackpropIter<'a, 'b, G, S, R>
+struct BackpropIter<'a, 'b, 'id, G, S, R>
 where
   G: Game,
-  S: BackpropSelector<'a, G, R> + 'b,
+  S: BackpropSelector<'id, G, R> + 'b,
   R: Rng,
 {
-  graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
+  graph: &'b search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
   /// Nodes whose parent edges to traverse.
-  stack: Vec<search_graph::view::NodeRef<'a>>,
+  stack: Vec<search_graph::view::NodeRef<'id>>,
   /// Edges from most recently examined node.
   parent_edges: S::Items,
   payoff: &'b G::Payoff,
@@ -65,15 +64,15 @@ where
   rng: &'b mut R,
 }
 
-impl<'a, 'b, G, S, R> BackpropIter<'a, 'b, G, S, R>
+impl<'a, 'b, 'id, G, S, R> BackpropIter<'a, 'b, 'id, G, S, R>
 where
   G: Game,
-  S: BackpropSelector<'a, G, R>,
+  S: BackpropSelector<'id, G, R> + 'b,
   R: Rng,
 {
   fn new(
-    graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
-    node: search_graph::view::NodeRef<'a>,
+    graph: &'b search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
+    node: search_graph::view::NodeRef<'id>,
     payoff: &'b G::Payoff,
     selector: &'b S,
     rng: &'b mut R,
@@ -90,13 +89,13 @@ where
   }
 }
 
-impl<'a, 'b, G, S, R> Iterator for BackpropIter<'a, 'b, G, S, R>
+impl<'a, 'b, 'id, G, S, R> Iterator for BackpropIter<'a, 'b, 'id, G, S, R>
 where
   G: Game,
-  S: BackpropSelector<'a, G, R>,
+  S: BackpropSelector<'id, G, R> + 'b,
   R: Rng,
 {
-  type Item = search_graph::view::EdgeRef<'a>;
+  type Item = search_graph::view::EdgeRef<'id>;
 
   fn next(&mut self) -> Option<Self::Item> {
     while let Some(parent) = self.parent_edges.next() {
@@ -127,24 +126,19 @@ where
 
 /// Iterable view over parents of a graph node that selects parents for which
 /// this node is a best child.
-pub struct ParentSelectionIter<'a, 'b, G, I>
-where
-  G: 'a + Game,
-  I: Iterator<Item = search_graph::view::EdgeRef<'a>>,
+pub struct ParentSelectionIter<'a, 'b, 'id, G, I>
+  where G: Game, I: Iterator<Item = search_graph::view::EdgeRef<'id>>
 {
-  graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
+  graph: &'b search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
   parents: I,
   explore_bias: f64,
-  game_type: PhantomData<&'a G>,
 }
 
-impl<'a, 'b, G, I> ParentSelectionIter<'a, 'b, G, I>
-where
-  G: 'a + Game,
-  I: Iterator<Item = search_graph::view::EdgeRef<'a>>,
+impl<'a, 'b, 'id, G, I> ParentSelectionIter<'a, 'b, 'id, G, I>
+where G: Game, I: Iterator<Item = search_graph::view::EdgeRef<'id>>,
 {
   pub fn new(
-    graph: &'b search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
+    graph: &'b search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
     parents: I,
     explore_bias: f64,
   ) -> Self {
@@ -152,19 +146,16 @@ where
       graph,
       parents,
       explore_bias,
-      game_type: PhantomData,
     }
   }
 }
 
-impl<'a, 'b, G, I> Iterator for ParentSelectionIter<'a, 'b, G, I>
-where
-  G: 'a + Game,
-  I: Iterator<Item = search_graph::view::EdgeRef<'a>>,
+impl<'a, 'b, 'id, G, I> Iterator for ParentSelectionIter<'a, 'b, 'id, G, I>
+where G: Game, I: Iterator<Item = search_graph::view::EdgeRef<'id>>,
 {
-  type Item = search_graph::view::EdgeRef<'a>;
+  type Item = search_graph::view::EdgeRef<'id>;
 
-  fn next(&mut self) -> Option<search_graph::view::EdgeRef<'a>> {
+  fn next(&mut self) -> Option<Self::Item> {
     loop {
       match self.parents.next() {
         None => return None,
@@ -192,16 +183,15 @@ where
   }
 }
 
-pub fn backprop<'a, 'b, G, S, R>(
-  graph: &search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
-  node: search_graph::view::NodeRef<'a>,
+pub fn backprop<'a, 'id, G, S, R>(
+  graph: &search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
+  node: search_graph::view::NodeRef<'id>,
   payoff: &G::Payoff,
   selector: &S,
   rng: &mut R,
 ) where
-  'a: 'b,
-  G: Game + 'a,
-  S: BackpropSelector<'a, G, R> + 'b,
+  G: Game,
+  S: BackpropSelector<'id, G, R>,
   R: Rng,
 {
   // Traverse parent nodes and place them into a materialized collection because

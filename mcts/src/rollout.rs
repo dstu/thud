@@ -70,26 +70,26 @@ where
   type Error: Error;
 
   /// Returns the element of `children` that should be followed, or an error.
-  fn select<'a>(
+  fn select<'a, 'id>(
     &self,
-    graph: &search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
-    children: impl Iterator<Item = search_graph::view::EdgeRef<'a>>,
+    graph: &search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
+    children: impl Iterator<Item = search_graph::view::EdgeRef<'id>>,
     rng: &mut R,
-  ) -> Result<Option<search_graph::view::EdgeRef<'a>>, Self::Error>;
+  ) -> Result<Option<search_graph::view::EdgeRef<'id>>, Self::Error>;
 }
 
 /// Traverses the game graph downwards from `node` down to some terminating
 /// vertex in the search graph. The terminating vertex will either have a known
 /// payoff, or yield `None` when `selector.select()` is called on it. Returns
 /// the terminating vertex, or an error.
-pub fn rollout<'a, G, S, R>(
-  graph: &search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
-  mut node: search_graph::view::NodeRef<'a>,
+pub fn rollout<'a, 'id, G, S, R>(
+  graph: &search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
+  mut node: search_graph::view::NodeRef<'id>,
   selector: S,
   rng: &mut R,
-) -> Result<search_graph::view::NodeRef<'a>, RolloutError<'a, S::Error>>
+) -> Result<search_graph::view::NodeRef<'id>, RolloutError<'id, S::Error>>
 where
-  G: 'a + Game,
+  G: Game,
   S: RolloutSelector<G, R>,
   R: Rng,
 {

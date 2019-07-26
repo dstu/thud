@@ -63,7 +63,7 @@ pub fn new_search_graph<G: Game>() -> search_graph::Graph<G::State, VertexData, 
   search_graph::Graph::<G::State, VertexData, EdgeData<G>>::new()
 }
 
-/// Settings for a Monte Carlo tree search.
+/// Settings for a round of Monte Carlo tree search.
 #[derive(Clone, Copy, Debug)]
 pub struct SearchSettings {
   /// The number of simulations to run when estimating payout of a new game state.
@@ -72,20 +72,21 @@ pub struct SearchSettings {
   pub explore_bias: f64,
 }
 
-///
-pub struct RolloutPhase<'a, R: Rng, G: Game> {
+/// Recursively traverses the search graph to find a game state from which to
+/// perform payoff estimates.
+pub struct RolloutPhase<'a, 'id, R: Rng, G: Game> {
   rng: R,
   settings: SearchSettings,
-  graph: search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
-  root_node: search_graph::view::NodeRef<'a>,
+  graph: search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
+  root_node: search_graph::view::NodeRef<'id>,
 }
 
-impl<'a, R: Rng, G: Game> RolloutPhase<'a, R, G> {
+impl<'a, 'id, R: Rng, G: Game> RolloutPhase<'a, 'id, R, G> {
   pub fn initialize(
     rng: R,
     settings: SearchSettings,
     root_state: G::State,
-    mut graph: search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
+    mut graph: search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
   ) -> Self {
     let root_node = match graph.find_node(&root_state) {
       Some(n) => n,
@@ -101,7 +102,7 @@ impl<'a, R: Rng, G: Game> RolloutPhase<'a, R, G> {
 
   pub fn rollout<S: RolloutSelector<G, R>>(
     mut self,
-  ) -> Result<ScoringPhase<'a, R, G>, rollout::RolloutError<'a, S::Error>> {
+  ) -> Result<ScoringPhase<'a, 'id, R, G>, rollout::RolloutError<'id, S::Error>> {
     rollout::rollout(
       &self.graph,
       self.root_node,
@@ -118,16 +119,17 @@ impl<'a, R: Rng, G: Game> RolloutPhase<'a, R, G> {
   }
 }
 
-pub struct ScoringPhase<'a, R: Rng, G: Game> {
+/// Computes an estimate of the score for a game state selected during rollout.
+pub struct ScoringPhase<'a, 'id, R: Rng, G: Game> {
   rng: R,
   settings: SearchSettings,
-  graph: search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
-  root_node: search_graph::view::NodeRef<'a>,
-  rollout_node: search_graph::view::NodeRef<'a>,
+  graph: search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
+  root_node: search_graph::view::NodeRef<'id>,
+  rollout_node: search_graph::view::NodeRef<'id>,
 }
 
-impl<'a, R: Rng, G: Game> ScoringPhase<'a, R, G> {
-  pub fn score<S: Simulator<G, R>>(mut self) -> Result<BackpropPhase<'a, R, G>, S::Error> {
+impl<'a, 'id, R: Rng, G: Game> ScoringPhase<'a, 'id, R, G> {
+  pub fn score<S: Simulator<G, R>>(mut self) -> Result<BackpropPhase<'a, 'id, R, G>, S::Error> {
     let payoff = match G::Payoff::from_state(self.graph.node_state(self.rollout_node)) {
       Some(p) => p,
       None => S::from(&self.settings).simulate(
@@ -146,17 +148,21 @@ impl<'a, R: Rng, G: Game> ScoringPhase<'a, R, G> {
   }
 }
 
-pub struct BackpropPhase<'a, R: Rng, G: Game> {
+/// Performs backprop of a known payoff from a node selected during rollout.
+///
+/// The strategy for finding the game-state statistics to update during backprop
+/// is determined by `BackpropSelector`.
+pub struct BackpropPhase<'a, 'id, R: Rng, G: Game> {
   rng: R,
   settings: SearchSettings,
-  graph: search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
-  root_node: search_graph::view::NodeRef<'a>,
-  rollout_node: search_graph::view::NodeRef<'a>,
+  graph: search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
+  root_node: search_graph::view::NodeRef<'id>,
+  rollout_node: search_graph::view::NodeRef<'id>,
   payoff: G::Payoff,
 }
 
-impl<'a, R: Rng, G: Game> BackpropPhase<'a, R, G> {
-  pub fn backprop<S: BackpropSelector<'a, G, R>>(mut self) -> ExpandPhase<'a, R, G> {
+impl<'a, 'id, R: Rng, G: Game> BackpropPhase<'a, 'id, R, G> {
+  pub fn backprop<S: BackpropSelector<'id, G, R>>(mut self) -> ExpandPhase<'a, 'id, R, G> {
     backprop::backprop(
       &self.graph,
       self.rollout_node,
@@ -174,16 +180,22 @@ impl<'a, R: Rng, G: Game> BackpropPhase<'a, R, G> {
   }
 }
 
-pub struct ExpandPhase<'a, R: Rng, G: Game> {
+/// Expands a node in the search graph.
+///
+/// This is done by playing out each of the legal moves at the node's game
+/// state, adding them to the graph if they don't already exist, and then
+/// creating an edge from the original node to the node for the resulting game
+/// state.
+pub struct ExpandPhase<'a, 'id, R: Rng, G: Game> {
   rng: R,
   settings: SearchSettings,
-  graph: search_graph::view::View<'a, G::State, VertexData, EdgeData<G>>,
-  root_node: search_graph::view::NodeRef<'a>,
-  rollout_node: search_graph::view::NodeRef<'a>,
+  graph: search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
+  root_node: search_graph::view::NodeRef<'id>,
+  rollout_node: search_graph::view::NodeRef<'id>,
 }
 
-impl<'a, R: Rng, G: Game> ExpandPhase<'a, R, G> {
-  pub fn expand(mut self) -> RolloutPhase<'a, R, G> {
+impl<'a, 'id, R: Rng, G: Game> ExpandPhase<'a, 'id, R, G> {
+  pub fn expand(mut self) -> RolloutPhase<'a, 'id, R, G> {
     if !self.graph.node_data(self.rollout_node).mark_expanded() {
       self
         .graph

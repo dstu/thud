@@ -1,6 +1,6 @@
-#![feature(associated_type_defaults)]
-#![feature(const_fn)]
-#![feature(custom_attribute)]
+// #![feature(associated_type_defaults)]
+// #![feature(const_fn)]
+// #![feature(custom_attribute)]
 #![cfg_attr(test, feature(plugin))]
 #![cfg_attr(test, plugin(quickcheck_macros))]
 
