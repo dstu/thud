@@ -5,7 +5,9 @@ pub mod game;
 pub mod graph;
 pub mod rollout;
 pub mod simulation;
+pub mod statistics;
 pub mod ucb;
+#[cfg(test)] pub(crate) mod tictactoe;
 
 use self::backprop::BackpropSelector;
 use self::rollout::RolloutSelector;
