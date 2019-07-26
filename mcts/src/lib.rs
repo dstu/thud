@@ -13,7 +13,7 @@ use self::backprop::BackpropSelector;
 use self::rollout::RolloutSelector;
 use self::simulation::Simulator;
 
-use self::game::{Game, Payoff, State, Statistics};
+use self::game::{Game, State, Statistics};
 use self::graph::{EdgeData, VertexData};
 
 use std::convert::From;
@@ -132,7 +132,7 @@ pub struct ScoringPhase<'a, 'id, R: Rng, G: Game> {
 
 impl<'a, 'id, R: Rng, G: Game> ScoringPhase<'a, 'id, R, G> {
   pub fn score<S: Simulator<G, R>>(mut self) -> Result<BackpropPhase<'a, 'id, R, G>, S::Error> {
-    let payoff = match G::Payoff::from_state(self.graph.node_state(self.rollout_node)) {
+    let payoff = match G::payoff_of(self.graph.node_state(self.rollout_node)) {
       Some(p) => p,
       None => S::from(&self.settings).simulate(
         self.graph.node_state(self.rollout_node).clone(),

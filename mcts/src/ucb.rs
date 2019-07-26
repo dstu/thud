@@ -1,6 +1,6 @@
 //! Upper confidence bound (UCB1) algorithm for graph search.
 
-use super::{EdgeData, Game, Payoff, State, Statistics, VertexData};
+use super::{EdgeData, Game, State, Statistics, VertexData};
 use log::error;
 use rand::Rng;
 use search_graph;
@@ -100,8 +100,7 @@ where
 
   fn next(&mut self) -> Option<Result<UcbSuccess<'id>, UcbError>> {
     self.edges.next().map(|e| {
-      let payoff = self.graph.edge_data(e).statistics.as_payoff();
-      if payoff.visits() == 0 {
+      if self.graph.edge_data(e).statistics.visits() == 0 {
         Ok(UcbSuccess::Select(e))
       } else {
         Ok(child_score(
@@ -126,15 +125,15 @@ pub fn child_score<'a, 'id, G: Game>(
   graph: &search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
   child: search_graph::view::EdgeRef<'id>,
 ) -> UcbSuccess<'id> {
-  let payoff = graph.edge_data(child).statistics.as_payoff();
-  if payoff.visits() == 0 {
+  let statistics = &graph.edge_data(child).statistics;
+  if statistics.visits() == 0 {
     UcbSuccess::Select(child)
   } else {
-    let child_visits = payoff.visits() as f64;
-    let child_payoff =
-      payoff.score(graph.node_state(graph.edge_source(child)).active_player()) as f64;
+    let child_visits = statistics.visits() as f64;
+    let child_score =
+      statistics.score(graph.node_state(graph.edge_source(child)).active_player()) as f64;
     let ucb =
-      child_payoff / child_visits + explore_bias * f64::sqrt(log_parent_visits / child_visits);
+      child_score / child_visits + explore_bias * f64::sqrt(log_parent_visits / child_visits);
     UcbSuccess::Value(child, ucb)
   }
 }
@@ -158,9 +157,9 @@ pub fn is_best_child<'a, 'id, G: Game>(
   explore_bias: f64,
 ) -> bool
 {
-  let payoff = graph.edge_data(e).statistics.as_payoff();
+  let statistics = &graph.edge_data(e).statistics;
   // trace!("is_best_child: edge {} has {} visits", e.get_id(), stats.visits);
-  if payoff.visits() == 0 {
+  if statistics.visits() == 0 {
     // Edge has been visited, but statistics aren't yet updated.
     // trace!("is_best_child: edge {} is a best child because stats.visits == 0", e.get_id());
     return true;
@@ -170,7 +169,7 @@ pub fn is_best_child<'a, 'id, G: Game>(
   let log_parent_visits = {
     let mut parent_visits = 0;
     for child_edge in graph.children(parent) {
-      parent_visits += graph.edge_data(child_edge).statistics.as_payoff().visits();
+      parent_visits += graph.edge_data(child_edge).statistics.visits();
     }
     f64::ln(parent_visits as f64)
   };
@@ -314,7 +313,7 @@ where
   let log_parent_visits = {
     let mut parent_visits = 0;
     for child in graph.children(parent) {
-      parent_visits += graph.edge_data(child).statistics.as_payoff().visits();
+      parent_visits += graph.edge_data(child).statistics.visits();
     }
     if parent_visits == 0 {
       // When we visit a vertex for the first time, it will have zero visits.

@@ -3,11 +3,10 @@
 use std::cmp::Eq;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::ops::{Add, AddAssign};
 
 pub trait State: Debug + Hash + Eq + Clone {
   type Action: Clone + Debug;
-  type Payoff: Payoff<State = Self>;
+  type Payoff: Debug;
   type PlayerId: Debug;
 
   fn active_player(&self) -> &Self::PlayerId;
@@ -18,26 +17,22 @@ pub trait State: Debug + Hash + Eq + Clone {
   fn terminated(&self) -> bool;
 }
 
-pub trait Payoff: Add + AddAssign + Debug + Default {
-  type State: State;
-  type PlayerId: Debug;
-
-  fn from_state(state: &Self::State) -> Option<Self>;
+pub trait Statistics<S: State, P>: Clone + Debug + Default {
+  fn increment(&self, payoff: &P);
   fn visits(&self) -> u32;
-  fn score(&self, player: &Self::PlayerId) -> f32;
+  fn score(&self, player: &S::PlayerId) -> f32;
 }
 
-pub trait Statistics: Clone + Debug + Default {
-  type Payoff: Payoff;
-
-  fn as_payoff(&self) -> Self::Payoff;
-  fn increment(&self, payoff: &Self::Payoff);
+pub trait PayoffFn<S, P>: Debug {
+  fn payoff_of(state: &S) -> Option<P>;
 }
 
-pub trait Game: Debug + Clone {
+pub trait Game: Debug {
   type Action: Clone + Debug;
   type PlayerId: Debug;
-  type Payoff: Payoff<PlayerId = Self::PlayerId, State = Self::State>;
+  type Payoff: Debug;
   type State: State<Action = Self::Action, Payoff = Self::Payoff, PlayerId = Self::PlayerId>;
-  type Statistics: Statistics<Payoff = Self::Payoff>;
+  type Statistics: Statistics<Self::State, Self::Payoff>;
+
+  fn payoff_of(state: &Self::State) -> Option<Self::Payoff>;
 }

@@ -11,7 +11,7 @@ pub struct Board {
   cells: [[Option<Player>; 3]; 3],
 }
 
-#[derive(Copy, Clone, Eq, Hash, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct Action {
   pub row: usize,
   pub column: usize,
@@ -80,38 +80,48 @@ impl Board {
   }
 }
 
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct State {
   active_player: Player,
   board: Board,
 }
 
-// impl game::State for State {
-//   type Action = Action;
-//   type Payoff = (u32, f32);
-//   type PlayerId = Player;
+#[derive(Debug)]
+pub struct Payoff {
+  winner: Player,
+}
 
-//   fn active_player(&self) -> Player {
-//     self.active_player
-//   }
+impl game::State for State {
+  type Action = Action;
+  type Payoff = Payoff;
+  type PlayerId = Player;
 
-//   fn for_actions<F>(&self, f: F) where F: FnMut(Action) -> bool {
-//     let player = self.active_player;
-//     for row in 0..3 {
-//       for column in 0..3 {
-//         if self.board.cells.get(row, column).is_none() {
-//           if !f(Action { row, column, player}) {
-//             break;
-//           }
-//         }
-//       }
-//     }
-//   }
+  fn active_player(&self) -> &Player {
+    &self.active_player
+  }
 
-//   fn do_action(&mut self, action: &Action) {
-//     self.set(action.row, action.column, action.player);
-//   }
+  fn for_actions<F>(&self, mut f: F) where F: FnMut(Action) -> bool {
+    let player = self.active_player;
+    for row in 0..3 {
+      for column in 0..3 {
+        if self.board.get(row, column).is_none() {
+          if !f(Action { row, column, player}) {
+            break;
+          }
+        }
+      }
+    }
+  }
 
-//   fn terminated(&self) -> bool {
-//     self.board.winner().is_some()
-//   }
-// }
+  fn do_action(&mut self, action: &Action) {
+    self.board.set(action.row, action.column, action.player);
+    self.active_player = match self.active_player {
+      Player::X => Player::O,
+      Player::O => Player::X,
+    };
+  }
+
+  fn terminated(&self) -> bool {
+    self.board.winner().is_some()
+  }
+}

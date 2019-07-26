@@ -1,5 +1,12 @@
-use std::fmt;
+//! Predefined statistics types for MCTS search graph vertices.
+//!
+//! The statistics types in this module may be adapted for use with various
+//! games.
+
+use crate::game;
+
 use std::cmp;
+use std::fmt;
 use std::marker::PhantomData;
 use std::sync::atomic;
 
@@ -20,14 +27,26 @@ pub trait TwoPlayerGamePlayerId: fmt::Debug {
   fn resolve_player(&self) -> TwoPlayerGamePlayer;
 }
 
+/// Generic game payoff for a two-player game where each player gets a
+/// whole-number score at the end of the game.
+///
+/// To use
+/// [TwoPlayerScoredGameStatistics](struct.TwoPlayerScoredGameStatistics.html),
+/// you should implement `TryInto<TwoPlayerScoredGamePayoff>` for your game
+/// state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct TwoPlayerScoredGamePayoff {
+  pub visits: u32,
+  pub score_one: u32,
+  pub score_two: u32,
+}
+
 /// Atomically mutable game statistics for a two-player game where each player
 /// gets a whole-number score at the end of the game. This type counts the
 /// number of games that have been observed and the sum of the final score of
 /// each game for each player.
 ///
-/// This type's fields have limited range. The highest score that a player can
-/// have is 4194303. The maximum number of final scores that can be recorded is
-/// 524287.
+/// This type's fields have limited range.
 pub struct TwoPlayerScoredGameStatistics<T: TwoPlayerGamePlayerId> {
   packed: AtomicU64,
   player: PhantomData<T>,
@@ -39,11 +58,15 @@ const ONE_SCORE_MASK: u64  // Middle 22 bits.
   = 0x00000FFFFFC00000;
 const TWO_SCORE_MASK: u64  // Lower 22 bits.
   = 0x00000000003FFFFF;
-const VISITS_MAX: u32 = (VISITS_MASK >> 44) as u32;
-const SCORE_MAX: u32 = TWO_SCORE_MASK as u32;
+/// The maximum value of the `visits` field of a
+/// [TwoPlayerScoredGameStatistics](struct.TwoPlayerScoredGameStatistics.html).
+pub const VISITS_MAX: u32 = (VISITS_MASK >> 44) as u32;
+/// The maximum value of the two `score` fields of a
+/// [TwoPlayerScoredGameStatistics](struct.TwoPlayerScoredGameStatistics.html).
+pub const SCORE_MAX: u32 = TWO_SCORE_MASK as u32;
 
-fn pack_values(weight: u32, score_one: u32, score_two: u32) -> u64 {
-  ((weight as u64) << 44)  // Visits.
+fn pack_values(visits: u32, score_one: u32, score_two: u32) -> u64 {
+  ((visits as u64) << 44)  // Visits.
     | (((score_one as u64) << 22) & ONE_SCORE_MASK)
     | ((score_two as u64) & TWO_SCORE_MASK)
 }
@@ -66,24 +89,19 @@ impl<T: TwoPlayerGamePlayerId> TwoPlayerScoredGameStatistics<T> {
     }
   }
 
-  /// Creates statistics for the given number of observed outcomes (`weight`)
+  /// Creates statistics for the given number of observed outcomes (`visits`)
   /// and the sum of the final scores for each player.
-  pub fn from_values(weight: u32, score_one: u32, score_two: u32) -> Self {
+  pub fn from_values(visits: u32, score_one: u32, score_two: u32) -> Self {
     TwoPlayerScoredGameStatistics {
-      packed: AtomicU64::new(pack_values(weight, score_one, score_two)),
+      packed: AtomicU64::new(pack_values(visits, score_one, score_two)),
       player: PhantomData,
     }
   }
 
   /// Returns the number of outcomes that have been recorded.
-  pub fn weight(&self) -> u32 {
+  pub fn visits(&self) -> u32 {
     let packed = self.packed.load(atomic::Ordering::SeqCst);
     ((packed & VISITS_MASK) >> 44) as u32
-  }
-
-  /// Returns true iff the number of outcomes has been saturated.
-  pub fn at_weight_max(&self) -> bool {
-    self.weight() == VISITS_MAX
   }
 
   /// Returns the score for `player`.
@@ -104,13 +122,13 @@ impl<T: TwoPlayerGamePlayerId> TwoPlayerScoredGameStatistics<T> {
     // CAS loop because we have multiple fields to check for saturation.
     while !success {
       let old_packed = self.packed.load(atomic::Ordering::SeqCst);
-      let (old_weight, old_score_one, old_score_two) = unpack_values(old_packed);
-      let weight = cmp::min(old_weight + 1, VISITS_MAX);
+      let (old_visits, old_score_one, old_score_two) = unpack_values(old_packed);
+      let visits = cmp::min(old_visits + 1, VISITS_MAX);
       let score_one = cmp::min(old_score_one + score_one, SCORE_MAX);
       let score_two = cmp::min(old_score_two + score_two, SCORE_MAX);
       success = self.packed.compare_and_swap(
         old_packed,
-        pack_values(weight, score_one, score_two),
+        pack_values(visits, score_one, score_two),
         atomic::Ordering::SeqCst,
       ) == old_packed;
     }
@@ -137,12 +155,30 @@ impl<T: TwoPlayerGamePlayerId> fmt::Debug for TwoPlayerScoredGameStatistics<T> {
     write!(
       f,
       "Statistics(visits: {}, {:?}: {}, {:?}: {})",
-      self.weight(),
+      self.visits(),
       T::player_one(),
       self.score(TwoPlayerGamePlayer::One),
       T::player_two(),
       self.score(TwoPlayerGamePlayer::Two)
     )
+  }
+}
+
+impl<S, T> game::Statistics<S, TwoPlayerScoredGamePayoff> for TwoPlayerScoredGameStatistics<T>
+where
+  S: game::State<PlayerId = T>,
+  T: TwoPlayerGamePlayerId,
+{
+  fn increment(&self, payoff: &TwoPlayerScoredGamePayoff) {
+    self.record_final_score(payoff.score_one, payoff.score_two)
+  }
+
+  fn visits(&self) -> u32 {
+    self.visits()
+  }
+
+  fn score(&self, player: &S::PlayerId) -> f32 {
+    self.score(player.resolve_player()) as f32
   }
 }
 
@@ -175,7 +211,7 @@ mod test {
   #[test]
   fn new_statistics_zero() {
     let stats: TwoPlayerScoredGameStatistics<Player> = TwoPlayerScoredGameStatistics::new();
-    assert_eq!(0, stats.weight());
+    assert_eq!(0, stats.visits());
     assert_eq!(0, stats.score(TwoPlayerGamePlayer::One));
     assert_eq!(0, stats.score(TwoPlayerGamePlayer::Two));
   }
@@ -184,7 +220,7 @@ mod test {
   fn statistics_sum_visits() {
     let stats: TwoPlayerScoredGameStatistics<Player> = TwoPlayerScoredGameStatistics::new();
     stats.record_final_score(0, 0);
-    assert_eq!(1, stats.weight());
+    assert_eq!(1, stats.visits());
     assert_eq!(0, stats.score(TwoPlayerGamePlayer::One));
     assert_eq!(0, stats.score(TwoPlayerGamePlayer::Two));
   }
@@ -193,29 +229,29 @@ mod test {
   fn statistics_sum() {
     let stats: TwoPlayerScoredGameStatistics<Player> = TwoPlayerScoredGameStatistics::new();
     stats.record_final_score(3, 0);
-    assert_eq!(1, stats.weight());
+    assert_eq!(1, stats.visits());
     assert_eq!(3, stats.score(TwoPlayerGamePlayer::One));
     assert_eq!(0, stats.score(TwoPlayerGamePlayer::Two));
 
     let stats: TwoPlayerScoredGameStatistics<Player> = TwoPlayerScoredGameStatistics::new();
     stats.record_final_score(0, 5);
-    assert_eq!(1, stats.weight());
+    assert_eq!(1, stats.visits());
     assert_eq!(0, stats.score(TwoPlayerGamePlayer::One));
     assert_eq!(5, stats.score(TwoPlayerGamePlayer::Two));
 
     let stats: TwoPlayerScoredGameStatistics<Player> = TwoPlayerScoredGameStatistics::new();
     stats.record_final_score(10, 15);
-    assert_eq!(1, stats.weight());
+    assert_eq!(1, stats.visits());
     assert_eq!(10, stats.score(TwoPlayerGamePlayer::One));
     assert_eq!(15, stats.score(TwoPlayerGamePlayer::Two));
 
     stats.record_final_score(3, 3);
-    assert_eq!(2, stats.weight());
+    assert_eq!(2, stats.visits());
     assert_eq!(13, stats.score(TwoPlayerGamePlayer::One));
     assert_eq!(18, stats.score(TwoPlayerGamePlayer::Two));
 
     stats.record_final_score(1000, 1000);
-    assert_eq!(3, stats.weight());
+    assert_eq!(3, stats.visits());
     assert_eq!(1013, stats.score(TwoPlayerGamePlayer::One));
     assert_eq!(1018, stats.score(TwoPlayerGamePlayer::Two));
   }
@@ -224,7 +260,7 @@ mod test {
   fn statistics_sum_truncate() {
     let stats: TwoPlayerScoredGameStatistics<Player> =
       TwoPlayerScoredGameStatistics::from_values(u32::MAX, u32::MAX, u32::MAX);
-    assert_eq!(0xFFFFF, stats.weight());
+    assert_eq!(0xFFFFF, stats.visits());
     assert_eq!(0x3FFFFF, stats.score(TwoPlayerGamePlayer::One));
     assert_eq!(0x3FFFFF, stats.score(TwoPlayerGamePlayer::Two));
   }
@@ -233,26 +269,26 @@ mod test {
   fn statistics_sum_overflow() {
     let stats: TwoPlayerScoredGameStatistics<Player> =
       TwoPlayerScoredGameStatistics::from_values(0xFFFFFu32 - 1, 0x3FFFFFu32 - 1, 0x3FFFFF - 1);
-    assert_eq!(0xFFFFF - 1, stats.weight());
+    assert_eq!(0xFFFFF - 1, stats.visits());
     assert_eq!(0x3FFFFF - 1, stats.score(TwoPlayerGamePlayer::One));
     assert_eq!(0x3FFFFF - 1, stats.score(TwoPlayerGamePlayer::Two));
     stats.record_final_score(1, 0);
-    assert_eq!(0xFFFFF, stats.weight());
+    assert_eq!(0xFFFFF, stats.visits());
     assert_eq!(0x3FFFFF, stats.score(TwoPlayerGamePlayer::One));
     assert_eq!(0x3FFFFF - 1, stats.score(TwoPlayerGamePlayer::Two));
     stats.record_final_score(1, 0);
-    assert_eq!(0xFFFFF, stats.weight());
+    assert_eq!(0xFFFFF, stats.visits());
     assert_eq!(0x3FFFFF, stats.score(TwoPlayerGamePlayer::One));
     assert_eq!(0x3FFFFF - 1, stats.score(TwoPlayerGamePlayer::Two));
 
     let stats: TwoPlayerScoredGameStatistics<Player> =
       TwoPlayerScoredGameStatistics::from_values(0xFFFFFu32 - 1, 0x3FFFFFu32 - 1, 0x3FFFFF - 1);
     stats.record_final_score(0, 1);
-    assert_eq!(0xFFFFF, stats.weight());
+    assert_eq!(0xFFFFF, stats.visits());
     assert_eq!(0x3FFFFF - 1, stats.score(TwoPlayerGamePlayer::One));
     assert_eq!(0x3FFFFF, stats.score(TwoPlayerGamePlayer::Two));
     stats.record_final_score(0, 1);
-    assert_eq!(0xFFFFF, stats.weight());
+    assert_eq!(0xFFFFF, stats.visits());
     assert_eq!(0x3FFFFF - 1, stats.score(TwoPlayerGamePlayer::One));
     assert_eq!(0x3FFFFF, stats.score(TwoPlayerGamePlayer::Two));
   }

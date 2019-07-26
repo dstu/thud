@@ -1,6 +1,6 @@
 //! Interface and implementations for the rollout phase of MCTS.
 
-use crate::game::{Game, Payoff};
+use crate::game::Game;
 use crate::graph::{EdgeData, VertexData};
 use crate::SearchSettings;
 
@@ -94,7 +94,7 @@ where
   R: Rng,
 {
   loop {
-    if let Some(_) = G::Payoff::from_state(graph.node_state(node)) {
+    if let Some(_) = G::payoff_of(graph.node_state(node)) {
       // Hit known payoff.
       break;
     } else {
