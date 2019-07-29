@@ -1,12 +1,15 @@
 //! Upper confidence bound (UCB1) algorithm for graph search.
 
-use super::{EdgeData, Game, State, Statistics, VertexData};
+use crate::graph::{EdgeData, VertexData};
+use crate::game::{Game, State, Statistics};
+use crate::rollout::RolloutSelector;
 use log::error;
 use rand::Rng;
 use search_graph;
 
 use std::cmp::Ordering;
 use std::error::Error;
+use std::f64;
 use std::fmt;
 use std::result::Result;
 
@@ -22,8 +25,6 @@ pub enum UcbSuccess<'id> {
 /// Represents error conditions when computing the UCB score for a child.
 #[derive(Clone, Debug)]
 pub enum UcbError {
-  /// There are no children to select from.
-  NoChildren,
   /// An error was encountered during computation of UCB score (such as
   /// encountering a `None` result when `PartialCmp`'ing two floating-point
   /// values).
@@ -45,7 +46,6 @@ where
 impl fmt::Display for UcbError {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match *self {
-      UcbError::NoChildren => write!(f, "Vertex has no children"),
       UcbError::InvalidComputation => write!(f, "Numerical error when computing UCB score"),
     }
   }
@@ -54,7 +54,6 @@ impl fmt::Display for UcbError {
 impl Error for UcbError {
   fn description(&self) -> &str {
     match *self {
-      UcbError::NoChildren => "no children",
       UcbError::InvalidComputation => "invalid computation",
     }
   }
@@ -144,10 +143,10 @@ pub fn child_score<'a, 'id, G: Game>(
 /// for a given parent vertex.)
 ///
 /// "Could be" reflects how this is different from calling
-/// `find_best_child_edge_index`: it is possible (and common) for multiple child
+/// `find_best_child_edge`: it is possible (and common) for multiple child
 /// edges of a vertex to be best children (as when there are multiple children
 /// that have not yet been explored). This is dealt with in
-/// `find_best_child_edge_index` by randomly choosing one of the best
+/// `find_best_child_edge` by randomly choosing one of the best
 /// children. But when doing backpropagation on a full game state graph (not
 /// just a tree), we want to know all of the parent edges which could have
 /// rolled out to a given child.
@@ -292,24 +291,20 @@ pub fn is_best_child<'a, 'id, G: Game>(
   // }
 }
 
-pub fn find_best_child_edge_index<'a, 'id, G, R>(
+/// Returns the child edge of `parent` that is best according to the UCB1
+/// criterion.
+///
+/// This function will panic if `parent` has no children.
+pub fn find_best_child<'a, 'id, G, R>(
   graph: &search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
   parent: search_graph::view::NodeRef<'id>,
   explore_bias: f64,
   rng: &mut R,
-) -> Result<usize, UcbError>
+) -> Result<search_graph::view::EdgeRef<'id>, UcbError>
 where
   G: Game,
   R: Rng,
 {
-  if graph.children(parent).next().is_none() {
-    error!(
-      "find_best_child_edge_index: no children for node {:?} with board: {:?}",
-      parent,
-      graph.node_state(parent),
-    );
-    return Err(UcbError::NoChildren);
-  }
   let log_parent_visits = {
     let mut parent_visits = 0;
     for child in graph.children(parent) {
@@ -323,49 +318,84 @@ where
       f64::ln(parent_visits as f64)
     }
   };
-  let mut best_index = 0;
-  let mut best_ucb = ::std::f64::MIN;
   let mut sampling_count = 0u32;
-  let ucb_iter = EdgeUcbIter::new(
+  let mut ucb_iter = EdgeUcbIter::new(
     log_parent_visits,
     explore_bias,
     graph,
     graph.children(parent),
   );
-  for (index, ucb) in ucb_iter.enumerate() {
-    match ucb {
-      Ok(UcbSuccess::Select(_)) => {
-        // trace!("find_best_child_edge_index: short-circuiting to select {}", index);
+  let mut best: search_graph::view::EdgeRef<'id>;
+  let mut best_ucb: f64;
+  match ucb_iter.next().expect("vertex has no children")? {
+    UcbSuccess::Select(e) => {
+      best = e;
+      best_ucb = f64::MIN;
+    }
+    UcbSuccess::Value(e, v) => {
+      best = e;
+      best_ucb = v;
+    }
+  }
+
+  for ucb in ucb_iter {
+    match ucb? {
+      UcbSuccess::Select(e) => {
+        // trace!("find_best_child_edge: short-circuiting to select {}", index);
         // TODO: we should do tie-breaking here, too, but reading
         // through child edges in order helps a lot with debugging.
-        return Ok(index);
+        return Ok(e);
       }
-      Ok(UcbSuccess::Value(_, v)) => {
+      UcbSuccess::Value(e, v) => {
         match v.partial_cmp(&best_ucb) {
           None => {
-            error!("find_best_child_edge_index: invalid floating-point comparison");
+            error!("find_best_child_edge: invalid floating-point comparison");
             return Err(UcbError::InvalidComputation);
           }
           Some(Ordering::Greater) => {
-            // trace!("find_best_child_edge_index: new best index is {} with score {}", index, v);
-            best_index = index;
+            // trace!("find_best_child_edge: new best index is {} with score {}", index, v);
+            best = e;
             best_ucb = v;
             sampling_count = 1;
           }
           Some(Ordering::Equal) => {
             // We use reservoir sampling to break ties.
-            // trace!("find_best_child_edge_index: found indices {} and {} with score {}; sampling to break tie", best_index, index, v);
+            // trace!("find_best_child_edge: found indices {} and {} with score {}; sampling to break tie", best_index, index, v);
             sampling_count += 1;
             if rng.gen_ratio(1, sampling_count) {
-              best_index = index;
+              best = e;
             }
-            // trace!("find_best_child_edge_index: updated best index to {} after sampling", best_index);
+            // trace!("find_best_child_edge: updated best index to {} after sampling", best_index);
           }
           _ => (),
         }
       }
-      Err(e) => return Err(e),
     }
   }
-  return Ok(best_index);
+  Ok(best)
+}
+
+pub struct Rollout {
+  explore_bias: f64,
+}
+
+impl<'a> From<&'a crate::SearchSettings> for Rollout {
+  fn from(settings: &'a crate::SearchSettings) -> Self {
+    Rollout {
+      explore_bias: settings.explore_bias,
+    }
+  }
+}
+
+impl RolloutSelector for Rollout {
+  type Error = UcbError;
+
+  fn select<'a, 'id, G: Game, R: Rng>(
+    &self,
+    graph: &search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
+    parent: search_graph::view::NodeRef<'id>,
+    rng: &mut R,
+  ) -> Result<search_graph::view::EdgeRef<'id>, UcbError> {
+    find_best_child(graph, parent, self.explore_bias, rng)
+  }
 }

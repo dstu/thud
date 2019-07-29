@@ -6,7 +6,6 @@ use std::hash::Hash;
 
 pub trait State: Debug + Hash + Eq + Clone {
   type Action: Clone + Debug;
-  type Payoff: Debug;
   type PlayerId: Debug;
 
   fn active_player(&self) -> &Self::PlayerId;
@@ -30,7 +29,7 @@ pub trait Game: Debug {
   type Action: Clone + Debug;
   type PlayerId: Debug;
   type Payoff: Debug;
-  type State: State<Action = Self::Action, Payoff = Self::Payoff, PlayerId = Self::PlayerId>;
+  type State: State<Action = Self::Action, PlayerId = Self::PlayerId>;
   type Statistics: Statistics<Self::State, Self::Payoff>;
 
   fn payoff_of(state: &Self::State) -> Option<Self::Payoff>;

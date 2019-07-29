@@ -1,9 +1,20 @@
-use crate::game;
+use crate::{game, statistics};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Player {
   X,
   O,
+}
+
+impl statistics::two_player::PlayerMapping for Player {
+  fn player_one() -> Self { Player::X }
+  fn player_two() -> Self { Player::O }
+  fn resolve_player(&self) -> statistics::two_player::Player {
+    match *self {
+      Player::X => statistics::two_player::Player::One,
+      Player::O => statistics::two_player::Player::Two,
+    }
+  }
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -26,19 +37,22 @@ fn winning_player(a: Option<Player>, b: Option<Player>, c: Option<Player>) -> Op
   }
 }
 
+pub enum Outcome {
+  Winner(Player),
+  Tie,
+}
+
 impl Board {
   pub fn new() -> Self {
     Board {
-      cells: [[None, None, None],
-              [None, None, None],
-              [None, None, None]],
+      cells: [[None, None, None], [None, None, None], [None, None, None]],
     }
   }
 
   pub fn set(&mut self, row: usize, column: usize, value: Player) {
     assert!(row < 3);
     assert!(column < 3);
-    assert!(self.cells[row][column].is_some());
+    assert!(self.cells[row][column].is_none());
     self.cells[row][column] = Some(value);
   }
 
@@ -48,64 +62,73 @@ impl Board {
     self.cells[row][column]
   }
 
-  pub fn winner(&self) -> Option<Player> {
+  pub fn outcome(&self) -> Option<Outcome> {
     for n in 0..3 {
-      let mut p = winning_player(self.cells[n][0],
-                                 self.cells[n][1],
-                                 self.cells[n][2]);
+      let mut p = winning_player(self.cells[n][0], self.cells[n][1], self.cells[n][2]);
       if p.is_some() {
-        return p;
+        return p.map(|p| Outcome::Winner(p));
       }
-      p = winning_player(self.cells[0][n],
-                         self.cells[1][n],
-                         self.cells[2][n]);
+      p = winning_player(self.cells[0][n], self.cells[1][n], self.cells[2][n]);
       if p.is_some() {
-        return p;
+        return p.map(|p| Outcome::Winner(p));
       }
     }
-    let mut p = winning_player(self.cells[0][0],
-                               self.cells[1][1],
-                               self.cells[2][2]);
+    let mut p = winning_player(self.cells[0][0], self.cells[1][1], self.cells[2][2]);
     if p.is_some() {
-      return p;
+      return p.map(|p| Outcome::Winner(p));
     }
-    p = winning_player(self.cells[0][2],
-                       self.cells[1][1],
-                       self.cells[2][0]);
+    p = winning_player(self.cells[0][2], self.cells[1][1], self.cells[2][0]);
     if p.is_some() {
-      return p;
+      return p.map(|p| Outcome::Winner(p));
+    }
+    for row in 0..3 {
+      for column in 0..3 {
+        if self.cells[row][column].is_none() {
+          return None;
+        }
+      }
     }
 
-    None
+    Some(Outcome::Tie)
   }
 }
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct State {
-  active_player: Player,
-  board: Board,
+  pub active_player: Player,
+  pub board: Board,
 }
 
-#[derive(Debug)]
-pub struct Payoff {
-  winner: Player,
+impl Default for State {
+  fn default() -> Self {
+    State {
+      active_player: Player::X,
+      board: Board::new(),
+    }
+  }
 }
 
 impl game::State for State {
   type Action = Action;
-  type Payoff = Payoff;
   type PlayerId = Player;
 
   fn active_player(&self) -> &Player {
     &self.active_player
   }
 
-  fn for_actions<F>(&self, mut f: F) where F: FnMut(Action) -> bool {
+  fn for_actions<F>(&self, mut f: F)
+  where
+    F: FnMut(Action) -> bool,
+  {
     let player = self.active_player;
     for row in 0..3 {
       for column in 0..3 {
         if self.board.get(row, column).is_none() {
-          if !f(Action { row, column, player}) {
+          if !f(Action {
+            row,
+            column,
+            player,
+          }) {
             break;
           }
         }
@@ -119,5 +142,36 @@ impl game::State for State {
       Player::X => Player::O,
       Player::O => Player::X,
     };
+  }
+}
+
+#[derive(Debug)]
+pub struct ScoredGame {}
+
+impl game::Game for ScoredGame {
+  type Action = Action;
+  type PlayerId = Player;
+  type Payoff = statistics::two_player::ScoredPayoff;
+  type State  = State;
+  type Statistics = statistics::two_player::ScoredStatistics<Player>;
+
+  fn payoff_of(state: &State) -> Option<statistics::two_player::ScoredPayoff> {
+    state.board.outcome().map(|p| match p {
+      Outcome::Winner(Player::X) => statistics::two_player::ScoredPayoff {
+        visits: 1,
+        score_one: 1,
+        score_two: 0,
+      },
+      Outcome::Winner(Player::O) => statistics::two_player::ScoredPayoff {
+        visits: 1,
+        score_one: 0,
+        score_two: 1,
+      },
+      Outcome::Tie => statistics::two_player::ScoredPayoff {
+        visits: 1,
+        score_one: 0,
+        score_two: 0,
+      },
+    })
   }
 }

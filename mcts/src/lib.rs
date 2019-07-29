@@ -6,14 +6,15 @@ pub mod graph;
 pub mod rollout;
 pub mod simulation;
 pub mod statistics;
+#[cfg(test)]
+pub(crate) mod tictactoe;
 pub mod ucb;
-#[cfg(test)] pub(crate) mod tictactoe;
 
 use self::backprop::BackpropSelector;
 use self::rollout::RolloutSelector;
 use self::simulation::Simulator;
 
-use self::game::{Game, State, Statistics};
+use self::game::{Game, State};
 use self::graph::{EdgeData, VertexData};
 
 use std::convert::From;
@@ -102,7 +103,7 @@ impl<'a, 'id, R: Rng, G: Game> RolloutPhase<'a, 'id, R, G> {
     }
   }
 
-  pub fn rollout<S: RolloutSelector<G, R>>(
+  pub fn rollout<S: RolloutSelector>(
     mut self,
   ) -> Result<ScoringPhase<'a, 'id, R, G>, rollout::RolloutError<'id, S::Error>> {
     rollout::rollout(
@@ -119,6 +120,10 @@ impl<'a, 'id, R: Rng, G: Game> RolloutPhase<'a, 'id, R, G> {
       rollout_node: node,
     })
   }
+
+  pub fn root_node(&self) -> search_graph::view::NodeRef<'id> {
+    self.root_node
+  }
 }
 
 /// Computes an estimate of the score for a game state selected during rollout.
@@ -131,13 +136,21 @@ pub struct ScoringPhase<'a, 'id, R: Rng, G: Game> {
 }
 
 impl<'a, 'id, R: Rng, G: Game> ScoringPhase<'a, 'id, R, G> {
-  pub fn score<S: Simulator<G, R>>(mut self) -> Result<BackpropPhase<'a, 'id, R, G>, S::Error> {
-    let payoff = match G::payoff_of(self.graph.node_state(self.rollout_node)) {
+  pub fn root_node(&self) -> search_graph::view::NodeRef<'id> {
+    self.root_node
+  }
+
+  pub fn rollout_node(&self) -> search_graph::view::NodeRef<'id> {
+    self.rollout_node
+  }
+
+  pub fn score<S: Simulator>(mut self) -> Result<BackpropPhase<'a, 'id, R, G>, S::Error> {
+    let payoff = match G::payoff_of(self.graph.node_state(self.rollout_node())) {
       Some(p) => p,
-      None => S::from(&self.settings).simulate(
-        self.graph.node_state(self.rollout_node).clone(),
-        &mut self.rng,
-      )?,
+      None => {
+        let simulator = S::from(&self.settings);
+        simulator.simulate::<G, R>(self.graph.node_state(self.rollout_node()), &mut self.rng)?
+      }
     };
     Ok(BackpropPhase {
       rng: self.rng,
@@ -164,7 +177,7 @@ pub struct BackpropPhase<'a, 'id, R: Rng, G: Game> {
 }
 
 impl<'a, 'id, R: Rng, G: Game> BackpropPhase<'a, 'id, R, G> {
-  pub fn backprop<S: BackpropSelector<'id, G, R>>(mut self) -> ExpandPhase<'a, 'id, R, G> {
+  pub fn backprop<S: BackpropSelector<'id>>(mut self) -> ExpandPhase<'a, 'id, R, G> {
     backprop::backprop(
       &self.graph,
       self.rollout_node,
@@ -223,6 +236,257 @@ impl<'a, 'id, R: Rng, G: Game> ExpandPhase<'a, 'id, R, G> {
       settings: self.settings,
       graph: self.graph,
       root_node: self.root_node,
+    }
+  }
+}
+
+#[cfg(test)]
+mod test {
+  use crate::graph::{EdgeData, VertexData};
+  use crate::ucb;
+  use crate::{
+    backprop, simulation, tictactoe, BackpropPhase, ExpandPhase, RolloutPhase, ScoringPhase,
+    SearchSettings,
+  };
+  use rand::SeedableRng;
+  use rand_pcg;
+
+  fn default_rng() -> rand_pcg::Pcg64 {
+    rand_pcg::Pcg64::from_seed([0; 32])
+  }
+
+  fn default_game_state() -> tictactoe::State {
+    Default::default()
+  }
+
+  fn default_settings() -> SearchSettings {
+    SearchSettings {
+      simulation_count: 1,
+      explore_bias: 1.0,
+    }
+  }
+
+  type Graph = search_graph::Graph<tictactoe::State, VertexData, EdgeData<tictactoe::ScoredGame>>;
+
+  #[test]
+  fn rollout_init() {
+    let mut graph = Graph::new();
+
+    search_graph::view::of_graph(&mut graph, |view| {
+      RolloutPhase::initialize(
+        default_rng(),
+        default_settings(),
+        default_game_state(),
+        view,
+      );
+    });
+
+    let node = graph.find_node(&default_game_state());
+    assert!(node.is_some());
+    let node = node.unwrap();
+    assert!(node.is_leaf());
+    assert!(node.is_root());
+    assert_eq!(default_game_state(), *node.get_label());
+  }
+
+  #[test]
+  fn integration_test() {
+    let mut graph = Graph::new();
+
+    search_graph::view::of_graph(&mut graph, |view| {
+      // Rollout.
+      let rollout_phase = RolloutPhase::initialize(
+        default_rng(),
+        default_settings(),
+        default_game_state(),
+        view,
+      );
+      let rollout_target = crate::rollout::rollout(
+        &rollout_phase.graph,
+        rollout_phase.root_node,
+        ucb::Rollout::from(&default_settings()),
+        &mut default_rng(),
+      )
+      .unwrap();
+      assert_eq!(rollout_phase.root_node(), rollout_target);
+      assert_eq!(
+        tictactoe::State::default(),
+        *rollout_phase.graph.node_state(rollout_target)
+      );
+
+      // Scoring.
+      let scoring_phase: ScoringPhase<'_, '_, _, tictactoe::ScoredGame> =
+        rollout_phase.rollout::<ucb::Rollout>().unwrap();
+      assert_eq!(scoring_phase.rollout_node(), rollout_target);
+      assert_eq!(scoring_phase.root_node(), rollout_target);
+
+      // Backprop.
+      let backprop_phase: BackpropPhase<'_, '_, _, tictactoe::ScoredGame> = scoring_phase
+        .score::<simulation::RandomSimulator>()
+        .unwrap();
+
+      // Expand.
+      let expand_phase: ExpandPhase<'_, '_, _, tictactoe::ScoredGame> =
+        backprop_phase.backprop::<backprop::FirstParentSelector>();
+      expand_phase.expand();
+    });
+
+    {
+      let node = graph.find_node(&Default::default()).unwrap();
+      assert!(node.is_root());
+      assert!(!node.is_leaf());
+      assert_eq!(9, node.get_child_list().len());
+      for child in node.get_child_list().iter() {
+        assert_eq!(0, child.get_data().statistics.visits());
+        assert_eq!(
+          0,
+          child
+            .get_data()
+            .statistics
+            .score(crate::statistics::two_player::Player::One)
+        );
+        assert_eq!(
+          0,
+          child
+            .get_data()
+            .statistics
+            .score(crate::statistics::two_player::Player::Two)
+        );
+        assert!(child.get_target().is_leaf());
+        assert!(!child.get_target().is_root());
+      }
+    }
+
+    search_graph::view::of_graph(&mut graph, |view| {
+      RolloutPhase::initialize(
+        default_rng(),
+        default_settings(),
+        default_game_state(),
+        view,
+      )
+      .rollout::<ucb::Rollout>()
+      .unwrap()
+      .score::<simulation::RandomSimulator>()
+      .unwrap()
+      .backprop::<backprop::FirstParentSelector>()
+      .expand();
+    });
+
+    {
+      let node = graph.find_node(&Default::default()).unwrap();
+      assert!(node.is_root());
+      assert!(!node.is_leaf());
+      assert_eq!(9, node.get_child_list().len());
+      for (i, child) in node.get_child_list().iter().enumerate() {
+        if i == 1 {
+          assert_eq!(1, child.get_data().statistics.visits());
+          assert_eq!(
+            0,
+            child
+              .get_data()
+              .statistics
+              .score(crate::statistics::two_player::Player::One)
+          );
+          assert_eq!(
+            1,
+            child
+              .get_data()
+              .statistics
+              .score(crate::statistics::two_player::Player::Two)
+          );
+        } else {
+          assert_eq!(0, child.get_data().statistics.visits());
+          assert_eq!(
+            0,
+            child
+              .get_data()
+              .statistics
+              .score(crate::statistics::two_player::Player::One)
+          );
+          assert_eq!(
+            0,
+            child
+              .get_data()
+              .statistics
+              .score(crate::statistics::two_player::Player::Two)
+          );
+        }
+      }
+    }
+
+    search_graph::view::of_graph(&mut graph, |view| {
+      RolloutPhase::initialize(
+        default_rng(),
+        default_settings(),
+        default_game_state(),
+        view,
+      )
+      .rollout::<ucb::Rollout>()
+      .unwrap()
+      .score::<simulation::RandomSimulator>()
+      .unwrap()
+      .backprop::<backprop::FirstParentSelector>()
+      .expand();
+    });
+    {
+      let node = graph.find_node(&Default::default()).unwrap();
+      // for (i, child) in node.get_child_list().iter().enumerate() {
+      //   if i == 1 {
+      //     assert_eq!(1, child.get_data().statistics.visits());
+      //     assert_eq!(
+      //       0,
+      //       child
+      //         .get_data()
+      //         .statistics
+      //         .score(crate::statistics::two_player::Player::One)
+      //     );
+      //     assert_eq!(
+      //       1,
+      //       child
+      //         .get_data()
+      //         .statistics
+      //         .score(crate::statistics::two_player::Player::Two)
+      //     );
+      //   } else {
+      //     assert_eq!(0, child.get_data().statistics.visits());
+      //     assert_eq!(
+      //       0,
+      //       child
+      //         .get_data()
+      //         .statistics
+      //         .score(crate::statistics::two_player::Player::One)
+      //     );
+      //     assert_eq!(
+      //       0,
+      //       child
+      //         .get_data()
+      //         .statistics
+      //         .score(crate::statistics::two_player::Player::Two)
+      //     );
+      //   }
+      // }
+    }
+
+    search_graph::view::of_graph(&mut graph, |view| {
+      let mut rollout = RolloutPhase::initialize(
+        default_rng(),
+        default_settings(),
+        default_game_state(),
+        view,
+      );
+      for _ in 0..10000 {
+        let score = rollout.rollout::<ucb::Rollout>().unwrap();
+        let backprop = score.score::<simulation::RandomSimulator>().unwrap();
+        let expand = backprop.backprop::<backprop::FirstParentSelector>();
+        rollout = expand.expand();
+      }
+    });
+
+    for child in graph.find_node(&default_game_state()).unwrap().get_child_list().iter() {
+      let statistics = &child.get_data().statistics;
+      // assert!(statistics.visits() > 500);
+      assert_eq!(statistics.score(crate::statistics::two_player::Player::One), 250);
+      assert_eq!(statistics.score(crate::statistics::two_player::Player::Two), 250);
     }
   }
 }

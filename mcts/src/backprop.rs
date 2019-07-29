@@ -10,20 +10,42 @@ use crate::SearchSettings;
 use log::trace;
 use rand::Rng;
 
-/// Provides a method for selecting outgoing parent edges to follow during
+/// Provides a method for selecting incoming parent edges to follow during
 /// backprop phase of MCTS.
-pub trait BackpropSelector<'id, G: Game, R: Rng>: for<'b> From<&'b SearchSettings> {
+pub trait BackpropSelector<'id>: for<'a> From<&'a SearchSettings> {
   type Items: Iterator<Item = search_graph::view::EdgeRef<'id>>;
 
   /// Returns the edges to follow when pushing statistics back up through the
   /// search graph.
-  fn select<I: IntoIterator<Item = search_graph::view::EdgeRef<'id>>>(
+  fn select<G: Game, R: Rng>(
     &self,
-    graph: &search_graph::view::View<G::State, VertexData, EdgeData<G>>,
-    parents: I,
+    graph: &search_graph::view::View<'_, 'id, G::State, VertexData, EdgeData<G>>,
+    node: search_graph::view::NodeRef<'id>,
     payoff: &G::Payoff,
     rng: &mut R,
   ) -> Self::Items;
+}
+
+pub struct FirstParentSelector {}
+
+impl<'a> From<&'a SearchSettings> for FirstParentSelector {
+  fn from(_: &'a SearchSettings) -> Self {
+    FirstParentSelector {}
+  }
+}
+
+impl<'id> BackpropSelector<'id> for FirstParentSelector {
+  type Items = std::option::IntoIter<search_graph::view::EdgeRef<'id>>;
+
+  fn select<G: Game, R: Rng>(
+    &self,
+    graph: &search_graph::view::View<'_, 'id, G::State, VertexData, EdgeData<G>>,
+    node: search_graph::view::NodeRef<'id>,
+    _payoff: &G::Payoff,
+    _rng: &mut R,
+  ) -> Self::Items {
+    graph.parents(node).next().into_iter()
+  }
 }
 
 /// Returns an iterator that traverses the game graph upwards from `node` up to
@@ -41,7 +63,7 @@ pub fn backprop_iter<'a, 'b, 'id, G, S, R>(
 where
   'a: 'b,
   G: Game,
-  S: BackpropSelector<'id, G, R>,
+  S: BackpropSelector<'id>,
   R: Rng,
 {
   BackpropIter::new(graph, node, payoff, selector, rng)
@@ -51,7 +73,7 @@ where
 struct BackpropIter<'a, 'b, 'id, G, S, R>
 where
   G: Game,
-  S: BackpropSelector<'id, G, R> + 'b,
+  S: BackpropSelector<'id> + 'b,
   R: Rng,
 {
   graph: &'b search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
@@ -67,7 +89,7 @@ where
 impl<'a, 'b, 'id, G, S, R> BackpropIter<'a, 'b, 'id, G, S, R>
 where
   G: Game,
-  S: BackpropSelector<'id, G, R> + 'b,
+  S: BackpropSelector<'id> + 'b,
   R: Rng,
 {
   fn new(
@@ -77,7 +99,7 @@ where
     selector: &'b S,
     rng: &'b mut R,
   ) -> Self {
-    let parent_edges = selector.select(graph, graph.parents(node), payoff, rng);
+    let parent_edges = selector.select(graph, node, payoff, rng);
     BackpropIter {
       graph,
       stack: vec![],
@@ -92,7 +114,7 @@ where
 impl<'a, 'b, 'id, G, S, R> Iterator for BackpropIter<'a, 'b, 'id, G, S, R>
 where
   G: Game,
-  S: BackpropSelector<'id, G, R> + 'b,
+  S: BackpropSelector<'id> + 'b,
   R: Rng,
 {
   type Item = search_graph::view::EdgeRef<'id>;
@@ -108,7 +130,7 @@ where
       self.parent_edges =
         self
           .selector
-          .select(self.graph, self.graph.parents(node), self.payoff, self.rng);
+          .select(self.graph, node, self.payoff, self.rng);
       while let Some(parent) = self.parent_edges.next() {
         if !self.graph.edge_data(parent).mark_backprop_traversal() {
           self.stack.push(self.graph.edge_source(parent));
@@ -127,7 +149,9 @@ where
 /// Iterable view over parents of a graph node that selects parents for which
 /// this node is a best child.
 pub struct ParentSelectionIter<'a, 'b, 'id, G, I>
-  where G: Game, I: Iterator<Item = search_graph::view::EdgeRef<'id>>
+where
+  G: Game,
+  I: Iterator<Item = search_graph::view::EdgeRef<'id>>,
 {
   graph: &'b search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
   parents: I,
@@ -135,7 +159,9 @@ pub struct ParentSelectionIter<'a, 'b, 'id, G, I>
 }
 
 impl<'a, 'b, 'id, G, I> ParentSelectionIter<'a, 'b, 'id, G, I>
-where G: Game, I: Iterator<Item = search_graph::view::EdgeRef<'id>>,
+where
+  G: Game,
+  I: Iterator<Item = search_graph::view::EdgeRef<'id>>,
 {
   pub fn new(
     graph: &'b search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
@@ -151,7 +177,9 @@ where G: Game, I: Iterator<Item = search_graph::view::EdgeRef<'id>>,
 }
 
 impl<'a, 'b, 'id, G, I> Iterator for ParentSelectionIter<'a, 'b, 'id, G, I>
-where G: Game, I: Iterator<Item = search_graph::view::EdgeRef<'id>>,
+where
+  G: Game,
+  I: Iterator<Item = search_graph::view::EdgeRef<'id>>,
 {
   type Item = search_graph::view::EdgeRef<'id>;
 
@@ -191,7 +219,7 @@ pub fn backprop<'a, 'id, G, S, R>(
   rng: &mut R,
 ) where
   G: Game,
-  S: BackpropSelector<'id, G, R>,
+  S: BackpropSelector<'id>,
   R: Rng,
 {
   // Traverse parent nodes and place them into a materialized collection because

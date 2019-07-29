@@ -9,14 +9,14 @@ use std::error::Error;
 use std::fmt;
 use std::result::Result;
 
-use log::error;
 use rand::Rng;
 
 /// Error type for MCTS rollout.
 pub enum RolloutError<'a, E: Error> {
   /// Rollout encountered a cycle.
   Cycle(Vec<search_graph::view::EdgeRef<'a>>),
-  /// The `RolloutSelector` that `rollout` delegates to reported some error.
+  /// The [RolloutSelector](struct.RolloutSelector.html) that
+  /// [rollout](fn.rollout.html) delegates to reported some error.
   Selector(E),
 }
 
@@ -62,26 +62,23 @@ impl<'a, E: Error> From<E> for RolloutError<'a, E> {
 
 /// Provides a method for selecting an outgoing child edge to follow during
 /// the rollout phase of MCTS.
-pub trait RolloutSelector<G, R>: for<'a> From<&'a SearchSettings>
-where
-  G: Game,
-  R: Rng,
-{
+pub trait RolloutSelector: for<'a> From<&'a SearchSettings> {
   type Error: Error;
 
   /// Returns the element of `children` that should be followed, or an error.
-  fn select<'a, 'id>(
+  fn select<'a, 'id, G: Game, R: Rng>(
     &self,
     graph: &search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
-    children: impl Iterator<Item = search_graph::view::EdgeRef<'id>>,
+    parent: search_graph::view::NodeRef<'id>,
     rng: &mut R,
-  ) -> Result<Option<search_graph::view::EdgeRef<'id>>, Self::Error>;
+  ) -> Result<search_graph::view::EdgeRef<'id>, Self::Error>;
 }
 
 /// Traverses the game graph downwards from `node` down to some terminating
 /// vertex in the search graph. The terminating vertex will either have a known
 /// payoff, or yield `None` when `selector.select()` is called on it. Returns
-/// the terminating vertex, or an error.
+/// the path to terminating vertex, whose last element is the terminating
+/// vertex, or an error.
 pub fn rollout<'a, 'id, G, S, R>(
   graph: &search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
   mut node: search_graph::view::NodeRef<'id>,
@@ -90,24 +87,19 @@ pub fn rollout<'a, 'id, G, S, R>(
 ) -> Result<search_graph::view::NodeRef<'id>, RolloutError<'id, S::Error>>
 where
   G: Game,
-  S: RolloutSelector<G, R>,
+  S: RolloutSelector,
   R: Rng,
 {
   loop {
     if let Some(_) = G::payoff_of(graph.node_state(node)) {
       // Hit known payoff.
       break;
+    } else if graph.child_count(node) == 0 {
+      break;
     } else {
-      match selector.select(graph, graph.children(node), rng)? {
-        Some(best_child) => {
-          graph.edge_data(best_child).mark_rollout_traversal();
-          node = graph.edge_target(best_child);
-        }
-        None => {
-          error!("selector declined to choose a child");
-          break;
-        }
-      }
+      let child = selector.select(graph, node, rng)?;
+      graph.edge_data(child).mark_rollout_traversal();
+      node = graph.edge_target(child);
     }
   }
   Ok(node)
