@@ -9,6 +9,7 @@ use crate::ucb;
 use crate::SearchSettings;
 use log::trace;
 use rand::Rng;
+use rand::seq::IteratorRandom;
 
 /// Provides a method for selecting incoming parent edges to follow during
 /// backprop phase of MCTS.
@@ -26,6 +27,13 @@ pub trait BackpropSelector<'id>: for<'a> From<&'a SearchSettings> {
   ) -> Self::Items;
 }
 
+/// [BackpropSelector](trait.BackpropSelector.html) implementation that
+/// arbitrarily selects the "first" parent of a node (according to iteration
+/// order).
+///
+/// This selector is only correct for true tree search, in which each vertex in
+/// the search graph has one and only one parent. When the search graph is not
+/// tree-structured, it will function incorrectly.
 pub struct FirstParentSelector {}
 
 impl<'a> From<&'a SearchSettings> for FirstParentSelector {
@@ -48,11 +56,41 @@ impl<'id> BackpropSelector<'id> for FirstParentSelector {
   }
 }
 
+/// [BackpropSelector](trait.BackpropSelector.html) implementation that
+/// arbitrarily selects the a parent of a node uniformly at random.
+///
+/// This selector is only correct for true tree search, in which each vertex in
+/// the search graph has one and only one parent. When the search graph is not
+/// tree-structured, it will function incorrectly.
+pub struct RandomParentSelector {}
+
+impl<'a> From<&'a SearchSettings> for RandomParentSelector {
+  fn from(_: &'a SearchSettings) -> Self {
+    RandomParentSelector {}
+  }
+}
+
+impl<'id> BackpropSelector<'id> for RandomParentSelector {
+  type Items = std::option::IntoIter<search_graph::view::EdgeRef<'id>>;
+
+  fn select<G: Game, R: Rng>(
+    &self,
+    graph: &search_graph::view::View<'_, 'id, G::State, VertexData, EdgeData<G>>,
+    node: search_graph::view::NodeRef<'id>,
+    _payoff: &G::Payoff,
+    rng: &mut R,
+  ) -> Self::Items {
+    graph.parents(node).choose(rng).into_iter()
+  }
+}
+
 /// Returns an iterator that traverses the game graph upwards from `node` up to
-/// the root vertices of the search graph. The caller may then update the
-/// statistics of each edge produced by this iterator. Keep in mind that the
-/// iterator is lazy, and the edges that it yields may be affected by statistics
-/// updates if they are applied during iteration.
+/// the root vertices of the search graph.
+///
+/// The caller may update the statistics of each edge produced by this
+/// iterator. Keep in mind that the iterator is lazy, and the edges that it
+/// yields may be affected by statistics updates if they are applied during
+/// iteration.
 pub fn backprop_iter<'a, 'b, 'id, G, S, R>(
   graph: &'b search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
   node: search_graph::view::NodeRef<'id>,
@@ -211,6 +249,12 @@ where
   }
 }
 
+/// Runs the backpropagation step of Monte Carlo tree search.
+///
+/// Starting from `node` in `graph` with known payoff `payoff`, recursively
+/// updates the local statistics at each ancestor of `node` that is selected by
+/// `selector`. Ancestors are selected by recursively applying `selector` to the
+/// parent that it selects.
 pub fn backprop<'a, 'id, G, S, R>(
   graph: &search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
   node: search_graph::view::NodeRef<'id>,

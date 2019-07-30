@@ -1,9 +1,10 @@
 //! Upper confidence bound (UCB1) algorithm for graph search.
 
-use crate::graph::{EdgeData, VertexData};
+use crate::backprop::BackpropSelector;
 use crate::game::{Game, State, Statistics};
+use crate::graph::{EdgeData, VertexData};
 use crate::rollout::RolloutSelector;
-use log::error;
+use log::{error, trace};
 use rand::Rng;
 use search_graph;
 
@@ -154,8 +155,7 @@ pub fn is_best_child<'a, 'id, G: Game>(
   graph: &search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
   e: search_graph::view::EdgeRef<'id>,
   explore_bias: f64,
-) -> bool
-{
+) -> bool {
   let statistics = &graph.edge_data(e).statistics;
   // trace!("is_best_child: edge {} has {} visits", e.get_id(), stats.visits);
   if statistics.visits() == 0 {
@@ -227,68 +227,6 @@ pub fn is_best_child<'a, 'id, G: Game>(
       false
     }
   }
-  //     match sibling_edge.get_taras_payoff() {
-  //         search_graph::Target::Unexpanded(_) => {
-  //             // This sibling has not yet been visited. We know that this edge
-  //             // has been visited, and we will always visit all siblings at
-  //             // least once before returning to this one.
-  //             trace!("is_best_child: edge {} is not a best child because it has an unexpanded sibling and its own visit count is {}",
-  //                    e.get_id(), stats.visits);
-  //             return false
-  //         },
-  //         search_graph::Target::Expanded(_) => {
-  //             let sibling_stats = sibling_edge.get_data().statistics.as_payoff();
-  //             match score(log_parent_visits, sibling_stats.visits as f64,
-  //                         stats.payoff.score(player) as f64, explore_bias) {
-  //                 Ok(UcbSuccess::Select) => {
-  //                     // Score computation short-circuits UCB to select this
-  //                     // sibling, so we select it iff it is the edge we're
-  //                     // considering. This only happens when the sibling
-  //                     // hasn't been visited yet, and we checked for that
-  //                     // above, but we handle the case again here to complete
-  //                     // the match.
-  //                     trace!("is_best_child: edge {} best child determined by weird edge case", e.get_id());
-  //                     return sibling_edge.get_id() == e.get_id()
-  //                 },
-  //                 Ok(UcbSuccess::Value(ucb)) => {
-  //                     trace!("is_best_child({:?}): edge {} (parent node {}) has ucb {}",
-  //                            player, sibling_edge.get_id(), sibling_edge.get_source().get_id(), ucb);
-  //                     if sibling_edge.get_id() == e.get_id() {
-  //                         if best_ucb > ucb {
-  //                             // We have already seen an edge with a greater
-  //                             // UCB score.
-  //                             trace!("edge {} is not a best child because we have seen a greater UCB score",
-  //                                    e.get_id());
-  //                             return false
-  //                         }
-  //                         edge_ucb = Some(ucb);
-  //                     }
-  //                     if let Some(u) = edge_ucb {
-  //                         if ucb > u {
-  //                             // This edge has a greater UCB score.
-  //                             trace!("is_best_child({:?}): ucb of {} exceeds {} of edge",
-  //                                    player, ucb, u);
-  //                             return false
-  //                         }
-  //                     }
-  //                     if ucb > best_ucb {
-  //                         best_ucb = ucb;
-  //                     }
-  //                 },
-  //                 Err(e) => panic!("error {:?} computing ucb for best child search", e),
-  //             }
-  //         },
-  //     }
-  // }
-  // trace!("is_best_child: edge ucb of {:?} vs. best_ucb of {}", edge_ucb, best_ucb);
-  // match edge_ucb {
-  //     Some(u) if u >= best_ucb =>
-  //         // Target edge has a UCB score which matches the maximum we found.
-  //         true,
-  //     _ =>
-  //         // ThudEdges are not best children by default.
-  //         false,
-  // }
 }
 
 /// Returns the child edge of `parent` that is best according to the UCB1
@@ -330,7 +268,7 @@ where
   match ucb_iter.next().expect("vertex has no children")? {
     UcbSuccess::Select(e) => {
       best = e;
-      best_ucb = f64::MIN;
+      best_ucb = f64::MAX;
     }
     UcbSuccess::Value(e, v) => {
       best = e;
@@ -339,42 +277,46 @@ where
   }
 
   for ucb in ucb_iter {
-    match ucb? {
-      UcbSuccess::Select(e) => {
-        // trace!("find_best_child_edge: short-circuiting to select {}", index);
-        // TODO: we should do tie-breaking here, too, but reading
-        // through child edges in order helps a lot with debugging.
-        return Ok(e);
+    let (edge, value) = match ucb? {
+      UcbSuccess::Select(e) => (e, f64::MAX),
+      UcbSuccess::Value(e, v) => (e, v),
+    };
+    match value.partial_cmp(&best_ucb) {
+      None => {
+        error!("find_best_child: invalid floating-point comparison");
+        return Err(UcbError::InvalidComputation);
       }
-      UcbSuccess::Value(e, v) => {
-        match v.partial_cmp(&best_ucb) {
-          None => {
-            error!("find_best_child_edge: invalid floating-point comparison");
-            return Err(UcbError::InvalidComputation);
-          }
-          Some(Ordering::Greater) => {
-            // trace!("find_best_child_edge: new best index is {} with score {}", index, v);
-            best = e;
-            best_ucb = v;
-            sampling_count = 1;
-          }
-          Some(Ordering::Equal) => {
-            // We use reservoir sampling to break ties.
-            // trace!("find_best_child_edge: found indices {} and {} with score {}; sampling to break tie", best_index, index, v);
-            sampling_count += 1;
-            if rng.gen_ratio(1, sampling_count) {
-              best = e;
-            }
-            // trace!("find_best_child_edge: updated best index to {} after sampling", best_index);
-          }
-          _ => (),
+      Some(Ordering::Greater) => {
+        trace!("find_best_child_edge: new best action with score {}", value);
+        best = edge;
+        best_ucb = value;
+        sampling_count = 1;
+      }
+      Some(Ordering::Equal) => {
+        // We use reservoir sampling to break ties.
+        trace!(
+          "find_best_child: found action with identical score {}; sampling to break tie",
+          value
+        );
+        sampling_count += 1;
+        if rng.gen_ratio(1, sampling_count) {
+          trace!("find_best_child: broke tie by selecting new action");
+          best = edge;
+        } else {
+          trace!("find_best_child: broke tie by keeping old action");
         }
       }
+      Some(Ordering::Less) => (),
     }
   }
   Ok(best)
 }
 
+/// [Rollout selector](../rollout/trait.RolloutSelector.html) that chooses a
+/// child with the highest the UCB1 score.
+///
+/// If more than one child has the same rollout score, chooses one such child at
+/// random.
 pub struct Rollout {
   explore_bias: f64,
 }
@@ -397,5 +339,43 @@ impl RolloutSelector for Rollout {
     rng: &mut R,
   ) -> Result<search_graph::view::EdgeRef<'id>, UcbError> {
     find_best_child(graph, parent, self.explore_bias, rng)
+  }
+}
+
+/// [Backprop selector](../backprop/trait.BackpropSelector.html) that traverses
+/// upward edges that would have been selected by the [UCB1
+/// rollout](struct.Rollout.html) policy.
+pub struct BestParentBackprop {
+  explore_bias: f64,
+}
+
+impl<'a> From<&'a crate::SearchSettings> for BestParentBackprop {
+  fn from(settings: &'a crate::SearchSettings) -> Self {
+    BestParentBackprop {
+      explore_bias: settings.explore_bias,
+    }
+  }
+}
+
+impl<'id> BackpropSelector<'id> for BestParentBackprop {
+  // TODO: this requires an allocation. We have everything in place for this
+  // selector to be allocation-free, except Rust doesn't yet support
+  // ATCs/HKTs. We need ATC support because this iterator type will have its
+  // lifetime constrained by the borrow of `graph` in the select method, but
+  // that lifetime isn't known statically.
+  type Items = std::vec::IntoIter<search_graph::view::EdgeRef<'id>>;
+
+  fn select<G: Game, R: Rng>(
+    &self,
+    graph: &search_graph::view::View<'_, 'id, G::State, VertexData, EdgeData<G>>,
+    node: search_graph::view::NodeRef<'id>,
+    _payoff: &G::Payoff,
+    _rng: &mut R,
+  ) -> Self::Items {
+    let result: Vec<search_graph::view::EdgeRef<'id>> = graph
+      .parents(node)
+      .filter(|&parent_edge| is_best_child(graph, parent_edge, self.explore_bias))
+      .collect();
+    result.into_iter()
   }
 }

@@ -10,16 +10,16 @@ pub mod statistics;
 pub(crate) mod tictactoe;
 pub mod ucb;
 
-use self::backprop::BackpropSelector;
-use self::rollout::RolloutSelector;
-use self::simulation::Simulator;
-
-use self::game::{Game, State};
-use self::graph::{EdgeData, VertexData};
+use crate::backprop::BackpropSelector;
+use crate::game::{Game, State};
+use crate::graph::{EdgeData, VertexData};
+use crate::rollout::RolloutSelector;
+use crate::simulation::Simulator;
 
 use std::convert::From;
 use std::result::Result;
 
+use log::trace;
 use rand::Rng;
 
 /// Wraps a decision made by the UCB rollout policy.
@@ -91,6 +91,7 @@ impl<'a, 'id, R: Rng, G: Game> RolloutPhase<'a, 'id, R, G> {
     root_state: G::State,
     mut graph: search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
   ) -> Self {
+    trace!("initializing rollout phase to state: {:?}", root_state);
     let root_node = match graph.find_node(&root_state) {
       Some(n) => n,
       None => graph.append_node(root_state.clone(), VertexData::default()),
@@ -106,18 +107,26 @@ impl<'a, 'id, R: Rng, G: Game> RolloutPhase<'a, 'id, R, G> {
   pub fn rollout<S: RolloutSelector>(
     mut self,
   ) -> Result<ScoringPhase<'a, 'id, R, G>, rollout::RolloutError<'id, S::Error>> {
-    rollout::rollout(
+    let result = rollout::rollout(
       &self.graph,
       self.root_node,
       S::from(&self.settings),
       &mut self.rng,
-    )
-    .map(|node| ScoringPhase {
-      rng: self.rng,
-      settings: self.settings,
-      graph: self.graph,
-      root_node: self.root_node,
-      rollout_node: node,
+    );
+    trace!("rollout finds result {:?}", result);
+    result.map(|node| {
+      trace!("rollout result has target node: {:?}", node);
+      trace!(
+        "rollout result has state: {:?}",
+        self.graph.node_state(node)
+      );
+      ScoringPhase {
+        rng: self.rng,
+        settings: self.settings,
+        graph: self.graph,
+        root_node: self.root_node,
+        rollout_node: node,
+      }
     })
   }
 
@@ -152,6 +161,7 @@ impl<'a, 'id, R: Rng, G: Game> ScoringPhase<'a, 'id, R, G> {
         simulator.simulate::<G, R>(self.graph.node_state(self.rollout_node()), &mut self.rng)?
       }
     };
+    trace!("scoring phase finds payoff {:?}", payoff);
     Ok(BackpropPhase {
       rng: self.rng,
       settings: self.settings,
@@ -211,19 +221,30 @@ pub struct ExpandPhase<'a, 'id, R: Rng, G: Game> {
 
 impl<'a, 'id, R: Rng, G: Game> ExpandPhase<'a, 'id, R, G> {
   pub fn expand(mut self) -> RolloutPhase<'a, 'id, R, G> {
-    if !self.graph.node_data(self.rollout_node).mark_expanded() {
+    if self.graph.node_data(self.rollout_node).mark_expanded() {
+      trace!("rollout node was already marked as expanded; ExpandPhase does nothing");
+    } else {
       self
         .graph
         .node_state(self.rollout_node)
         .clone()
         .for_actions(|action| {
+          trace!("ExpandPhase adds edge for action {:?}", action);
           let mut child_state = self.graph.node_state(self.rollout_node).clone();
+          trace!("ExpandState old state: {:?}", child_state);
           child_state.do_action(&action);
+          trace!("ExpandState new state: {:?}", child_state);
           let child = match self.graph.find_node(&child_state) {
-            Some(n) => n,
-            None => self
-              .graph
-              .append_node(child_state.clone(), Default::default()),
+            Some(n) => {
+              trace!("ExpandState expanded to existing game state");
+              n
+            }
+            None => {
+              trace!("ExpandState expanded to new game state");
+              self
+                .graph
+                .append_node(child_state.clone(), Default::default())
+            }
           };
           self
             .graph
@@ -248,6 +269,7 @@ mod test {
     backprop, simulation, tictactoe, BackpropPhase, ExpandPhase, RolloutPhase, ScoringPhase,
     SearchSettings,
   };
+  use log::trace;
   use rand::SeedableRng;
   use rand_pcg;
 
@@ -332,6 +354,8 @@ mod test {
     });
 
     {
+      // Search graph should consist of root, edges for each possible move, and
+      // leaves for the result of each move.
       let node = graph.find_node(&Default::default()).unwrap();
       assert!(node.is_root());
       assert!(!node.is_leaf());
@@ -373,12 +397,15 @@ mod test {
     });
 
     {
+      // Two levels of should be expanded.
+      assert_eq!(18, graph.vertex_count());
+      assert_eq!(17, graph.edge_count());
       let node = graph.find_node(&Default::default()).unwrap();
       assert!(node.is_root());
       assert!(!node.is_leaf());
       assert_eq!(9, node.get_child_list().len());
       for (i, child) in node.get_child_list().iter().enumerate() {
-        if i == 1 {
+        if i == 7 {
           assert_eq!(1, child.get_data().statistics.visits());
           assert_eq!(
             0,
@@ -428,45 +455,11 @@ mod test {
       .backprop::<backprop::FirstParentSelector>()
       .expand();
     });
-    {
-      let node = graph.find_node(&Default::default()).unwrap();
-      // for (i, child) in node.get_child_list().iter().enumerate() {
-      //   if i == 1 {
-      //     assert_eq!(1, child.get_data().statistics.visits());
-      //     assert_eq!(
-      //       0,
-      //       child
-      //         .get_data()
-      //         .statistics
-      //         .score(crate::statistics::two_player::Player::One)
-      //     );
-      //     assert_eq!(
-      //       1,
-      //       child
-      //         .get_data()
-      //         .statistics
-      //         .score(crate::statistics::two_player::Player::Two)
-      //     );
-      //   } else {
-      //     assert_eq!(0, child.get_data().statistics.visits());
-      //     assert_eq!(
-      //       0,
-      //       child
-      //         .get_data()
-      //         .statistics
-      //         .score(crate::statistics::two_player::Player::One)
-      //     );
-      //     assert_eq!(
-      //       0,
-      //       child
-      //         .get_data()
-      //         .statistics
-      //         .score(crate::statistics::two_player::Player::Two)
-      //     );
-      //   }
-      // }
-    }
+  }
 
+  #[test]
+  fn integration_test_first_parent_selector() {
+    let mut graph = Graph::new();
     search_graph::view::of_graph(&mut graph, |view| {
       let mut rollout = RolloutPhase::initialize(
         default_rng(),
@@ -482,11 +475,159 @@ mod test {
       }
     });
 
-    for child in graph.find_node(&default_game_state()).unwrap().get_child_list().iter() {
-      let statistics = &child.get_data().statistics;
-      // assert!(statistics.visits() > 500);
-      assert_eq!(statistics.score(crate::statistics::two_player::Player::One), 250);
-      assert_eq!(statistics.score(crate::statistics::two_player::Player::Two), 250);
-    }
+    assert_eq!(3295, graph.vertex_count());
+    assert_eq!(5361, graph.edge_count());
+
+    let child_statistics: Vec<&crate::statistics::two_player::ScoredStatistics<_>> =
+    graph
+      .find_node(&default_game_state())
+      .unwrap()
+      .get_child_list()
+      .iter()
+      .map(|c| &c.get_data().statistics)
+      .collect();
+    assert_eq!(108, child_statistics[0].visits());
+    assert_eq!(28, child_statistics[0].score(crate::statistics::two_player::Player::One));
+    assert_eq!(78, child_statistics[0].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(209, child_statistics[1].visits());
+    assert_eq!(153, child_statistics[1].score(crate::statistics::two_player::Player::One));
+    assert_eq!(50, child_statistics[1].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(754, child_statistics[2].visits());
+    assert_eq!(557, child_statistics[2].score(crate::statistics::two_player::Player::One));
+    assert_eq!(178, child_statistics[2].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(2023, child_statistics[3].visits());
+    assert_eq!(1548, child_statistics[3].score(crate::statistics::two_player::Player::One));
+    assert_eq!(459, child_statistics[3].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(2105, child_statistics[4].visits());
+    assert_eq!(834, child_statistics[4].score(crate::statistics::two_player::Player::One));
+    assert_eq!(1181, child_statistics[4].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(1172, child_statistics[5].visits());
+    assert_eq!(574, child_statistics[5].score(crate::statistics::two_player::Player::One));
+    assert_eq!(590, child_statistics[5].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(953, child_statistics[6].visits());
+    assert_eq!(483, child_statistics[6].score(crate::statistics::two_player::Player::One));
+    assert_eq!(282, child_statistics[6].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(806, child_statistics[7].visits());
+    assert_eq!(382, child_statistics[7].score(crate::statistics::two_player::Player::One));
+    assert_eq!(410, child_statistics[7].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(1869, child_statistics[8].visits());
+    assert_eq!(678, child_statistics[8].score(crate::statistics::two_player::Player::One));
+    assert_eq!(913, child_statistics[8].score(crate::statistics::two_player::Player::Two));
+  }
+
+  #[test]
+  fn integration_test_random_parent_selector() {
+    let mut graph = Graph::new();
+    search_graph::view::of_graph(&mut graph, |view| {
+      let mut rollout = RolloutPhase::initialize(
+        default_rng(),
+        default_settings(),
+        default_game_state(),
+        view,
+      );
+      for _ in 0..10000 {
+        let score = rollout.rollout::<ucb::Rollout>().unwrap();
+        let backprop = score.score::<simulation::RandomSimulator>().unwrap();
+        let expand = backprop.backprop::<backprop::RandomParentSelector>();
+        rollout = expand.expand();
+      }
+    });
+
+    assert_eq!(5795, graph.vertex_count());
+    assert_eq!(13874, graph.edge_count());
+
+    let child_statistics: Vec<&crate::statistics::two_player::ScoredStatistics<_>> =
+    graph
+      .find_node(&default_game_state())
+      .unwrap()
+      .get_child_list()
+      .iter()
+      .map(|c| &c.get_data().statistics)
+      .collect();
+    assert_eq!(1204, child_statistics[0].visits());
+    assert_eq!(708, child_statistics[0].score(crate::statistics::two_player::Player::One));
+    assert_eq!(347, child_statistics[0].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(790, child_statistics[1].visits());
+    assert_eq!(396, child_statistics[1].score(crate::statistics::two_player::Player::One));
+    assert_eq!(266, child_statistics[1].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(983, child_statistics[2].visits());
+    assert_eq!(553, child_statistics[2].score(crate::statistics::two_player::Player::One));
+    assert_eq!(249, child_statistics[2].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(829, child_statistics[3].visits());
+    assert_eq!(471, child_statistics[3].score(crate::statistics::two_player::Player::One));
+    assert_eq!(258, child_statistics[3].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(2015, child_statistics[4].visits());
+    assert_eq!(1224, child_statistics[4].score(crate::statistics::two_player::Player::One));
+    assert_eq!(388, child_statistics[4].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(795, child_statistics[5].visits());
+    assert_eq!(449, child_statistics[5].score(crate::statistics::two_player::Player::One));
+    assert_eq!(242, child_statistics[5].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(1035, child_statistics[6].visits());
+    assert_eq!(578, child_statistics[6].score(crate::statistics::two_player::Player::One));
+    assert_eq!(287, child_statistics[6].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(1002, child_statistics[7].visits());
+    assert_eq!(581, child_statistics[7].score(crate::statistics::two_player::Player::One));
+    assert_eq!(271, child_statistics[7].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(1346, child_statistics[8].visits());
+    assert_eq!(798, child_statistics[8].score(crate::statistics::two_player::Player::One));
+    assert_eq!(399, child_statistics[8].score(crate::statistics::two_player::Player::Two));
+  }
+
+  #[test]
+  fn integration_test_best_parent_selector() {
+    let mut graph = Graph::new();
+    search_graph::view::of_graph(&mut graph, |view| {
+      let mut rollout = RolloutPhase::initialize(
+        default_rng(),
+        default_settings(),
+        default_game_state(),
+        view,
+      );
+      for _ in 0..10000 {
+        let score = rollout.rollout::<ucb::Rollout>().unwrap();
+        let backprop = score.score::<simulation::RandomSimulator>().unwrap();
+        let expand = backprop.backprop::<ucb::BestParentBackprop>();
+        rollout = expand.expand();
+      }
+    });
+
+    assert_eq!(4471, graph.vertex_count());
+    assert_eq!(10889, graph.edge_count());
+
+    let child_statistics: Vec<&crate::statistics::two_player::ScoredStatistics<_>> =
+    graph
+      .find_node(&default_game_state())
+      .unwrap()
+      .get_child_list()
+      .iter()
+      .map(|c| &c.get_data().statistics)
+      .collect();
+    assert_eq!(229, child_statistics[0].visits());
+    assert_eq!(138, child_statistics[0].score(crate::statistics::two_player::Player::One));
+    assert_eq!(53, child_statistics[0].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(73, child_statistics[1].visits());
+    assert_eq!(33, child_statistics[1].score(crate::statistics::two_player::Player::One));
+    assert_eq!(30, child_statistics[1].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(322, child_statistics[2].visits());
+    assert_eq!(203, child_statistics[2].score(crate::statistics::two_player::Player::One));
+    assert_eq!(83, child_statistics[2].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(90, child_statistics[3].visits());
+    assert_eq!(44, child_statistics[3].score(crate::statistics::two_player::Player::One));
+    assert_eq!(32, child_statistics[3].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(9033, child_statistics[4].visits());
+    assert_eq!(7693, child_statistics[4].score(crate::statistics::two_player::Player::One));
+    assert_eq!(945, child_statistics[4].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(74, child_statistics[5].visits());
+    assert_eq!(34, child_statistics[5].score(crate::statistics::two_player::Player::One));
+    assert_eq!(35, child_statistics[5].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(118, child_statistics[6].visits());
+    assert_eq!(62, child_statistics[6].score(crate::statistics::two_player::Player::One));
+    assert_eq!(43, child_statistics[6].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(98, child_statistics[7].visits());
+    assert_eq!(49, child_statistics[7].score(crate::statistics::two_player::Player::One));
+    assert_eq!(36, child_statistics[7].score(crate::statistics::two_player::Player::Two));
+    assert_eq!(180, child_statistics[8].visits());
+    assert_eq!(104, child_statistics[8].score(crate::statistics::two_player::Player::One));
+    assert_eq!(41, child_statistics[8].score(crate::statistics::two_player::Player::Two));
   }
 }
