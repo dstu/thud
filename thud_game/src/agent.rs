@@ -1,118 +1,126 @@
-use crate::actions::{Action, ActionParseError};
-use std::borrow::Borrow;
-use std::{error, fmt, fs, path, result};
+use crate::actions::Action;
+use std::future::Future;
 use std::io::{self, BufRead};
+use std::pin::Pin;
 use std::str::FromStr;
+use std::sync::mpsc::{channel, Receiver, TryRecvError};
+use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll};
+use std::thread::{self, JoinHandle};
+use std::{error, fmt, result};
 
-/// Errors that may occur when querying an agent for its next move.
+pub type Result = result::Result<Action, Box<dyn error::Error + Send>>;
+
+/// Error states unique to [Agent](trait.Agent.html)s that read actions in from a text stream.
 #[derive(Debug)]
-pub enum Error {
-  BadAction(ActionParseError),
+pub enum ReaderAgentError {
+  BadMove(String),
   Exhausted,
-  Wrapped(Box<(dyn error::Error + 'static)>),
+  Io(io::Error),
 }
 
-impl From<ActionParseError> for Error {
-  fn from(err: ActionParseError) -> Self {
-    Error::BadAction(err)
-  }
-}
-
-impl From<io::Error> for Error {
-  fn from(err: io::Error) -> Self {
-    Error::Wrapped(Box::new(err))
-  }
-}
-
-impl error::Error for Error {
-  fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+impl error::Error for ReaderAgentError {
+  fn cause(&self) -> Option<&dyn error::Error> {
     match self {
-      Error::BadAction(e) => Some(e),
-      Error::Exhausted => None,
-      Error::Wrapped(e) => Some(e.borrow()),
+      ReaderAgentError::BadMove(_) | ReaderAgentError::Exhausted => None,
+      ReaderAgentError::Io(ref e) => Some(e),
     }
   }
 }
 
-impl fmt::Display for Error {
+impl fmt::Display for ReaderAgentError {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "{:?}", self)
-  }
-}
-
-type Result = result::Result<Action, Error>;
-
-/// The interface that Thud-playing agents should implement.
-pub trait Agent {
-  /// Requests a move for the given game state. This move should be legal to
-  /// play on `state`.
-  ///
-  /// If an agent cannot propose a move (e.g., because it is in a bad internal
-  /// state, or it has read the last move from a pre-recorded list), it should
-  /// return an error.
-  fn propose_move(&mut self, state: &crate::state::State) -> Result;
-}
-
-/// An agent that reads Thud moves from stdin. This agent does not lock stdin,
-/// making it possible to have two different instances of it take turns reading
-/// from stdin.
-///
-/// A prompt function may be specified, which will result in a prompt string
-/// being printed before each move is read.
-pub struct StdinAgent<F: Fn(&crate::state::State) -> String> {
-  prompt: F,
-}
-
-impl<F: Fn(&crate::state::State) -> String> StdinAgent<F> {
-  /// Returns an agent that will evaluate `prompt` on the current game state and
-  /// print the resulting string each time a move is requested.
-  pub fn with_prompt(prompt: F) -> Self {
-    StdinAgent { prompt: prompt, }
-  }
-}
-
-impl<F: Fn(&crate::state::State) -> String> Agent for StdinAgent<F> {
-  fn propose_move(&mut self, state: &crate::state::State) -> Result {
-    print!("{}", (self.prompt)(state));
-    let mut line = String::new();
-    let bytes_read = io::stdin().lock().read_line(&mut line)?;
-    if bytes_read == 0 {
-      return Err(Error::Exhausted)
+    match self {
+      ReaderAgentError::BadMove(s) => write!(f, "bad move string '{}'", s),
+      ReaderAgentError::Exhausted => write!(f, "exhausted list of moves"),
+      ReaderAgentError::Io(e) => write!(f, "{}", e),
     }
-    Ok(Action::from_str(line.trim())?)
   }
 }
 
-/// An agent that reads Thud moves from an input stream.
-pub struct ReaderAgent<R: io::BufRead> {
-  reader: R,
-}
-
-impl<R: io::BufRead> ReaderAgent<R> {
-  pub fn new(reader: R) -> Self {
-    ReaderAgent { reader, }
+impl From<io::Error> for ReaderAgentError {
+  fn from(e: io::Error) -> Self {
+    ReaderAgentError::Io(e)
   }
 }
 
-impl ReaderAgent<io::BufReader<fs::File>> {
-  /// Returns a `ReaderAgent` that reads lines from the file at `path`.
-  pub fn from_file_at<P: AsRef<path::Path>>(path: P) -> result::Result<Self, io::Error> {
-    Ok(Self::from_file(fs::File::open(path)?))
-  }
-
-  /// Returns a `ReaderAgent` that reads lines from `file`.
-  pub fn from_file(file: fs::File) -> Self {
-    ReaderAgent { reader: io::BufReader::new(file), }
-  }
+/// Implemented for agents that can play Thud.
+pub trait Agent: Send {
+  fn propose_action(&mut self, state: &crate::state::State) -> Result;
 }
 
-impl<R: io::BufRead> Agent for ReaderAgent<R> {
-  fn propose_move(&mut self, _state: &crate::state::State) -> Result {
-    let mut line = String::new();
-    let bytes_read = self.reader.read_line(&mut line)?;
-    if bytes_read == 0 {
-      return Err(Error::Exhausted)
+/// Tries to interpret the next line available from `stdin` as a game action.
+pub fn read_action_from_stdin() -> Result {
+  let mut line = String::new();
+  let bytes_read = match io::stdin().lock().read_line(&mut line) {
+    Ok(n) => n,
+    Err(e) => return Err(Box::new(ReaderAgentError::Io(e))),
+  };
+  if bytes_read == 0 {
+    Err(Box::new(ReaderAgentError::Exhausted))
+  } else {
+    match Action::from_str(line.trim()) {
+      Ok(a) => Ok(a),
+      Err(_) => Err(Box::new(ReaderAgentError::BadMove(line))),
     }
-    Ok(Action::from_str(line.trim())?)
   }
+}
+
+/// Tries to interpret the next line of text in `reader` as a game action.
+pub fn read_action_from_reader<R: io::BufRead>(reader: &mut R) -> Result {
+  let mut line = String::new();
+  let bytes_read = match reader.read_line(&mut line) {
+    Ok(n) => n,
+    Err(e) => return Err(Box::new(ReaderAgentError::Io(e))),
+  };
+  if bytes_read == 0 {
+    Err(Box::new(ReaderAgentError::Exhausted))
+  } else {
+    match Action::from_str(line.trim()) {
+      Ok(a) => Ok(a),
+      Err(_) => Err(Box::new(ReaderAgentError::BadMove(line))),
+    }
+  }
+}
+
+/// Wraps around an asynchronous thread that executes an agent's move processing.
+struct AgentFuture {
+  rx: Receiver<Result>,
+  _thread_handle: JoinHandle<()>,
+}
+
+impl AgentFuture {
+  fn new(agent: Arc<Mutex<dyn Agent>>, state: &crate::state::State) -> Self {
+    let (tx, rx) = channel();
+    let state = state.clone();
+    let thread_handle = thread::spawn(move || {
+      let result = match agent.lock() {
+        Ok(mut agent) => agent.propose_action(&state),
+        Err(_) => panic!("agent mutex poisoned"),
+      };
+      tx.send(result).expect("failed to send proposed action from agent thread")
+    });
+    AgentFuture { rx, _thread_handle: thread_handle,  }
+  }
+}
+
+impl Future for AgentFuture {
+  type Output = Result;
+
+  fn poll(self: Pin<&mut Self>, _cx: &mut Context) -> Poll<Result> {
+    match self.rx.try_recv() {
+      Ok(r) => Poll::Ready(r),
+      Err(TryRecvError::Empty) => Poll::Pending,
+      Err(e) => Poll::Ready(Err(Box::new(e))),
+    }
+  }
+}
+
+/// Returns a future that will query an [Agent](trait.Agent.html) off-thread and yield the result of
+/// calling its `propose_action` method.
+pub fn query_agent(
+  agent: Arc<Mutex<dyn Agent>>,
+  state: &crate::state::State,
+) -> impl Future<Output = Result> {
+  AgentFuture::new(agent, state)
 }
