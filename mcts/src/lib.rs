@@ -106,7 +106,7 @@ impl<'a, 'id, R: Rng, G: Game> RolloutPhase<'a, 'id, R, G> {
 
   pub fn rollout<S: RolloutSelector>(
     mut self,
-  ) -> Result<ScoringPhase<'a, 'id, R, G>, rollout::RolloutError<'id, S::Error>> {
+  ) -> Result<ScoringPhase<'a, 'id, R, G>, rollout::RolloutError<G, S::Error>> {
     let result = rollout::rollout(
       &self.graph,
       self.root_node,

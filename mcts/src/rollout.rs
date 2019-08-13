@@ -12,36 +12,43 @@ use std::result::Result;
 use rand::Rng;
 
 /// Error type for MCTS rollout.
-pub enum RolloutError<'a, E: Error> {
+pub enum RolloutError<G: Game, E: Error> {
   /// Rollout encountered a cycle.
-  Cycle(Vec<search_graph::view::EdgeRef<'a>>),
+  Cycle { root: G::State, elements: Vec<(G::Action, G::State)>, },
   /// The [RolloutSelector](struct.RolloutSelector.html) that
   /// [rollout](fn.rollout.html) delegates to reported some error.
   Selector(E),
 }
 
-impl<'a, E: Error> fmt::Debug for RolloutError<'a, E> {
+impl<G: Game, E: Error> fmt::Debug for RolloutError<G, E> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match *self {
-      RolloutError::Cycle(_) => write!(f, "Cycle in path"),
+      RolloutError::Cycle { ref root, ref elements, } => {
+        write!(f, "Cycle in path: ")?;
+        write!(f, "Start state: {:?}", root)?;
+        for (action, state) in elements.iter() {
+          write!(f, "; action: {:?}, state: {:?}", action, state)?;
+        }
+        Ok(())
+      }
       RolloutError::Selector(ref e) => write!(f, "Selector error ({:?})", e),
     }
   }
 }
 
-impl<'a, E: Error> fmt::Display for RolloutError<'a, E> {
+impl<G: Game, E: Error> fmt::Display for RolloutError<G, E> {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match *self {
-      RolloutError::Cycle(_) => write!(f, "Cycle in path"),
+      RolloutError::Cycle { root: _, elements: _, } => write!(f, "Cycle in path"),
       RolloutError::Selector(ref e) => write!(f, "Selector error ({})", e),
     }
   }
 }
 
-impl<'a, E: Error> Error for RolloutError<'a, E> {
+impl<G: Game, E: Error> Error for RolloutError<G, E> {
   fn description(&self) -> &str {
     match *self {
-      RolloutError::Cycle(_) => "Cycle",
+      RolloutError::Cycle { root: _, elements: _, } => "Cycle",
       RolloutError::Selector(_) => "Selector error",
     }
   }
@@ -54,7 +61,7 @@ impl<'a, E: Error> Error for RolloutError<'a, E> {
   }
 }
 
-impl<'a, E: Error> From<E> for RolloutError<'a, E> {
+impl<G: Game, E: Error> From<E> for RolloutError<G, E> {
   fn from(e: E) -> Self {
     RolloutError::Selector(e)
   }
@@ -84,7 +91,7 @@ pub fn rollout<'a, 'id, G, S, R>(
   mut node: search_graph::view::NodeRef<'id>,
   selector: S,
   rng: &mut R,
-) -> Result<search_graph::view::NodeRef<'id>, RolloutError<'id, S::Error>>
+) -> Result<search_graph::view::NodeRef<'id>, RolloutError<G, S::Error>>
 where
   G: Game,
   S: RolloutSelector,
