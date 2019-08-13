@@ -15,7 +15,7 @@ pub enum Decision {
 const ALL_DECISIONS: &'static [Decision] = &[Decision::Accept, Decision::Decline];
 
 impl Decision {
-  pub fn all() -> &'static [Self] {
+  pub /* const */ fn all() -> &'static [Self] {
     ALL_DECISIONS
   }
 }

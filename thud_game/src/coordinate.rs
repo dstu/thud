@@ -1,5 +1,6 @@
 #[cfg(test)] use quickcheck::{Arbitrary, Gen};
 #[cfg(test)] use rand::Rng;
+#[cfg(test)] use rand::seq::SliceRandom;
 
 use std::fmt;
 
@@ -40,7 +41,7 @@ impl Coordinate {
     }
   }
 
-  pub const fn all() -> &'static [Self] {
+  pub /* const */ fn all() -> &'static [Self] {
     ALL_COORDINATES
   }
 
@@ -2453,7 +2454,7 @@ impl Direction {
     }
   }
 
-  pub fn all() -> &'static [Direction] {
+  pub /* const */ fn all() -> &'static [Direction] {
     ALL_DIRECTIONS_REF
   }
 }
@@ -2492,7 +2493,7 @@ impl Convolution {
     }
   }
 
-  pub const fn all() -> &'static [Self] {
+  pub /* const */ fn all() -> &'static [Self] {
     ALL_CONVOLUTIONS
   }
 }
@@ -2508,12 +2509,12 @@ const ALL_CONVOLUTIONS: &'static [Convolution; 8] = &[
   Convolution { i: 7 },
 ];
 
-#[cfg(test)]
-impl Arbitrary for Coordinate {
-  fn arbitrary<G: Gen>(g: &mut G) -> Self {
-    *g.choose(Coordinate::all()).unwrap()
-  }
-}
+// #[cfg(test)]
+// impl Arbitrary for Coordinate {
+//   fn arbitrary<G: Gen>(g: &mut G) -> Self {
+//     *Coordinate::all().choose(g).unwrap()
+//   }
+// }
 
 #[cfg(test)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -2523,45 +2524,45 @@ pub struct CoordinateLineSegment {
   pub length: u8,
 }
 
-#[cfg(test)]
-impl Arbitrary for Direction {
-  fn arbitrary<G: Gen>(g: &mut G) -> Self {
-    *g.choose(Direction::all()).unwrap()
-  }
-}
+// #[cfg(test)]
+// impl Arbitrary for Direction {
+//   fn arbitrary<G: Gen>(g: &mut G) -> Self {
+//     *Direction::all().choose(g).unwrap()
+//   }
+// }
 
-#[cfg(test)]
-impl Arbitrary for CoordinateLineSegment {
-  fn arbitrary<G: Gen>(g: &mut G) -> Self {
-    loop {
-      let start = Coordinate::arbitrary(g);
-      let direction = Direction::arbitrary(g);
-      if start.to_direction(direction).is_none() {
-        continue;
-      }
+// #[cfg(test)]
+// impl Arbitrary for CoordinateLineSegment {
+//   fn arbitrary<G: Gen>(g: &mut G) -> Self {
+//     loop {
+//       let start = Coordinate::arbitrary(g);
+//       let direction = Direction::arbitrary(g);
+//       if start.to_direction(direction).is_none() {
+//         continue;
+//       }
 
-      let mut length = 1u8;
-      let mut next = start.to_direction(direction);
-      loop {
-        match next {
-          None => break,
-          Some(n) => {
-            if g.gen_ratio(1, length as u32) {
-              break;
-            }
-            next = n.to_direction(direction);
-            length += 1;
-          }
-        }
-      }
-      return CoordinateLineSegment {
-        start: start,
-        direction: direction,
-        length: length,
-      };
-    }
-  }
-}
+//       let mut length = 1u8;
+//       let mut next = start.to_direction(direction);
+//       loop {
+//         match next {
+//           None => break,
+//           Some(n) => {
+//             if g.gen_ratio(1, length as u32) {
+//               break;
+//             }
+//             next = n.to_direction(direction);
+//             length += 1;
+//           }
+//         }
+//       }
+//       return CoordinateLineSegment {
+//         start: start,
+//         direction: direction,
+//         length: length,
+//       };
+//     }
+//   }
+// }
 
 #[cfg(test)]
 mod test {
