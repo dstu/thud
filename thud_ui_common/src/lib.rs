@@ -7,8 +7,8 @@ use thud_game::{self, board};
 // pub use thud_game::ai::mcts::deconvolve_transpositions::Statistics as ThudStatistics;
 
 pub mod agent_registry;
-// pub mod init;
-// pub mod ai;
+pub mod init;
+pub mod ai;
 
 pub const FLAG_INITIAL_BOARD: &'static str = "initial_board";
 pub const FLAG_INITIAL_PLAYER: &'static str = "initial_player";

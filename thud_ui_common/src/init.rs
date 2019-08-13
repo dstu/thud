@@ -36,7 +36,7 @@ pub fn init_logger(logging_level: log::LevelFilter) {
         format!("[{}][{}] {}", level, time, msg)
       },
     ),
-    output: vec![fern::OutputConfig::stdout()],
+    output: vec![fern::Output::stderr()],
     level: logging_level,
   };
   if let Err(e) = fern::init_global_logger(config, logging_level) {

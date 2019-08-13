@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::{error, fmt, result};
 use thud_game::agent::{self, Agent};
 
+pub mod mcts;
+
 pub const FLAG_PLAYER_1_AGENT: &'static str = "player_1_agent";
 pub const FLAG_PLAYER_2_AGENT: &'static str = "player_1_agent";
 
@@ -14,7 +16,11 @@ pub enum Error {
   InvalidAgent(String),
   /// The the agent named `agent` could not be created because of an error with
   /// the parameter named `parameter`.
-  InvalidAgentParameter { agent: String, parameter: String, error: Option<Box<dyn error::Error>>, },
+  InvalidAgentParameter {
+    agent: String,
+    parameter: String,
+    error: Option<Box<dyn error::Error>>,
+  },
 }
 
 impl error::Error for Error {}
@@ -32,7 +38,9 @@ pub trait AgentBuilder {
   fn name(&self) -> &str;
 
   /// Registers arguments for configuring this agent on `app`.
-  fn register_args<'a, 'b>(&'a self, app: App<'a, 'b> ) -> App<'a, 'b> where 'a: 'b;
+  fn register_args<'a, 'b>(&'a self, app: App<'a, 'b>) -> App<'a, 'b>
+  where
+    'a: 'b;
 
   /// Creates an instance of this agent from `matches`, which should be the
   /// results of reading a configuration.
@@ -41,19 +49,23 @@ pub trait AgentBuilder {
 
 /// A collection of `AgentBuilder`s that can instantiate `Agent`s by name.
 pub struct AgentRegistry {
+  /// Keyed by agent name.
   agents: HashMap<String, Box<dyn AgentBuilder>>,
 }
 
 impl AgentRegistry {
   /// Creates an empty registry.
   pub fn new() -> Self {
-    AgentRegistry { agents: HashMap::new(), }
+    AgentRegistry {
+      agents: HashMap::new(),
+    }
   }
 
   /// Adds `builder` to this registry. Future calls to `get` and `register_args`
   /// may delegate to `builder` (in whole or in part).
-  pub fn register(&mut self, builder: Box<dyn AgentBuilder>) {
+  pub fn register(&mut self, builder: Box<dyn AgentBuilder>) -> &mut Self {
     self.agents.insert(builder.name().to_string(), builder);
+    self
   }
 
   /// Constructs an agent from the builder with the given name, using the
@@ -86,23 +98,30 @@ impl AgentRegistry {
 
   /// Adds command-line arguments to `app` for setting the agents that will be
   /// playing. Returns `app`, updated.
-  pub fn register_args<'a, 'b>(&'a self, mut app: App<'a, 'b>) -> App<'a, 'b> where 'a: 'b {
+  pub fn register_args<'a, 'b>(&'a self, mut app: App<'a, 'b>) -> App<'a, 'b>
+  where
+    'a: 'b,
+  {
     let mut values = Vec::with_capacity(self.agents.len());
     for (_, builder) in self.agents.iter() {
       values.push(builder.name());
       app = builder.register_args(app);
     }
     app
-      .arg(Arg::with_name(FLAG_PLAYER_1_AGENT)
-           .long(FLAG_PLAYER_1_AGENT)
-           .takes_value(true)
-           .possible_values(&values[0..values.len()])
-           .required(true))
-      .arg(Arg::with_name(FLAG_PLAYER_2_AGENT)
-           .long(FLAG_PLAYER_2_AGENT)
-           .takes_value(true)
-           .possible_values(&values[0..values.len()])
-           .required(true))
+      .arg(
+        Arg::with_name(FLAG_PLAYER_1_AGENT)
+          .long(FLAG_PLAYER_1_AGENT)
+          .takes_value(true)
+          .possible_values(&values[0..values.len()])
+          .required(true),
+      )
+      .arg(
+        Arg::with_name(FLAG_PLAYER_2_AGENT)
+          .long(FLAG_PLAYER_2_AGENT)
+          .takes_value(true)
+          .possible_values(&values[0..values.len()])
+          .required(true),
+      )
   }
 }
 
@@ -118,7 +137,10 @@ impl FileAgentBuilder {
     FileAgentBuilder {
       name: name.to_owned(),
       arg_name: format!("{}_file", name),
-      help: format!("File listing moves (one per line) for the agent '{}' to use", name),
+      help: format!(
+        "File listing moves (one per line) for the agent '{}' to use",
+        name
+      ),
     }
   }
 }
@@ -128,22 +150,37 @@ impl AgentBuilder for FileAgentBuilder {
     &self.name
   }
 
-  fn register_args<'a, 'b>(&'a self, app: App<'a, 'b>) -> App<'a, 'b> where 'a: 'b {
-    app.arg(Arg::with_name(&self.arg_name)
-            .long(&self.arg_name)
-            .value_name("FILE")
-            .help(&self.help)
-            .takes_value(true))
+  fn register_args<'a, 'b>(&'a self, app: App<'a, 'b>) -> App<'a, 'b>
+  where
+    'a: 'b,
+  {
+    app.arg(
+      Arg::with_name(&self.arg_name)
+        .long(&self.arg_name)
+        .value_name("FILE")
+        .help(&self.help)
+        .takes_value(true),
+    )
   }
 
   fn build(&self, matches: &ArgMatches) -> Result {
     if let Some(ref path) = matches.value_of(&self.arg_name) {
-      match agent::ReaderAgent::from_file_at(path) {
-        Ok(agent) => Ok(Box::new(agent)),
-        Err(e) => Err(Error::InvalidAgentParameter { agent: self.name.clone(), parameter: self.arg_name.clone(), error: Some(Box::new(e)), }),
-      }
+      agent::BufReaderAgent::from_file(path)
+        .map(|agent| {
+          let b: Box<dyn agent::Agent> = Box::new(agent);
+          b
+        })
+        .map_err(|e| Error::InvalidAgentParameter {
+          agent: self.name.clone(),
+          parameter: self.arg_name.clone(),
+          error: Some(Box::new(e)),
+        })
     } else {
-      Err(Error::InvalidAgentParameter { agent: self.name.clone(), parameter: self.arg_name.clone(), error: None, })
+      Err(Error::InvalidAgentParameter {
+        agent: self.name.clone(),
+        parameter: self.arg_name.clone(),
+        error: None,
+      })
     }
   }
 }
@@ -154,7 +191,7 @@ pub struct StdinAgentBuilder {}
 
 impl StdinAgentBuilder {
   pub fn new() -> Self {
-    StdinAgentBuilder{}
+    StdinAgentBuilder {}
   }
 }
 
@@ -163,24 +200,33 @@ impl AgentBuilder for StdinAgentBuilder {
     "stdin"
   }
 
-  fn register_args<'a, 'b>(&'a self, app: App<'a, 'b>) -> App<'a, 'b> where 'a: 'b {
+  fn register_args<'a, 'b>(&'a self, app: App<'a, 'b>) -> App<'a, 'b>
+  where
+    'a: 'b,
+  {
     app
   }
 
   fn build(&self, _matches: &ArgMatches) -> Result {
-    Ok(Box::new(agent::StdinAgent::with_prompt(|_| "".to_owned())))
+    Ok(Box::new(agent::StdinReaderAgent{}))
   }
 }
 
 #[cfg(test)]
 mod test {
-  use super::*;
+  use super::{AgentRegistry, FileAgentBuilder, StdinAgentBuilder};
 
   #[test]
   fn reader_agents() {
     let mut registry = AgentRegistry::new();
-    registry.register(Box::new(FileAgentBuilder::new("file1")));
-    registry.register(Box::new(FileAgentBuilder::new("file2")));
-    registry.register(Box::new(StdinAgentBuilder::new()));
+    registry
+      .register(Box::new(FileAgentBuilder::new("file1")))
+      .register(Box::new(FileAgentBuilder::new("file2")))
+      .register(Box::new(StdinAgentBuilder::new()));
+    let matches = clap::ArgMatches::new();
+    assert!(registry.get("foo", &matches).is_err());
+    assert!(registry.get("file1", &matches).is_ok());
+    assert!(registry.get("file2", &matches).is_ok());
+    assert!(registry.get("stdin", &matches).is_ok());
   }
 }

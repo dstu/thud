@@ -10,7 +10,7 @@ clap = "2.33"
 fern = "0.5"
 log = "0.4"
 mcts = { path = "../mcts" }
-rand = "0.6.1"
+rand = "0.7.0"
 
 [dependencies.thud-game]
 path = "../thud_game"
