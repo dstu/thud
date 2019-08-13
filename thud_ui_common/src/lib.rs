@@ -1,4 +1,4 @@
-use clap::{self, arg_enum, _clap_count_exprs};
+use clap::{self, arg_enum};
 use thud_game::{self, board};
 
 // pub use thud_game::ai::mcts::deconvolve_transpositions::Game as ThudGame;
@@ -8,7 +8,6 @@ use thud_game::{self, board};
 
 pub mod agent_registry;
 pub mod init;
-pub mod ai;
 
 pub const FLAG_INITIAL_BOARD: &'static str = "initial_board";
 pub const FLAG_INITIAL_PLAYER: &'static str = "initial_player";
@@ -32,14 +31,6 @@ impl InitialBoard {
       InitialBoard::DwarfEndgame => board::decode_board(DWARF_ENDGAME),
       InitialBoard::DwarfBoxed => board::decode_board(DWARF_BOXED),
     }
-  }
-}
-
-arg_enum! {
-  #[derive(Debug, Clone, Copy)]
-  pub enum MoveSelectionCriterion {
-    VisitCount,
-    Ucb
   }
 }
 

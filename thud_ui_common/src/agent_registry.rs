@@ -159,7 +159,8 @@ impl AgentBuilder for FileAgentBuilder {
         .long(&self.arg_name)
         .value_name("FILE")
         .help(&self.help)
-        .takes_value(true),
+        .takes_value(true)
+        .required(false),
     )
   }
 
@@ -208,13 +209,14 @@ impl AgentBuilder for StdinAgentBuilder {
   }
 
   fn build(&self, _matches: &ArgMatches) -> Result {
-    Ok(Box::new(agent::StdinReaderAgent{}))
+    Ok(Box::new(agent::StdinReaderAgent {}))
   }
 }
 
 #[cfg(test)]
 mod test {
   use super::{AgentRegistry, FileAgentBuilder, StdinAgentBuilder};
+  use clap::App;
 
   #[test]
   fn reader_agents() {
@@ -223,7 +225,18 @@ mod test {
       .register(Box::new(FileAgentBuilder::new("file1")))
       .register(Box::new(FileAgentBuilder::new("file2")))
       .register(Box::new(StdinAgentBuilder::new()));
-    let matches = clap::ArgMatches::new();
+    let app = registry.register_args(App::new("test"));
+    let matches = app
+      .get_matches_from_safe(&[
+        "bin",
+        "--player_1_agent",
+        "file1",
+        "--file1_file",
+        "/dev/null",
+        "--file2_file",
+        "/dev/null",
+      ])
+      .unwrap();
     assert!(registry.get("foo", &matches).is_err());
     assert!(registry.get("file1", &matches).is_ok());
     assert!(registry.get("file2", &matches).is_ok());
