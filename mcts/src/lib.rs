@@ -6,9 +6,10 @@ pub mod graph;
 pub mod rollout;
 pub mod simulation;
 pub mod statistics;
+pub mod ucb;
+
 #[cfg(test)]
 pub(crate) mod tictactoe;
-pub mod ucb;
 
 use crate::backprop::BackpropSelector;
 use crate::game::{Game, State};
@@ -269,7 +270,6 @@ mod test {
     backprop, simulation, tictactoe, BackpropPhase, ExpandPhase, RolloutPhase, ScoringPhase,
     SearchSettings,
   };
-  use log::trace;
   use rand::SeedableRng;
   use rand_pcg;
 

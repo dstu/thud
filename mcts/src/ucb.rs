@@ -32,6 +32,8 @@ pub enum UcbError {
   InvalidComputation,
 }
 
+unsafe impl Send for UcbError {}
+
 /// Lazy iterator over UCB scores for a series of edges.
 pub struct EdgeUcbIter<'a, 'b, 'id, G, I>
 where
@@ -143,14 +145,13 @@ pub fn child_score<'a, 'id, G: Game>(
 /// statistics. (Callers should ensure that this is not called more than once
 /// for a given parent vertex.)
 ///
-/// "Could be" reflects how this is different from calling
-/// `find_best_child_edge`: it is possible (and common) for multiple child
-/// edges of a vertex to be best children (as when there are multiple children
-/// that have not yet been explored). This is dealt with in
-/// `find_best_child_edge` by randomly choosing one of the best
-/// children. But when doing backpropagation on a full game state graph (not
-/// just a tree), we want to know all of the parent edges which could have
-/// rolled out to a given child.
+/// "Could be" reflects how this is different from calling `find_best_child`: it
+/// is possible (and common) for multiple child edges of a vertex to be best
+/// children (as when there are multiple children that have not yet been
+/// explored). This is dealt with in `find_best_child` by randomly choosing one
+/// of the best children. But when doing backpropagation on a full game state
+/// graph (not just a tree), we want to know all of the parent edges which could
+/// have rolled out to a given child.
 pub fn is_best_child<'a, 'id, G: Game>(
   graph: &search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
   e: search_graph::view::EdgeRef<'id>,
