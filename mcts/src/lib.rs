@@ -134,6 +134,10 @@ impl<'a, 'id, R: Rng, G: Game> RolloutPhase<'a, 'id, R, G> {
   pub fn root_node(&self) -> search_graph::view::NodeRef<'id> {
     self.root_node
   }
+
+  pub fn recover_components(self) -> (R, search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>) {
+    (self.rng, self.graph)
+  }
 }
 
 /// Computes an estimate of the score for a game state selected during rollout.
