@@ -5,17 +5,18 @@ authors = ["Stu Black"]
 edition = "2018"
 
 [features]
-default = []
+default = ["ai"]
 ai = ["ai-mcts"]
-ai-mcts = ["mcts", "syncbox"]
+ai-mcts = ["mcts", "search-graph", "syncbox", "rand"]
 
 [dependencies]
 log = "0.4.6"
 mcts = { path = "../mcts", optional = true }
 r4 = "1.0"
+rand = { version = "0.7.0", optional = true }
+search-graph = { git = "https://github.com/dstu/search-graph.git", branch = "master", optional = true }
 syncbox = { version = "0.2.4", optional = true }
 
 [dev-dependencies]
-quickcheck = "0.7.2"
-quickcheck_macros = "0.7.0"
-rand = "0.6.1"
+quickcheck = "0.8.5"
+rand = "0.7.0"

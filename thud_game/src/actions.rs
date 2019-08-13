@@ -110,7 +110,7 @@ pub enum ActionParseError {
 impl FromStr for Action {
   type Err = ActionParseError;
 
-  fn from_str(s: &str) -> Result<Self, Self::Err> {
+  fn from_str(_s: &str) -> Result<Self, Self::Err> {
     unimplemented!()
   }
 }
