@@ -63,14 +63,19 @@ fn main() {
     &thud_game::board::TRANSPOSITIONAL_EQUIVALENCE,
   );
   while !state.terminated() {
+    println!("state: {:?}", state);
     let action = agent1.propose_action(&state).unwrap();
+    println!("agent 1 proposes action: {:?}", action);
     state.do_action(&action);
+    println!("state: {:?}", state);
     if state.terminated() {
       break;
     }
     let action = agent2.propose_action(&state).unwrap();
+    println!("agent 2 proposes action: {:?}", action);
     state.do_action(&action);
   }
+  println!("state has terminated");
 
   // // Prompt for play.
   // loop {
