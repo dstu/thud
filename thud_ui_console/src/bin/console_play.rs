@@ -11,7 +11,10 @@ fn main() {
       thud_ui_common::agent_registry::StdinAgentBuilder::new(),
     ))
     .register(Box::new(
-      thud_ui_common::agent_registry::mcts::MctsAgentBuilder::new("mcts"),
+      thud_ui_common::agent_registry::mcts::MctsAgentBuilder::new("mcts1"),
+    ))
+    .register(Box::new(
+      thud_ui_common::agent_registry::mcts::MctsAgentBuilder::new("mcts2"),
     ))
     .register(Box::new(
       thud_ui_common::agent_registry::FileAgentBuilder::new("file_agent"),
@@ -75,7 +78,7 @@ fn main() {
     println!("agent 2 proposes action: {:?}", action);
     state.do_action(&action);
   }
-  println!("state has terminated");
+  println!("state has terminated: {:?}", state);
 
   // // Prompt for play.
   // loop {
