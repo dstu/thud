@@ -107,6 +107,18 @@ impl<M: PlayerMapping> ScoredStatistics<M> {
     ((packed & VISITS_MASK) >> 44) as u32
   }
 
+  /// Returns the net score for `player`, which is equal to the difference
+  /// between `player`'s score and that of the opponent.
+  pub fn net_score(&self, player: Player) -> i32 {
+    let packed = self.packed.load(atomic::Ordering::SeqCst);
+    let score_one = ((packed & ONE_SCORE_MASK) >> 22) as i32;
+    let score_two = (packed & TWO_SCORE_MASK) as i32;
+    match player {
+      Player::One => score_one - score_two,
+      Player::Two => score_two - score_one,
+    }
+  }
+
   /// Returns the score for `player`.
   pub fn score(&self, player: Player) -> u32 {
     let packed = self.packed.load(atomic::Ordering::SeqCst);
@@ -181,7 +193,7 @@ where
   }
 
   fn score(&self, player: &S::PlayerId) -> f32 {
-    self.score(player.resolve_player()) as f32
+    self.net_score(player.resolve_player()) as f32
   }
 }
 
