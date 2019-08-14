@@ -6,7 +6,7 @@ use thud_game::agent::{self, Agent};
 pub mod mcts;
 
 pub const FLAG_PLAYER_1_AGENT: &'static str = "player_1_agent";
-pub const FLAG_PLAYER_2_AGENT: &'static str = "player_1_agent";
+pub const FLAG_PLAYER_2_AGENT: &'static str = "player_2_agent";
 
 #[derive(Debug)]
 pub enum Error {

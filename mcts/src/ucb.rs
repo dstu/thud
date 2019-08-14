@@ -103,8 +103,13 @@ where
   fn next(&mut self) -> Option<Result<UcbSuccess<'id>, UcbError>> {
     self.edges.next().map(|e| {
       if self.graph.edge_data(e).statistics.visits() == 0 {
+        trace!("EdgeUcbIter selects unvisited action");
         Ok(UcbSuccess::Select(e))
       } else {
+        trace!("EdgeUcbIter calls child_score with log_parent_visits = {}, explore_bias = {}, edge = {:?}",
+               self.log_parent_visits,
+               self.explore_bias,
+               e);
         Ok(child_score(
           self.log_parent_visits,
           self.explore_bias,
@@ -295,10 +300,7 @@ where
       }
       Some(Ordering::Equal) => {
         // We use reservoir sampling to break ties.
-        trace!(
-          "find_best_child: found action with identical score {}; sampling to break tie",
-          value
-        );
+        trace!("find_best_child: found action with identical score; sampling to break tie");
         sampling_count += 1;
         if rng.gen_ratio(1, sampling_count) {
           trace!("find_best_child: broke tie by selecting new action");

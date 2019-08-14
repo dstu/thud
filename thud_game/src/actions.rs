@@ -1,9 +1,10 @@
 use crate::coordinate::Coordinate;
 use crate::end;
-
+use lazy_static::lazy_static;
+use regex::Regex;
 use std::cmp::{Eq, PartialEq};
-use std::{error, fmt};
 use std::str::FromStr;
+use std::{error, fmt};
 
 #[derive(Clone, Copy, Hash)]
 pub enum Action {
@@ -102,16 +103,157 @@ impl PartialEq<Action> for Action {
 
 impl Eq for Action {}
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ActionParseError {
-  InvalidMove,
+  /// Basic tokenization of move failed.
+  PatternMismatch,
+  /// Player indicator was invalid.
+  InvalidPlayer,
+  /// Move contained an invalid coordinate.
+  InvalidCoordinate(String),
+  /// Capture component of a move is not valid.
+  InvalidCapture,
+}
+
+fn parse_coordinate(s: &str) -> Result<Coordinate, ActionParseError> {
+  if s.len() < 2 || s.len() > 3 {
+    return Err(ActionParseError::PatternMismatch);
+  }
+  let mut i = s.chars();
+  let c1 = i.next().unwrap();
+  let row = match c1 {
+    'A' => 0,
+    'B' => 1,
+    'C' => 2,
+    'D' => 3,
+    'E' => 4,
+    'F' => 5,
+    'G' => 6,
+    'H' => 7,
+    'J' => 8,
+    'K' => 9,
+    'L' => 10,
+    'M' => 11,
+    'N' => 12,
+    'O' => 13,
+    'P' => 14,
+    _ => return Err(ActionParseError::InvalidCoordinate(s.into())),
+  };
+  let column = match i.as_str().parse::<u8>() {
+    Ok(n) if n > 0 && n < 16 => n - 1,
+    Ok(_) | Err(_) => return Err(ActionParseError::InvalidCoordinate(s.into())),
+  };
+  match Coordinate::new(row, column) {
+    Some(c) => Ok(c),
+    None => Err(ActionParseError::InvalidCoordinate(s.into())),
+  }
+}
+
+fn parse_captures(s: &str) -> Result<Vec<Coordinate>, ActionParseError> {
+  let mut captures: Vec<Coordinate> = Vec::with_capacity(7);
+  for capture_str in s.split("x").skip(1) {
+    captures.push(parse_coordinate(capture_str)?);
+  }
+  Ok(captures)
 }
 
 impl FromStr for Action {
   type Err = ActionParseError;
 
-  fn from_str(_s: &str) -> Result<Self, Self::Err> {
-    unimplemented!()
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    lazy_static! {
+      static ref RE: Regex =
+        Regex::new(r#"(?x)
+^(?:
+   # Propose end of game.
+   (?P<end>end)
+   # Confirm end of game.
+  |(?P<confirm>confirm)
+   # Refuse end of game.
+  |(?P<refuse>refuse)
+   # Actual action.
+  |# Player taking action.
+   (?P<player>[dt])
+   # Source coordinate.
+   \x20(?P<source>...?)
+   # Target coordinate.
+     \-(?P<target>...?)
+   # Optional captures.
+   (?P<capture>(?:x...?)+)?
+)$"#).unwrap();
+    }
+
+    let captures = match RE.captures(s.trim()) {
+      None => return Err(ActionParseError::PatternMismatch),
+      Some(c) => c,
+    };
+
+    if let Some(_) = captures.name("end") {
+      return Ok(Action::ProposeEnd);
+    }
+    if let Some(_) = captures.name("confirm") {
+      return Ok(Action::HandleEndProposal(end::Decision::Accept));
+    }
+    if let Some(_) = captures.name("refuse") {
+      return Ok(Action::HandleEndProposal(end::Decision::Decline));
+    }
+
+    let player = match captures.name("player") {
+      Some(s) if s.as_str() == "d" => crate::Role::Dwarf,
+      Some(s) if s.as_str() == "t" => crate::Role::Troll,
+      _ => return Err(ActionParseError::InvalidPlayer),
+    };
+
+    let from_coordinate = match captures.name("source").map(|s| parse_coordinate(s.as_str())) {
+      Some(Ok(c)) => c,
+      Some(Err(e)) => return Err(e),
+      None => return Err(ActionParseError::PatternMismatch),
+    };
+
+    let to_coordinate = match captures.name("target").map(|s| parse_coordinate(s.as_str())) {
+      Some(Ok(c)) => c,
+      Some(Err(e)) => return Err(e),
+      None => return Err(ActionParseError::PatternMismatch),
+    };
+
+    let capture_coordinates = match captures.name("capture").map(|s| parse_captures(s.as_str())) {
+      None => Vec::new(),
+      Some(Ok(v)) => v,
+      Some(Err(e)) => return Err(e),
+    };
+    if player == crate::Role::Dwarf && capture_coordinates.len() > 1 {
+      return Err(ActionParseError::InvalidCapture);
+    }
+    if capture_coordinates.len() >= 7 {
+      return Err(ActionParseError::InvalidCapture);
+    }
+    let mut capture_coordinates_array = [Coordinate::new_unchecked(6, 6); 7];
+    for (i, c) in capture_coordinates.iter().enumerate() {
+      capture_coordinates_array[i] = *c;
+    }
+
+    let action = match player {
+      crate::Role::Dwarf => {
+        if capture_coordinates.is_empty() {
+          Action::Move(from_coordinate, to_coordinate)
+        } else {
+          Action::Hurl(from_coordinate, to_coordinate)
+        }
+      }
+      crate::Role::Troll => {
+        if capture_coordinates.is_empty() {
+          Action::Move(from_coordinate, to_coordinate)
+        } else {
+          Action::Shove(
+            from_coordinate,
+            to_coordinate,
+            capture_coordinates.len() as u8,
+            capture_coordinates_array,
+          )
+        }
+      }
+    };
+    Ok(action)
   }
 }
 
@@ -135,130 +277,159 @@ macro_rules! move_literal {
 
 #[macro_export]
 macro_rules! shove_literal {
-    (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
-     [($capture_1_row: expr, $capture_1_col: expr)]) =>
-        ($crate::actions::Action::Shove(
-            $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
-            $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
-            1,
-            [$crate::coordinate::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),]));
-    (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
+  (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
+     [($capture_1_row: expr, $capture_1_col: expr)]) => {
+    $crate::actions::Action::Shove(
+      $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
+      $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
+      1,
+      [
+        $crate::coordinate::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+      ],
+    )
+  };
+  (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
      [($capture_1_row: expr, $capture_1_col: expr),
-      ($capture_2_row: expr, $capture_2_col: expr)]) =>
-        ($crate::actions::Action::Shove(
-            $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
-            $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
-            2,
-            [$crate::coordinate::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),]));
-    (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
+      ($capture_2_row: expr, $capture_2_col: expr)]) => {
+    $crate::actions::Action::Shove(
+      $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
+      $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
+      2,
+      [
+        $crate::coordinate::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+      ],
+    )
+  };
+  (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
      [($capture_1_row: expr, $capture_1_col: expr),
       ($capture_2_row: expr, $capture_2_col: expr),
-      ($capture_3_row: expr, $capture_3_col: expr)]) =>
-        ($crate::actions::Action::Shove(
-            $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
-            $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
-            3,
-            [$crate::coordinate::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_3_row, $capture_3_col),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),]));
-    (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
+      ($capture_3_row: expr, $capture_3_col: expr)]) => {
+    $crate::actions::Action::Shove(
+      $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
+      $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
+      3,
+      [
+        $crate::coordinate::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_3_row, $capture_3_col),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+      ],
+    )
+  };
+  (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
      [($capture_1_row: expr, $capture_1_col: expr),
       ($capture_2_row: expr, $capture_2_col: expr),
       ($capture_3_row: expr, $capture_3_col: expr),
-      ($capture_4_row: expr, $capture_4_col: expr)]) =>
-        ($crate::actions::Action::Shove(
-            $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
-            $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
-            4,
-            [$crate::coordinate::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_3_row, $capture_3_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_4_row, $capture_4_col),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),]));
-    (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
+      ($capture_4_row: expr, $capture_4_col: expr)]) => {
+    $crate::actions::Action::Shove(
+      $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
+      $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
+      4,
+      [
+        $crate::coordinate::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_3_row, $capture_3_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_4_row, $capture_4_col),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+      ],
+    )
+  };
+  (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
      [($capture_1_row: expr, $capture_1_col: expr),
       ($capture_2_row: expr, $capture_2_col: expr),
       ($capture_3_row: expr, $capture_3_col: expr),
       ($capture_4_row: expr, $capture_4_col: expr),
-      ($capture_5_row: expr, $capture_5_col: expr)]) =>
-        ($crate::actions::Action::Shove(
-            $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
-            $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
-            5,
-            [$crate::coordinate::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_3_row, $capture_3_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_4_row, $capture_4_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_5_row, $capture_5_col),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),]));
-    (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
+      ($capture_5_row: expr, $capture_5_col: expr)]) => {
+    $crate::actions::Action::Shove(
+      $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
+      $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
+      5,
+      [
+        $crate::coordinate::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_3_row, $capture_3_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_4_row, $capture_4_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_5_row, $capture_5_col),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+      ],
+    )
+  };
+  (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
      [($capture_1_row: expr, $capture_1_col: expr),
       ($capture_2_row: expr, $capture_2_col: expr),
       ($capture_3_row: expr, $capture_3_col: expr),
       ($capture_4_row: expr, $capture_4_col: expr),
       ($capture_5_row: expr, $capture_5_col: expr),
-      ($capture_6_row: expr, $capture_6_col: expr)]) =>
-        ($crate::actions::Action::Shove(
-            $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
-            $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
-            6,
-            [$crate::coordinate::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_3_row, $capture_3_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_4_row, $capture_4_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_5_row, $capture_5_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_6_row, $capture_6_col),
-             $crate::coordinate::Coordinate::new_unchecked(7, 7),]));
-    (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
+      ($capture_6_row: expr, $capture_6_col: expr)]) => {
+    $crate::actions::Action::Shove(
+      $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
+      $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
+      6,
+      [
+        $crate::coordinate::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_3_row, $capture_3_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_4_row, $capture_4_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_5_row, $capture_5_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_6_row, $capture_6_col),
+        $crate::coordinate::Coordinate::new_unchecked(7, 7),
+      ],
+    )
+  };
+  (($start_row: expr, $start_col: expr), ($end_row: expr, $end_col: expr),
      [($capture_1_row: expr, $capture_1_col: expr),
       ($capture_2_row: expr, $capture_2_col: expr),
       ($capture_3_row: expr, $capture_3_col: expr),
       ($capture_4_row: expr, $capture_4_col: expr),
       ($capture_5_row: expr, $capture_5_col: expr),
       ($capture_6_row: expr, $capture_6_col: expr),
-      ($capture_7_row: expr, $capture_7_col: expr)]) =>
-        ($crate::actions::Action::Shove(
-            $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
-            $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
-            7,
-            [$crate::coordinate::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_3_row, $capture_3_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_4_row, $capture_4_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_5_row, $capture_5_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_6_row, $capture_6_col),
-             $crate::coordinate::Coordinate::new_unchecked($capture_7_row, $capture_7_col),]));
+      ($capture_7_row: expr, $capture_7_col: expr)]) => {
+    $crate::actions::Action::Shove(
+      $crate::coordinate::Coordinate::new_unchecked($start_row, $start_col),
+      $crate::coordinate::Coordinate::new_unchecked($end_row, $end_col),
+      7,
+      [
+        $crate::coordinate::Coordinate::new_unchecked($capture_1_row, $capture_1_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_2_row, $capture_2_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_3_row, $capture_3_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_4_row, $capture_4_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_5_row, $capture_5_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_6_row, $capture_6_col),
+        $crate::coordinate::Coordinate::new_unchecked($capture_7_row, $capture_7_col),
+      ],
+    )
+  };
 }
 
 #[cfg(test)]
 mod test {
   use crate::actions::Action;
-  use crate::{board, end, Role};
   use crate::state::State;
+  use crate::{board, end, Role};
 
   #[test]
   fn troll_can_move() {
-    let state = State::new(board::decode_board(
-      r#"
+    let state = State::new(
+      board::decode_board(
+        r#"
 ....._____.....
 ...._______....
 ..._________...
@@ -274,8 +445,10 @@ _______________
 ..._________...
 ...._______....
 ....._____.....
-"#),
-    &board::TRANSPOSITIONAL_EQUIVALENCE);
+"#,
+      ),
+      &board::TRANSPOSITIONAL_EQUIVALENCE,
+    );
     let actions: Vec<Action> = state.role_actions(Role::Troll).collect();
     assert!(!actions.is_empty());
     assert_eq!(Action::ProposeEnd, Action::ProposeEnd);
@@ -304,8 +477,9 @@ _______________
 
   #[test]
   fn troll_cant_move() {
-    let mut state = State::new(board::decode_board(
-      r#"
+    let mut state = State::new(
+      board::decode_board(
+        r#"
 .....____d.....
 ...._____d_....
 ..._________...
@@ -321,8 +495,10 @@ Td__________dd_
 ..._____d___...
 ...._______....
 ....._____.....
-"#),
-                               &board::TRANSPOSITIONAL_EQUIVALENCE);
+"#,
+      ),
+      &board::TRANSPOSITIONAL_EQUIVALENCE,
+    );
     state.do_action(&Action::HandleEndProposal(end::Decision::Decline));
     let actions: Vec<Action> = state.role_actions(Role::Troll).collect();
     assert_eq!(actions, vec!());
@@ -348,8 +524,10 @@ d___d_________d
 ..._____d___...
 ....d_____d....
 ....._d___.....
-"#),
-    &board::TRANSPOSITIONAL_EQUIVALENCE);
+"#,
+      ),
+      &board::TRANSPOSITIONAL_EQUIVALENCE,
+    );
     let actions = {
       let mut v: Vec<Action> = state.role_actions(Role::Troll).collect();
       v.sort_by(crate::util::cmp_actions);
@@ -400,8 +578,9 @@ d___d_________d
 
   #[test]
   fn dwarf_cant_move_illegally_ok() {
-    let state = State::new(board::decode_board(
-      r#"
+    let state = State::new(
+      board::decode_board(
+        r#"
 .....dd_dd.....
 ....d_____d....
 ..._d______d...
@@ -417,8 +596,10 @@ d______T______d
 ...d_______d...
 ....d_____d....
 .....dd_dd.....
-"#),
-    &board::TRANSPOSITIONAL_EQUIVALENCE);
+"#,
+      ),
+      &board::TRANSPOSITIONAL_EQUIVALENCE,
+    );
     let actions: Vec<Action> = state.role_actions(Role::Dwarf).collect();
     assert!(!actions.contains(&move_literal!((9, 0), (9, 7))));
   }

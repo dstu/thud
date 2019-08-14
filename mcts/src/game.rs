@@ -4,6 +4,12 @@ use std::cmp::Eq;
 use std::fmt::Debug;
 use std::hash::Hash;
 
+#[derive(Debug, Clone, Copy)]
+pub enum LoopControl {
+  Continue,
+  Break,
+}
+
 pub trait State: Debug + Hash + Eq + Clone {
   type Action: Clone + Debug;
   type PlayerId: Debug;
@@ -11,7 +17,7 @@ pub trait State: Debug + Hash + Eq + Clone {
   fn active_player(&self) -> &Self::PlayerId;
   fn for_actions<F>(&self, f: F)
   where
-    F: FnMut(Self::Action) -> bool;
+    F: FnMut(Self::Action) -> LoopControl;
   fn do_action(&mut self, action: &<Self as State>::Action);
 }
 

@@ -10,10 +10,12 @@ ai = ["ai-mcts"]
 ai-mcts = ["mcts", "search-graph", "syncbox", "rand"]
 
 [dependencies]
+lazy_static = "1.2"
 log = "0.4.6"
 mcts = { path = "../mcts", optional = true }
 r4 = "1.0"
 rand = { version = "0.7.0", optional = true }
+regex = "1.2"
 search-graph = { git = "https://github.com/dstu/search-graph.git", branch = "master", optional = true }
 syncbox = { version = "0.2.4", optional = true }
 

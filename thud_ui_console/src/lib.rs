@@ -1,7 +1,3 @@
-#[macro_use]
-extern crate log;
-extern crate thud_game;
-
 use std::fmt;
 use std::io;
 use std::io::Write;
@@ -36,7 +32,7 @@ pub fn read_coordinate() -> Coordinate {
     let row: u8 = match input.trim().parse() {
       Ok(r) if r <= 14 => r,
       _ => {
-        error!("bad row");
+        println!("bad row");
         continue;
       }
     };
@@ -50,13 +46,13 @@ pub fn read_coordinate() -> Coordinate {
     let col: u8 = match input.trim().parse() {
       Ok(c) if c <= 14 => c,
       _ => {
-        error!("bad col");
+        println!("bad col");
         continue;
       }
     };
     match Coordinate::new(row, col) {
       None => {
-        error!("coordinate out of playable range");
+        println!("coordinate out of playable range");
         continue;
       }
       Some(c) => return c,

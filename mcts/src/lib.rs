@@ -12,7 +12,7 @@ pub mod ucb;
 pub(crate) mod tictactoe;
 
 use crate::backprop::BackpropSelector;
-use crate::game::{Game, State};
+use crate::game::{Game, LoopControl, State};
 use crate::graph::{EdgeData, VertexData};
 use crate::rollout::RolloutSelector;
 use crate::simulation::Simulator;
@@ -160,8 +160,12 @@ impl<'a, 'id, R: Rng, G: Game> ScoringPhase<'a, 'id, R, G> {
 
   pub fn score<S: Simulator>(mut self) -> Result<BackpropPhase<'a, 'id, R, G>, S::Error> {
     let payoff = match G::payoff_of(self.graph.node_state(self.rollout_node())) {
-      Some(p) => p,
+      Some(p) => {
+        trace!("direct payoff found: {:?}", p);
+        p
+      }
       None => {
+        trace!("simulating to find payoff");
         let simulator = S::from(&self.settings);
         simulator.simulate::<G, R>(self.graph.node_state(self.rollout_node()), &mut self.rng)?
       }
@@ -254,7 +258,7 @@ impl<'a, 'id, R: Rng, G: Game> ExpandPhase<'a, 'id, R, G> {
           self
             .graph
             .append_edge(self.rollout_node, child, EdgeData::new(action));
-          true
+          LoopControl::Continue
         });
     }
     RolloutPhase {

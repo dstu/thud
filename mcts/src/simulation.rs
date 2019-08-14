@@ -1,8 +1,8 @@
 //! Interface for deriving payoffs from game state.
 
-use crate::game::{Game, State};
+use crate::game::{Game, LoopControl, State};
 use crate::SearchSettings;
-
+use log::trace;
 use std::convert::From;
 use std::error::Error;
 use std::fmt;
@@ -66,10 +66,14 @@ impl Simulator for RandomSimulator {
           let mut actions: Vec<G::Action> = Vec::new();
           state.for_actions(|a| {
             actions.push(a);
-            true
+            LoopControl::Continue
           });
           match actions.choose(rng) {
-            Some(a) => state.do_action(&a),
+            Some(a) => {
+              trace!("doing action: {:?}", a);
+              state.do_action(&a);
+              trace!("updated state: {:?}", state);
+            }
             None => return Err(RandomSimulatorError::DeadEnd),
           }
         }

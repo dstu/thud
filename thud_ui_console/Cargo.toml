@@ -2,11 +2,13 @@
 name = "thud-ui-console"
 version = "0.1.0"
 authors = ["Stu Black"]
+edition = "2018"
 
 [dependencies]
 clap = "2.33"
-log = "0.3.5"
+log = "0.4"
 mcts = { path = "../mcts" }
 thud-game = { path = "../thud_game" }
 thud-ui-common = { path = "../thud_ui_common" }
-rand = "0.6.1"
+rand = "0.7.0"
+rand_pcg = "0.2.0"

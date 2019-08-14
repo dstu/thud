@@ -33,14 +33,18 @@ impl mcts::game::State for crate::state::State {
 
   fn for_actions<F>(&self, mut f: F)
   where
-    F: FnMut(Action) -> bool,
+    F: FnMut(Action) -> mcts::game::LoopControl,
   {
     let mut actions = self.actions();
-    let mut done = false;
-    while !done {
-      done = match actions.next() {
-        None => true,
-        Some(a) => f(a),
+    loop {
+      match actions.next() {
+        Some(a) => {
+          match f(a) {
+            mcts::game::LoopControl::Continue => continue,
+            mcts::game::LoopControl::Break => break,
+          }
+        }
+        None => break,
       }
     }
   }
