@@ -5,7 +5,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::ops::AddAssign;
 
-pub trait State: Debug + Hash + Eq + Clone {
+pub trait State: Debug + Hash + Eq + Clone + Send {
   type Action: Clone + Debug;
   type PlayerId: Debug;
 
@@ -27,7 +27,7 @@ pub trait PayoffFn<S, P>: Debug {
 pub trait Game: Debug {
   type Action: Clone + Debug;
   type PlayerId: Debug;
-  type Payoff: Debug + Default + for<'a> AddAssign<&'a Self::Payoff>;
+  type Payoff: Debug + Default + for<'a> AddAssign<&'a Self::Payoff> + Send;
   type State: State<Action = Self::Action, PlayerId = Self::PlayerId>;
   type Statistics: Statistics<Self::State, Self::Payoff>;
 

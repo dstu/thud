@@ -6,6 +6,7 @@ pub struct MctsAgentBuilder {
   name: String,
   iteration_count_flag: String,
   simulation_count_flag: String,
+  simulation_thread_limit_flag: String,
   exploration_bias_flag: String,
   compact_graph_flag: String,
   action_selection_flag: String,
@@ -17,12 +18,13 @@ impl MctsAgentBuilder {
     let name: String = name.into();
     MctsAgentBuilder {
       name: name.clone(),
-      iteration_count_flag: format!("{}_iterations", name.clone()),
-      simulation_count_flag: format!("{}_simulations", name.clone()),
-      exploration_bias_flag: format!("{}_explore_bias", name.clone()),
-      compact_graph_flag: format!("{}_compact_search_graph", name.clone()),
-      action_selection_flag: format!("{}_action_selection", name.clone()),
-      rng_seed_flag: format!("{}_rng_seed", name.clone()),
+      iteration_count_flag: format!("{}_iterations", name),
+      simulation_count_flag: format!("{}_simulations", name),
+      simulation_thread_limit_flag: format!("{}_simulation_threads", name),
+      exploration_bias_flag: format!("{}_explore_bias", name),
+      compact_graph_flag: format!("{}_compact_search_graph", name),
+      action_selection_flag: format!("{}_action_selection", name),
+      rng_seed_flag: format!("{}_rng_seed", name),
     }
   }
 }
@@ -44,6 +46,10 @@ impl AgentBuilder for MctsAgentBuilder {
            .long(&self.simulation_count_flag)
            .value_name("COUNT")
            .help("Number of simulations to run in MCTS simulation phase for the agent"))
+      .arg(Arg::with_name(&self.simulation_thread_limit_flag)
+           .long(&self.simulation_thread_limit_flag)
+           .value_name("THREADS")
+           .help("Maximum number of threads to run MCTS simulations in"))
       .arg(Arg::with_name(&self.exploration_bias_flag)
            .long(&self.exploration_bias_flag)
            .value_name("BIAS")
@@ -84,6 +90,26 @@ impl AgentBuilder for MctsAgentBuilder {
         })
       }
     };
+    let simulation_thread_limit = match matches
+      .value_of(&self.simulation_thread_limit_flag)
+      .map(|s| s.parse::<u32>())
+    {
+      Some(Ok(c)) if c > 0 => c,
+      Some(Ok(_)) | None => {
+        return Err(Error::InvalidAgentParameter {
+          agent: self.name().into(),
+          parameter: self.simulation_thread_limit_flag.clone(),
+          error: None,
+        })
+      }
+      Some(Err(e)) => {
+        return Err(Error::InvalidAgentParameter {
+          agent: self.name().into(),
+          parameter: self.simulation_thread_limit_flag.clone(),
+          error: Some(Box::new(e)),
+        })
+      }
+    };
     let explore_bias = match matches
       .value_of(&self.exploration_bias_flag)
       .map(|s| s.parse::<f64>())
@@ -106,6 +132,7 @@ impl AgentBuilder for MctsAgentBuilder {
     };
     let settings = mcts::SearchSettings {
       simulation_count,
+      simulation_thread_limit,
       explore_bias,
     };
     let iterations = match matches
@@ -188,6 +215,8 @@ mod test {
         "bin",
         "--mcts_simulations",
         "5",
+        "--mcts_simulation_threads",
+        "2",
         "--mcts_iterations",
         "31",
         "--mcts_explore_bias",

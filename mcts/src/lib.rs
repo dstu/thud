@@ -72,6 +72,8 @@ pub fn new_search_graph<G: Game>() -> search_graph::Graph<G::State, VertexData, 
 pub struct SearchSettings {
   /// The number of simulations to run when estimating payout of a new game state.
   pub simulation_count: u32,
+  /// The maximum number of threads to execute at once when simulating payout of a new game state.
+  pub simulation_thread_limit: u32,
   /// The exploration bias term to use for the UCB policy.
   pub explore_bias: f64,
 }
@@ -291,6 +293,7 @@ mod test {
   fn default_settings() -> SearchSettings {
     SearchSettings {
       simulation_count: 1,
+      simulation_thread_limit: 1,
       explore_bias: 1.0,
     }
   }

@@ -8,9 +8,10 @@ edition = "2018"
 itertools = "0.8"
 log = "0.4.6"
 rand = "0.7.0"
+rayon = "1"
 search-graph = { git = "https://github.com/dstu/search-graph.git", branch = "master" }
 syncbox = { git = "https://github.com/carllerche/syncbox", branch = "master" }
+rand_pcg = "0.2.0"
 
 [dev-dependencies]
-rand_pcg = "0.2.0"
 r4 = "1.0"
