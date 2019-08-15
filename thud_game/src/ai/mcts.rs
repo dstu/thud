@@ -114,7 +114,6 @@ type SearchGraph =
 pub struct Agent<R: Rng> {
   settings: SearchSettings,
   iterations: u32,
-  player: statistics::two_player::Player,
   rng: R,
   action_select: ActionSelect,
   graph_compact: GraphCompact,
@@ -125,7 +124,6 @@ impl<R: Rng> Agent<R> {
   pub fn new(
     settings: SearchSettings,
     iterations: u32,
-    player: statistics::two_player::Player,
     rng: R,
     action_select: ActionSelect,
     graph_compact: GraphCompact,
@@ -133,7 +131,6 @@ impl<R: Rng> Agent<R> {
     Agent {
       settings,
       iterations,
-      player,
       rng,
       action_select,
       graph_compact,

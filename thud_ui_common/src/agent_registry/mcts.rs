@@ -1,11 +1,5 @@
 use crate::agent_registry::{AgentBuilder, Error};
 use clap::{App, Arg, ArgMatches};
-use mcts::statistics::two_player::PlayerMapping;
-// use rand::Rng;
-// use std::marker::Send;
-// use std::sync::mpsc;
-// use std::sync::{Arc, Mutex};
-// use std::thread;
 use thud_game;
 
 pub struct MctsAgentBuilder {
@@ -13,7 +7,6 @@ pub struct MctsAgentBuilder {
   iteration_count_flag: String,
   simulation_count_flag: String,
   exploration_bias_flag: String,
-  ai_player_flag: String,
   compact_graph_flag: String,
   action_selection_flag: String,
   rng_seed_flag: String,
@@ -27,7 +20,6 @@ impl MctsAgentBuilder {
       iteration_count_flag: format!("{}_iterations", name.clone()),
       simulation_count_flag: format!("{}_simulations", name.clone()),
       exploration_bias_flag: format!("{}_explore_bias", name.clone()),
-      ai_player_flag: format!("{}_ai_player", name.clone()),
       compact_graph_flag: format!("{}_compact_search_graph", name.clone()),
       action_selection_flag: format!("{}_action_selection", name.clone()),
       rng_seed_flag: format!("{}_rng_seed", name.clone()),
@@ -56,10 +48,6 @@ impl AgentBuilder for MctsAgentBuilder {
            .long(&self.exploration_bias_flag)
            .value_name("BIAS")
            .help("UCB1 exploration bias for the agent"))
-      .arg(Arg::with_name(&self.ai_player_flag)
-           .long(&self.ai_player_flag)
-           .value_name("TROLL|DWARF")
-           .help("Player for the agent to play as"))
       .arg(Arg::with_name(&self.compact_graph_flag)
            .long(&self.compact_graph_flag)
            .value_name("PRUNE|CLEAR|RETAIN")
@@ -140,17 +128,6 @@ impl AgentBuilder for MctsAgentBuilder {
         })
       }
     };
-    let player = match matches.value_of(&self.ai_player_flag) {
-      Some(s) if s.to_lowercase() == "dwarf" => thud_game::Role::Dwarf,
-      Some(s) if s.to_lowercase() == "troll" => thud_game::Role::Troll,
-      Some(_) | None => {
-        return Err(Error::InvalidAgentParameter {
-          agent: self.name().into(),
-          parameter: self.ai_player_flag.clone(),
-          error: None,
-        })
-      }
-    };
     let rng = match matches.value_of(&self.rng_seed_flag) {
       Some(_) => {
         return Err(Error::InvalidAgentParameter {
@@ -189,7 +166,6 @@ impl AgentBuilder for MctsAgentBuilder {
     Ok(Box::new(thud_game::ai::mcts::Agent::new(
       settings,
       iterations,
-      player.resolve_player(),
       rng,
       action_select,
       graph_compact,
@@ -216,8 +192,6 @@ mod test {
         "31",
         "--mcts_explore_bias",
         "0.64",
-        "--mcts_ai_player",
-        "DWARF",
         "--mcts_compact_search_graph",
         "PRUNE",
         "--mcts_action_selection",

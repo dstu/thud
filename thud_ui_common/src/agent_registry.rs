@@ -231,6 +231,8 @@ mod test {
         "bin",
         "--player_1_agent",
         "file1",
+        "--player_2_agent",
+        "file2",
         "--file1_file",
         "/dev/null",
         "--file2_file",
