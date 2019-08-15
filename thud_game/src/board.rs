@@ -269,7 +269,6 @@ impl Cells {
           self[captured[i as usize]] = Content::Empty;
         }
       }
-      // &Action::Concede => (),
     }
   }
 
