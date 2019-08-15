@@ -110,6 +110,14 @@ impl State {
   pub fn opponent_proposed_end(&self) -> bool {
     self.proposed_terminate
   }
+
+  pub fn score(&self, role: Role) -> u16 {
+    let multiplier = match role {
+      Role::Dwarf => 1u16,
+      Role::Troll => 4u16,
+    };
+    self.board.occupied_iter(role).fold(0u16, |acc, _| acc + multiplier)
+  }
 }
 
 impl Clone for State {
@@ -324,5 +332,12 @@ mod test {
     state.do_action(&available_actions[0]);
     available_actions = state.actions().collect();
     assert!(available_actions.contains(&Action::ProposeEnd));
+  }
+
+  #[test]
+  fn compute_score() {
+    let state = new_simple_state();
+    assert_eq!(32, state.score(Role::Dwarf));
+    assert_eq!(32, state.score(Role::Troll));
   }
 }
