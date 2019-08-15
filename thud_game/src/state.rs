@@ -17,7 +17,7 @@ pub struct State {
 }
 
 impl State {
-  pub fn new(board: Cells, equivalence_class: &'static CellEquivalence) -> Self {
+  pub fn new(board: Cells, equivalence_class: &'static dyn CellEquivalence) -> Self {
     State {
       board: board,
       active_role: Role::Dwarf,

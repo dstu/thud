@@ -181,7 +181,7 @@ mod test {
 
   #[test]
   fn build_agent() {
-    let mut builder = MctsAgentBuilder::new("mcts");
+    let builder = MctsAgentBuilder::new("mcts");
     let app = builder.register_args(App::new("test"));
     let matches = app
       .get_matches_from_safe(&[
@@ -198,6 +198,6 @@ mod test {
         "VISIT_COUNT",
       ])
       .unwrap();
-    let agent = builder.build(&matches).unwrap();
+    let _agent = builder.build(&matches).unwrap();
   }
 }

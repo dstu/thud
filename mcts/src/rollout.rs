@@ -53,7 +53,7 @@ impl<G: Game, E: Error> Error for RolloutError<G, E> {
     }
   }
 
-  fn cause(&self) -> Option<&Error> {
+  fn cause(&self) -> Option<&dyn Error> {
     match *self {
       RolloutError::Selector(ref e) => Some(e),
       _ => None,
