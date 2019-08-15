@@ -79,6 +79,11 @@ fn main() {
     state.do_action(&action);
   }
   println!("state has terminated: {:?}", state);
+  println!(
+    "final score: dwarfs {}, trolls {}",
+    state.score(thud_game::Role::Dwarf),
+    state.score(thud_game::Role::Troll)
+  );
 
   // // Prompt for play.
   // loop {
