@@ -135,7 +135,12 @@ impl<'a, 'id, R: Rng, G: Game> RolloutPhase<'a, 'id, R, G> {
     self.root_node
   }
 
-  pub fn recover_components(self) -> (R, search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>) {
+  pub fn recover_components(
+    self,
+  ) -> (
+    R,
+    search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
+  ) {
     (self.rng, self.graph)
   }
 }

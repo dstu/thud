@@ -8,8 +8,12 @@ pub enum Player {
 }
 
 impl statistics::two_player::PlayerMapping for Player {
-  fn player_one() -> Self { Player::X }
-  fn player_two() -> Self { Player::O }
+  fn player_one() -> Self {
+    Player::X
+  }
+  fn player_two() -> Self {
+    Player::O
+  }
   fn resolve_player(&self) -> statistics::two_player::Player {
     match *self {
       Player::X => statistics::two_player::Player::One,
@@ -140,7 +144,7 @@ impl game::Game for ScoredGame {
   type Action = Action;
   type PlayerId = Player;
   type Payoff = statistics::two_player::ScoredPayoff;
-  type State  = State;
+  type State = State;
   type Statistics = statistics::two_player::ScoredStatistics<Player>;
 
   fn payoff_of(state: &State) -> Option<statistics::two_player::ScoredPayoff> {
