@@ -63,19 +63,10 @@ impl mcts::game::Game for Game {
 
   fn payoff_of(state: &Self::State) -> Option<Self::Payoff> {
     if state.terminated() {
-      let mut dwarf = 0u32;
-      let mut troll = 0u32;
-      for (_, c) in state.cells().cells_iter() {
-        match c {
-          crate::board::Content::Occupied(crate::board::Token::Dwarf) => dwarf += 1,
-          crate::board::Content::Occupied(crate::board::Token::Troll) => troll += 4,
-          _ => (),
-        }
-      }
       Some(statistics::two_player::ScoredPayoff {
         visits: 1,
-        score_one: dwarf,
-        score_two: troll,
+        score_one: state.score(Role::Dwarf) as u32,
+        score_two: state.score(Role::Troll) as u32,
       })
     } else {
       None
