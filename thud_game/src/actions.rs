@@ -603,4 +603,33 @@ d______T______d
     let actions: Vec<Action> = state.role_actions(Role::Dwarf).collect();
     assert!(!actions.contains(&move_literal!((9, 0), (9, 7))));
   }
+
+  #[test]
+  fn troll_doesnt_have_illegal_move() {
+    let state = State::new(
+      board::decode_board(
+    r#"
+.....dd_dd.....
+....d_____d....
+...d_______d...
+..d_________d..
+.d___d_______d.
+d______T______d
+d_____TT______d
+______TOT______
+d_____TTT_____d
+______________d
+.dd__________d.
+..d_________d..
+...d_______d...
+....d_____d....
+.....d__dd.....
+"#,
+      ),
+      &board::TRANSPOSITIONAL_EQUIVALENCE,
+    );
+    let actions: Vec<Action> = state.role_actions(Role::Troll).collect();
+    println!("{:?}", actions);
+    assert!(!actions.contains(&move_literal!((9, 7), (10, 8))));
+  }
 }
