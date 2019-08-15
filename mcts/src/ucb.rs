@@ -74,7 +74,6 @@ where
   ///  - `log_parent_visits`: ln(visits to parent vertex).
   ///  - `explore_bias`: scalar bias controlling tradeoff between search width
   ///    and search depth (lower = wider, higher = deeper).
-  ///  - `role`: the game role whose score to maximize.
   ///  - `edges`: an iterator over edge handles for which to compute UCB
   ///    scores. This should usually be a list of child edges which share a
   ///    parent vertex.
