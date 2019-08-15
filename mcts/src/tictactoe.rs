@@ -1,4 +1,5 @@
 use crate::{game, statistics};
+use r4::iterate;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Player {
@@ -116,24 +117,11 @@ impl game::State for State {
     &self.active_player
   }
 
-  fn for_actions<F>(&self, mut f: F)
-  where
-    F: FnMut(Action) -> bool,
-  {
-    let player = self.active_player;
-    for row in 0..3 {
-      for column in 0..3 {
-        if self.board.get(row, column).is_none() {
-          if !f(Action {
-            row,
-            column,
-            player,
-          }) {
-            break;
-          }
-        }
-      }
-    }
+  fn actions<'s>(&'s self) -> Box<dyn Iterator<Item = Action> + 's> {
+    Box::new(iterate![for row in 0..3;
+                      for column in 0..3;
+                      if self.board.get(row, column).is_none();
+                      yield Action { row, column, player: self.active_player, }])
   }
 
   fn do_action(&mut self, action: &Action) {

@@ -3,21 +3,14 @@
 use std::cmp::Eq;
 use std::fmt::Debug;
 use std::hash::Hash;
-
-#[derive(Debug, Clone, Copy)]
-pub enum LoopControl {
-  Continue,
-  Break,
-}
+use std::ops::AddAssign;
 
 pub trait State: Debug + Hash + Eq + Clone {
   type Action: Clone + Debug;
   type PlayerId: Debug;
 
   fn active_player(&self) -> &Self::PlayerId;
-  fn for_actions<F>(&self, f: F)
-  where
-    F: FnMut(Self::Action) -> LoopControl;
+  fn actions<'s>(&'s self) -> Box<dyn Iterator<Item=Self::Action> + 's>;
   fn do_action(&mut self, action: &<Self as State>::Action);
 }
 
@@ -34,7 +27,7 @@ pub trait PayoffFn<S, P>: Debug {
 pub trait Game: Debug {
   type Action: Clone + Debug;
   type PlayerId: Debug;
-  type Payoff: Debug;
+  type Payoff: Debug + Default + for<'a> AddAssign<&'a Self::Payoff>;
   type State: State<Action = Self::Action, PlayerId = Self::PlayerId>;
   type Statistics: Statistics<Self::State, Self::Payoff>;
 

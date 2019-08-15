@@ -5,6 +5,7 @@ use crate::game;
 use std::cmp;
 use std::fmt;
 use std::marker::PhantomData;
+use std::ops::AddAssign;
 use std::sync::atomic;
 
 use syncbox::atomic::AtomicU64;
@@ -41,6 +42,24 @@ pub struct ScoredPayoff {
   pub visits: u32,
   pub score_one: u32,
   pub score_two: u32,
+}
+
+impl Default for ScoredPayoff {
+  fn default() -> Self {
+    ScoredPayoff {
+      visits: 0,
+      score_one: 0,
+      score_two: 0,
+    }
+  }
+}
+
+impl<'a> AddAssign<&'a ScoredPayoff> for ScoredPayoff {
+  fn add_assign(&mut self, payoff: &'a ScoredPayoff) {
+    self.visits += payoff.visits;
+    self.score_one += payoff.score_one;
+    self.score_two += payoff.score_two;
+  }
 }
 
 /// Atomically mutable game statistics for a two-player game where each player

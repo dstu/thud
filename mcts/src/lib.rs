@@ -12,7 +12,7 @@ pub mod ucb;
 pub(crate) mod tictactoe;
 
 use crate::backprop::BackpropSelector;
-use crate::game::{Game, LoopControl, State};
+use crate::game::{Game, State};
 use crate::graph::{EdgeData, VertexData};
 use crate::rollout::RolloutSelector;
 use crate::simulation::Simulator;
@@ -233,33 +233,27 @@ impl<'a, 'id, R: Rng, G: Game> ExpandPhase<'a, 'id, R, G> {
     if self.graph.node_data(self.rollout_node).mark_expanded() {
       trace!("rollout node was already marked as expanded; ExpandPhase does nothing");
     } else {
-      self
-        .graph
-        .node_state(self.rollout_node)
-        .clone()
-        .for_actions(|action| {
-          trace!("ExpandPhase adds edge for action {:?}", action);
-          let mut child_state = self.graph.node_state(self.rollout_node).clone();
-          trace!("ExpandState old state: {:?}", child_state);
-          child_state.do_action(&action);
-          trace!("ExpandState new state: {:?}", child_state);
-          let child = match self.graph.find_node(&child_state) {
-            Some(n) => {
-              trace!("ExpandState expanded to existing game state");
-              n
-            }
-            None => {
-              trace!("ExpandState expanded to new game state");
-              self
-                .graph
-                .append_node(child_state.clone(), Default::default())
-            }
-          };
-          self
-            .graph
-            .append_edge(self.rollout_node, child, EdgeData::new(action));
-          LoopControl::Continue
-        });
+      let parent_state = self.graph.node_state(self.rollout_node).clone();
+      for action in parent_state.actions() {
+        trace!("ExpandPhase adds edge for action {:?}", action);
+        let mut child_state = parent_state.clone();
+        trace!("ExpandState old state: {:?}", child_state);
+        child_state.do_action(&action);
+        trace!("ExpandState new state: {:?}", child_state);
+        let child = match self.graph.find_node(&child_state) {
+          Some(n) => {
+            trace!("ExpandState expanded to existing game state");
+            n
+          }
+          None => {
+            trace!("ExpandState expanded to new game state");
+            self.graph.append_node(child_state, Default::default())
+          }
+        };
+        self
+          .graph
+          .append_edge(self.rollout_node, child, EdgeData::new(action));
+      }
     }
     RolloutPhase {
       rng: self.rng,

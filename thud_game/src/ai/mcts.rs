@@ -31,22 +31,8 @@ impl mcts::game::State for crate::state::State {
     &self.active_role()
   }
 
-  fn for_actions<F>(&self, mut f: F)
-  where
-    F: FnMut(Action) -> mcts::game::LoopControl,
-  {
-    let mut actions = self.actions();
-    loop {
-      match actions.next() {
-        Some(a) => {
-          match f(a) {
-            mcts::game::LoopControl::Continue => continue,
-            mcts::game::LoopControl::Break => break,
-          }
-        }
-        None => break,
-      }
-    }
+  fn actions<'s>(&'s self) -> Box<dyn Iterator<Item = Action> + 's> {
+    Box::new(self.actions())
   }
 
   fn do_action(&mut self, action: &Action) {
@@ -130,6 +116,39 @@ impl<R: Rng> Agent<R> {
   }
 }
 
+fn find_most_visited_child<'a, 'id, R: Rng>(
+  view: &search_graph::view::View<
+    'a,
+    'id,
+    crate::state::State,
+    mcts::graph::VertexData,
+    mcts::graph::EdgeData<Game>,
+  >,
+  root: search_graph::view::NodeRef<'id>,
+  mut rng: R,
+) -> search_graph::view::EdgeRef<'id> {
+  let mut children = view.children(root);
+  let mut best_child = children.next().unwrap();
+  let mut best_child_visits = view[best_child].statistics.visits();
+  let mut reservoir_count = 1u32;
+  for child in children {
+    let visits = view[child].statistics.visits();
+    match visits.cmp(&best_child_visits) {
+      cmp::Ordering::Less => continue,
+      cmp::Ordering::Equal => {
+        reservoir_count += 1;
+        if !rng.gen_bool(1.0f64 / (reservoir_count as f64)) {
+          continue;
+        }
+      }
+      cmp::Ordering::Greater => reservoir_count = 1,
+    }
+    best_child = child;
+    best_child_visits = visits;
+  }
+  best_child
+}
+
 impl<R: Rng + Send> crate::agent::Agent for Agent<R> {
   fn propose_action(&mut self, state: &crate::state::State) -> crate::agent::Result {
     match self.graph_compact {
@@ -173,37 +192,29 @@ impl<R: Rng + Send> crate::agent::Agent for Agent<R> {
       let (rng, view) = rollout.recover_components();
 
       let root = view.find_node(state).unwrap();
-      let best_action: Action = match action_select {
+      let child_edge = match action_select {
         ActionSelect::Ucb => {
           match mcts::ucb::find_best_child(&view, root, settings.explore_bias, rng) {
-            Ok(child) => view[child].action().clone(),
+            Ok(child) => child,
             Err(e) => return Err(Box::new(e)),
           }
         }
-        ActionSelect::VisitCount => {
-          let mut children = view.children(root);
-          let mut best_child = children.next().unwrap();
-          let mut best_child_visits = view[best_child].statistics.visits();
-          let mut reservoir_count = 1u32;
-          for child in children {
-            let visits = view[child].statistics.visits();
-            match visits.cmp(&best_child_visits) {
-              cmp::Ordering::Less => continue,
-              cmp::Ordering::Equal => {
-                reservoir_count += 1;
-                if !rng.gen_bool(1.0f64 / (reservoir_count as f64)) {
-                  continue;
-                }
-              }
-              cmp::Ordering::Greater => reservoir_count = 1,
-            }
-            best_child = child;
-            best_child_visits = visits;
-          }
-          view[best_child].action().clone()
-        }
+        ActionSelect::VisitCount => find_most_visited_child(&view, root, rng),
       };
-      Ok(best_action)
+      // Because search graph de-duplication maps each set of equivalent game
+      // states to a single "canonical" game state, the state in the search graph
+      // that corresponds to `state` may not actually be the game state at `root`. As
+      // a result, actions on the root game state need to be mapped back into the
+      // set of actions on `state`.
+      let transposed_to_state = view.node_state(view.edge_target(child_edge));
+      for action in state.actions() {
+        let mut actual_to_state = state.clone();
+        actual_to_state.do_action(&action);
+        if actual_to_state == *transposed_to_state {
+          return Ok(action);
+        }
+      }
+      unreachable!()
     })
   }
 }

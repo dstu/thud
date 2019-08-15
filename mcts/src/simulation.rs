@@ -1,6 +1,6 @@
 //! Interface for deriving payoffs from game state.
 
-use crate::game::{Game, LoopControl, State};
+use crate::game::{Game, State};
 use crate::SearchSettings;
 use log::trace;
 use std::convert::From;
@@ -9,7 +9,7 @@ use std::fmt;
 use std::result::Result;
 
 use rand::Rng;
-use rand::seq::SliceRandom;
+use rand::seq::IteratorRandom;
 
 pub trait Simulator: for<'a> From<&'a SearchSettings> {
   type Error: Error;
@@ -21,7 +21,9 @@ pub trait Simulator: for<'a> From<&'a SearchSettings> {
   ) -> Result<G::Payoff, Self::Error>;
 }
 
-pub struct RandomSimulator {}
+pub struct RandomSimulator {
+  simulation_count: u32,
+}
 
 #[derive(Debug)]
 pub enum RandomSimulatorError {
@@ -42,8 +44,10 @@ impl Error for RandomSimulatorError {
   
 
 impl<'a> From<&'a SearchSettings> for RandomSimulator {
-  fn from(_: &'a SearchSettings) -> Self {
-    RandomSimulator {}
+  fn from(settings: &'a SearchSettings) -> Self {
+    RandomSimulator {
+      simulation_count: settings.simulation_count,
+    }
   }
 }
 
@@ -55,29 +59,30 @@ impl Simulator for RandomSimulator {
     state: &G::State,
     rng: &mut R,
   ) -> Result<G::Payoff, Self::Error> {
+    let mut payoff = G::Payoff::default();
     if let Some(p) = G::payoff_of(state) {
-      return Ok(p);
-    }
-    let mut state = state.clone();
-    loop {
-      match G::payoff_of(&state) {
-        Some(p) => return Ok(p),
-        None => {
-          let mut actions: Vec<G::Action> = Vec::new();
-          state.for_actions(|a| {
-            actions.push(a);
-            LoopControl::Continue
-          });
-          match actions.choose(rng) {
+      for _ in 0..self.simulation_count {
+        payoff += &p;
+      }
+    } else {
+      for _ in 0..self.simulation_count {
+        let mut simulation_state = state.clone();
+        loop {
+          match simulation_state.actions().choose(rng) {
             Some(a) => {
               trace!("doing action: {:?}", a);
-              state.do_action(&a);
+              simulation_state.do_action(&a);
               trace!("updated state: {:?}", state);
             }
             None => return Err(RandomSimulatorError::DeadEnd),
           }
+          if let Some(p) = G::payoff_of(&simulation_state) {
+            payoff += &p;
+            break;
+          }
         }
       }
     }
+    Ok(payoff)
   }
 }

@@ -13,3 +13,4 @@ syncbox = { git = "https://github.com/carllerche/syncbox", branch = "master" }
 
 [dev-dependencies]
 rand_pcg = "0.2.0"
+r4 = "1.0"
