@@ -82,10 +82,14 @@ pub trait RolloutSelector: for<'a> From<&'a SearchSettings> {
 }
 
 /// Traverses the game graph downwards from `node` down to some terminating
-/// vertex in the search graph. The terminating vertex will either have a known
-/// payoff, or yield `None` when `selector.select()` is called on it. Returns
-/// the path to terminating vertex, whose last element is the terminating
-/// vertex, or an error.
+/// vertex in the search graph.
+///
+/// The terminating vertex will either have a known payoff, or yield `None` when
+/// `selector.select()` is called on it. Returns the path to terminating vertex,
+/// whose last element is the terminating vertex, or an error.
+///
+/// Selection will be done minimax-style, i.e., always trying to maximize the
+/// score for the currently active player.
 pub fn rollout<'a, 'id, G, S, R>(
   graph: &search_graph::view::View<'a, 'id, G::State, VertexData, EdgeData<G>>,
   mut node: search_graph::view::NodeRef<'id>,
@@ -102,6 +106,7 @@ where
       // Hit known payoff.
       break;
     } else if graph.child_count(node) == 0 {
+      // Hit leaf in search graph.
       break;
     } else {
       let child = selector.select(graph, node, rng)?;
